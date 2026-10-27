@@ -132,6 +132,66 @@ const SOIL: PixelMap = [
   'OOOOOOOOOO',
 ];
 
+/** Carretilla con dos ruedas: la rueda de más. */
+const WHEELBARROW: PixelMap = [
+  '..............',
+  '...YlY.l......',
+  '..YYYYYYY.....',
+  '.OOOOOOOOOO...',
+  '.OsssssssssOOO',
+  '..OsssssssOTTO',
+  '...OOOOOOOO.OO',
+  '...OKO..OKO...',
+  '..OKsKOOKsKO..',
+  '..OKKKOOKKKO..',
+  '...OOO..OOO...',
+];
+/** Cesto de mimbre con paja y un tomate a salvo dentro. */
+const STRAW_BASKET: PixelMap = [
+  '...Y.OO..Y..',
+  '.YYYORROYYY.',
+  'OOOOOOOOOOOO',
+  'OwCwCwCwCwCO',
+  'OCwCwCwCwCwO',
+  '.OwCwCwCwCO.',
+  '.OCwCwCwCwO.',
+  '..OOOOOOOO..',
+];
+/** Puesto de mercado con toldo de rayas y género en el mostrador. */
+const MARKET: PixelMap = [
+  'OOOOOOOOOOOOOO',
+  'ORRWWRRWWRRWWO',
+  'ORRWWRRWWRRWWO',
+  'OOOOOOOOOOOOOO',
+  '.OtO......OtO.',
+  '.OtO......OtO.',
+  '.OtORRYYlGOtO.',
+  'OOOOOOOOOOOOOO',
+  'OwwwwwwwwwwwwO',
+  'OTTTTTTTTTTTTO',
+  'OwwwwwwwwwwwwO',
+  'OOOOOOOOOOOOOO',
+];
+/** Casa de gnomos: seta con puerta. */
+const HOUSE_ICON: PixelMap = [
+  '......OOOO......',
+  '....OORRRROO....',
+  '...ORRWWRRRRO...',
+  '..ORRRWWRRRRRO..',
+  '.ORRRRRRRRWWRRO.',
+  '.ORWWRRRRRWWRRO.',
+  'ORRWWRRRRRRRRRRO',
+  'OOOOOOOOOOOOOOOO',
+  '...OWWWWWWWWsO..',
+  '...OWWOOOOWWsO..',
+  '...OWOTTTTOWsO..',
+  '...OWOTTTTOWsO..',
+  '...OWOTTYTOWsO..',
+  '...OWOTTTTOWsO..',
+  '.GGOOOOOOOOOOOG.',
+  '................',
+];
+
 /** Podio con corona: oro en el centro, plata a la izquierda y bronce a la derecha. */
 const PODIUM_ICON: PixelMap = [
   '.....Y..Y..Y....',
@@ -163,6 +223,7 @@ export const menuIcons: Record<MenuId, string> = {
 };
 
 export const crownIcon = url(crownCanvas());
+export const houseIcon = url(mapCanvas(HOUSE_ICON, P));
 
 export const cropIcons: Record<CropId, string> = {
   zanahoria: url(mapCanvas(PLANT_MAPS.zanahoria[4], PLANT_PAL)),
@@ -183,11 +244,14 @@ export const nodeIcons: Record<NodeId, string> = {
   saco: url(mapCanvas(SACK, BASE)),
   porteadores: jobIcons.porteador,
   cesta: url(basketCanvas(3)),
+  carretilla: url(mapCanvas(WHEELBARROW, P)),
   bancal: url(mapCanvas(SOIL, P)),
   trigo: cropIcons.trigo,
   abono: url(mapCanvas(FERTILIZER, P)),
   tomate: cropIcons.tomate,
   calabaza: cropIcons.calabaza,
+  conservas: url(mapCanvas(STRAW_BASKET, P)),
+  mercado: url(mapCanvas(MARKET, P)),
 };
 
 export const rootIcon = url(mapCanvas(PLANT_MAPS.zanahoria[1], PLANT_PAL));

@@ -117,6 +117,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .job-text p { font-size: 0.9rem; color: var(--ink-soft); }
 .job.locked .job-icon { filter: grayscale(1) brightness(0.6); }
 .lock-note { color: var(--red) !important; font-weight: 700; }
+.job-icon.house-icon { height: 48px; }
+.job-text .full { color: var(--red); font-weight: 700; }
 
 /* ---------- árbol de mejoras ---------- */
 .tree-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; }

@@ -5,6 +5,7 @@ import type { CropId, JobId, NodeId, Priority } from '../sim/types';
 export interface GameActions {
   hire(job: JobId): void;
   buyNode(id: NodeId): void;
+  buyHouse(): void;
   createGroup(): void;
   renameGroup(id: number, name: string): void;
   setGroupColor(id: number, color: number): void;

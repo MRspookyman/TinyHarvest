@@ -1,8 +1,8 @@
 // Simulación pura: sin DOM ni render. Todo lo que pasa en el huerto ocurre aquí.
 import {
-  BASE_SPEED, BASKET, CLEAR_TIME, COST_GROWTH, CROPS, CROWN_MARGIN, DOOR, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HARVEST_TIME,
-  IDLE_AREA, JOBS, LOG_MAX, MAX_GNOMES, MAX_GROUPS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TREE,
-  VALUE_DISTANCE_BIAS,
+  BASE_SPEED, BASKET, CARRETILLA_PER_LEVEL, CLEAR_TIME, CONSERVAS_PER_LEVEL, COST_GROWTH, CROPS, CROWN_MARGIN, DOOR, FIELD,
+  GROUP_NAME_MAX, GROUP_PALETTE, HARVEST_TIME, HOUSE, IDLE_AREA, JOBS, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL,
+  PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TREE, VALUE_DISTANCE_BIAS,
 } from './config';
 import { makeGnome } from './state';
 import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LOG, NOMBRES, OFICIOS } from '../textos';
@@ -49,6 +49,28 @@ export const capacity = (s: GameState) => 1 + s.tree.saco;
 export const basketMax = (s: GameState) => BASKET.base + BASKET.perLevel * s.tree.cesta;
 export const stageTime = (s: GameState, crop: CropId) => (CROPS[crop].grow * 0.85 ** s.tree.abono) / RIPE;
 export const hasPorters = (s: GameState) => s.gnomes.some(g => g.job === 'porteador');
+/** monedas que da un cultivo al venderse, con el mercado */
+export const cropValue = (s: GameState, crop: CropId) => CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado);
+/** segundos que aguanta madura, con las conservas */
+export const keepTime = (s: GameState, crop: CropId) => CROPS[crop].keep * (1 + CONSERVAS_PER_LEVEL * s.tree.conservas);
+/** cultivos que se lleva un porteador de la cesta en cada viaje, con la carretilla */
+export const porterCapacity = (s: GameState) => PORTER_CAPACITY + CARRETILLA_PER_LEVEL * s.tree.carretilla;
+
+// ---------- Casa de gnomos ----------
+
+/** camas de la casa: sin cama libre no se puede contratar */
+export const houseCapacity = (s: GameState) => Math.min(MAX_GNOMES, HOUSE.base + HOUSE.perLevel * s.house);
+export const houseCost = (s: GameState) => Math.floor(HOUSE.cost * HOUSE.mult ** s.house);
+export const houseMaxed = (s: GameState) => s.house >= HOUSE.max;
+
+export function buyHouse(s: GameState): boolean {
+  const cost = houseCost(s);
+  if (houseMaxed(s) || s.coins < cost) return false;
+  s.coins -= cost;
+  s.house++;
+  log(s, LOG.casa(houseCapacity(s)));
+  return true;
+}
 
 // ---------- Geometría del bancal ----------
 
@@ -112,7 +134,7 @@ export function hireCost(s: GameState, job: JobId): number {
 
 export function hire(s: GameState, job: JobId, rng: Rng): boolean {
   const cost = hireCost(s, job);
-  if (!jobUnlocked(s, job) || s.coins < cost || s.gnomes.length >= MAX_GNOMES) return false;
+  if (!jobUnlocked(s, job) || s.coins < cost || s.gnomes.length >= houseCapacity(s)) return false;
   s.coins -= cost;
   s.hired[job]++;
   const g = makeGnome(s.nextId++, makeName(s, rng), job, s.groups[0].id, DOOR.x + rng() * 8 - 4, DOOR.y + 2);
@@ -204,11 +226,11 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
   const p = s.plots[id];
   if (!p || !isOpen(s, p)) return null;
   if (p.stage === RIPE) {
-    const v = CROPS[p.crop].value;
+    const v = cropValue(s, p.crop);
     s.coins += v;
     s.totalEarned += v;
     const o = plotOrigin(p);
-    s.events.push({ type: 'coins', x: o.x + 9, y: o.y + 2, amount: v });
+    s.events.push({ type: 'coins', x: o.x + 9, y: o.y + 2, amount: Math.round(v) });
     if (s.manualHarvests++ % 5 === 0) log(s, LOG.manual(CULTIVOS[p.crop].uno));
     p.stage = -1;
     p.t = 0;
@@ -232,7 +254,7 @@ export function tick(s: GameState, dt: number, rng: Rng) {
     if (p.stage < 0 || p.stage === ROTTEN) continue;
     p.t += dt;
     if (p.stage === RIPE) {
-      if (p.t >= CROPS[p.crop].keep) rot(s, p, rng);
+      if (p.t >= keepTime(s, p.crop)) rot(s, p, rng);
       continue;
     }
     const st = stageTime(s, p.crop);
@@ -347,9 +369,9 @@ function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | 
     let score = dist;
     if (prio === 'valioso') {
       const crop = g.job === 'sembrador' ? seedFor(s, g, p) : p.crop;
-      score = -CROPS[crop].value / (dist + VALUE_DISTANCE_BIAS);
+      score = -cropValue(s, crop) / (dist + VALUE_DISTANCE_BIAS);
     } else if (prio === 'urgente' && p.stage === RIPE) {
-      const margin = CROPS[p.crop].keep - p.t - dist / speed - HARVEST_TIME;
+      const margin = keepTime(s, p.crop) - p.t - dist / speed - HARVEST_TIME;
       score = margin >= 0 ? margin - UNSAVABLE : dist;
     }
     if (score < bestScore) {
@@ -390,8 +412,8 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
     }
   } else {
     if (g.carry.length) return goDeliver(s, g, rng);
-    // cada porteador que ya va a la cesta se lleva hasta PORTER_CAPACITY; si no queda nada para este, no va
-    const claimed = s.gnomes.filter(o => o !== g && o.job === 'porteador' && o.task?.kind === 'pickup').length * PORTER_CAPACITY;
+    // cada porteador que ya va a la cesta se lleva su carga; si no queda nada para este, no va
+    const claimed = s.gnomes.filter(o => o !== g && o.job === 'porteador' && o.task?.kind === 'pickup').length * porterCapacity(s);
     if (s.basket.length > claimed) {
       goTo(g, BASKET.x + rng() * 6 - 3, BASKET.y + 2, { kind: 'pickup' });
       return;
@@ -425,13 +447,13 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
     if (p.stage !== -1 && p.stage !== ROTTEN) return releaseTask(s, g);
     work(g, (PLANT_TIME + (p.stage === ROTTEN ? CLEAR_TIME : 0)) * workMult(s), 'harvest', task);
   } else if (task.kind === 'deliver') {
-    const amount = g.carry.reduce((a, c) => a + CROPS[c].value, 0);
+    const amount = g.carry.reduce((a, c) => a + cropValue(s, c), 0);
     s.coins += amount;
     s.totalEarned += amount;
-    s.events.push({ type: 'coins', x: DOOR.x, y: DOOR.y - 20, amount });
+    s.events.push({ type: 'coins', x: DOOR.x, y: DOOR.y - 20, amount: Math.round(amount) });
     if (rng() < 0.2) {
       const que = g.carry.length === 1 ? CULTIVOS[g.carry[0]].uno : LOG.variosCultivos(g.carry.length);
-      log(s, LOG.entrega(g.name, que, amount));
+      log(s, LOG.entrega(g.name, que, Math.round(amount)));
     }
     g.stats.delivered += g.carry.length;
     g.stats.tasks++;
@@ -472,7 +494,7 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
     p.t = 0;
     g.carry.push(p.crop);
     g.stats.harvests++;
-    g.stats.value += CROPS[p.crop].value;
+    g.stats.value += cropValue(s, p.crop);
     g.stats.tasks++;
     if (CROPS[p.crop].value >= 12 && rng() < 0.15) {
       log(s, LOG.protesta(g.name));
@@ -494,7 +516,7 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
     }
   } else if (task?.kind === 'pickup') {
     const before = g.carry.length;
-    g.carry.push(...s.basket.splice(0, PORTER_CAPACITY));
+    g.carry.push(...s.basket.splice(0, porterCapacity(s)));
     if (g.carry.length > before) g.stats.tasks++;
   } else if (task?.kind === 'wait') {
     // vuelve a intentar dejar lo que lleva

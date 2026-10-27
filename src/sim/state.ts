@@ -1,4 +1,4 @@
-import { CROP_IDS, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, JOB_IDS, MAX_GROUPS, NODE_IDS, PRIORITIES, ROTTEN, TREE } from './config';
+import { CROP_IDS, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, PRIORITIES, ROTTEN, TREE } from './config';
 import { GRUPOS, LOG } from '../textos';
 import type { CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Priority, Rng } from './types';
 
@@ -36,6 +36,7 @@ export function createState(rng: Rng): GameState {
     nextId: 1,
     manualHarvests: 0,
     rotted: 0,
+    house: 0,
     crowns: { recolector: null, sembrador: null, porteador: null },
     log: [LOG.inicio],
     events: [],
@@ -62,6 +63,7 @@ export interface SaveData {
   nextId: number;
   manualHarvests: number;
   rotted: number;
+  house: number;
   crowns: Record<JobId, number | null>;
   plots: { crop: CropId; stage: number; t: number }[];
   gnomes: { id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[]; stats: GnomeStats }[];
@@ -81,6 +83,7 @@ export function serialize(s: GameState): SaveData {
     nextId: s.nextId,
     manualHarvests: s.manualHarvests,
     rotted: s.rotted,
+    house: s.house,
     crowns: { ...s.crowns },
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t })),
     gnomes: s.gnomes.map(g => ({ id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry], stats: { ...g.stats } })),
@@ -105,6 +108,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   s.nextId = Math.max(1, Math.floor(num(d.nextId, 1)));
   s.manualHarvests = Math.max(0, num(d.manualHarvests, 0));
   s.rotted = Math.max(0, num(d.rotted, 0));
+  s.house = int(d.house, 0, 0, HOUSE.max);
   for (const j of JOB_IDS) s.hired[j] = int(d.hired?.[j], 0, 0, 999);
 
   if (Array.isArray(d.groups)) {
@@ -145,6 +149,8 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
       });
     s.nextId = Math.max(s.nextId, ...s.gnomes.map(g => g.id + 1));
   }
+  // las partidas de antes de la casa pueden tener más gnomos que camas: la casa crece hasta que quepan
+  while (s.house < HOUSE.max && HOUSE.base + HOUSE.perLevel * s.house < s.gnomes.length) s.house++;
   for (const j of JOB_IDS) {
     const id = d.crowns?.[j];
     s.crowns[j] = s.gnomes.some(g => g.id === id && g.job === j) ? (id as number) : null;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BASKET, CROPS, CROWN_MARGIN, FIELD, MAX_GROUPS, RIPE, ROTTEN, TREE } from './config';
+import { BASKET, COST_GROWTH, CROPS, CROWN_MARGIN, FIELD, HOUSE, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL, RIPE, ROTTEN, TREE } from './config';
 import {
-  basketMax, buyNode, clickPlot, createGroup, deleteGroup, fieldSize, hire, hireCost, isOpen, moveGnome, nodeCost,
-  nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
+  basketMax, buyHouse, buyNode, clickPlot, createGroup, deleteGroup, fieldSize, hire, hireCost, houseCapacity, isOpen,
+  moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
 } from './sim';
 import { createState, deserialize, serialize } from './state';
 import type { GameState, JobId, Rng } from './types';
@@ -37,11 +37,11 @@ function park(g: { state: string; timer: number; task: unknown }) {
 const plotId = (col: number, row: number) => row * FIELD.maxCols + col;
 
 describe('contratar', () => {
-  it('el coste sube un 18 % por gnomo del mismo oficio', () => {
+  it('el coste sube un COST_GROWTH por gnomo del mismo oficio', () => {
     const s = createState(seeded(1));
     expect(hireCost(s, 'recolector')).toBe(12);
     s.hired.recolector = 5;
-    expect(hireCost(s, 'recolector')).toBe(Math.floor(12 * 1.18 ** 5));
+    expect(hireCost(s, 'recolector')).toBe(Math.floor(12 * COST_GROWTH ** 5));
   });
 
   it('no se puede contratar sin monedas', () => {
@@ -63,6 +63,36 @@ describe('contratar', () => {
   });
 });
 
+describe('casa de gnomos', () => {
+  it('sin cama libre no se contrata; ampliar la casa da más camas', () => {
+    const rng = seeded(1);
+    const s = createState(rng);
+    s.coins = 1e9;
+    for (let i = 0; i < HOUSE.base; i++) expect(hire(s, 'recolector', rng)).toBe(true);
+    expect(hire(s, 'recolector', rng)).toBe(false);
+    const coins = s.coins;
+    expect(buyHouse(s)).toBe(true);
+    expect(s.coins).toBe(coins - HOUSE.cost);
+    expect(houseCapacity(s)).toBe(HOUSE.base + HOUSE.perLevel);
+    expect(hire(s, 'recolector', rng)).toBe(true);
+    while (buyHouse(s));
+    expect(s.house).toBe(HOUSE.max);
+    expect(houseCapacity(s)).toBeLessThanOrEqual(MAX_GNOMES);
+  });
+
+  it('una partida con más gnomos que camas carga con la casa ampliada', () => {
+    const rng = seeded(1);
+    const s = createState(rng);
+    s.coins = 1e9;
+    s.house = HOUSE.max;
+    for (let i = 0; i < HOUSE.base + 5; i++) hire(s, 'recolector', rng);
+    const old = JSON.parse(JSON.stringify(serialize(s)));
+    delete old.house;
+    const loaded = deserialize(old, rng)!;
+    expect(houseCapacity(loaded)).toBeGreaterThanOrEqual(loaded.gnomes.length);
+  });
+});
+
 describe('árbol de mejoras', () => {
   it('un nodo necesita a su padre', () => {
     const s = createState(seeded(1));
@@ -76,17 +106,32 @@ describe('árbol de mejoras', () => {
   it('el coste crece con el nivel y hay un máximo', () => {
     const s = createState(seeded(1));
     s.coins = 1e9;
-    expect(nodeCost(s, 'botas')).toBe(30);
+    expect(nodeCost(s, 'botas')).toBe(TREE.botas.base);
     buyNode(s, 'botas');
-    expect(nodeCost(s, 'botas')).toBe(60);
+    expect(nodeCost(s, 'botas')).toBe(Math.floor(TREE.botas.base * TREE.botas.mult));
     while (buyNode(s, 'botas'));
     expect(s.tree.botas).toBe(TREE.botas.max);
+  });
+
+  it('el mercado sube lo que se cobra y las conservas retrasan la podredumbre', () => {
+    const rng = seeded(1);
+    const s = createState(rng);
+    s.tree.mercado = 2;
+    s.plots[0].stage = RIPE;
+    clickPlot(s, 0, 'zanahoria');
+    expect(s.coins).toBeCloseTo(CROPS.zanahoria.value * (1 + 2 * MERCADO_PER_LEVEL));
+    s.tree.conservas = 1;
+    const p = s.plots[0];
+    p.stage = RIPE;
+    p.t = 0;
+    for (let i = 0; i < (CROPS.zanahoria.keep + 1) * 30; i++) tick(s, 1 / 30, rng);
+    expect(p.stage).toBe(RIPE);
   });
 
   it('los cultivos nuevos se desbloquean en el árbol', () => {
     const s = createState(seeded(1));
     expect(clickPlot(s, 0, 'trigo')).toBe(null);
-    s.coins = 60;
+    s.coins = TREE.trigo.base;
     expect(buyNode(s, 'trigo')).toBe(true);
     expect(clickPlot(s, 0, 'trigo')).toBe('plant');
   });

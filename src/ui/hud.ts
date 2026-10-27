@@ -1,6 +1,6 @@
 // Lo que está siempre en pantalla: monedas arriba, barra de accesos y semillas abajo, y el último aviso del diario.
-import { CROP_IDS, CROPS } from '../sim/config';
-import { cropUnlocked } from '../sim/sim';
+import { CROP_IDS } from '../sim/config';
+import { cropUnlocked, cropValue } from '../sim/sim';
 import type { CropId, GameState } from '../sim/types';
 import { cropIcons, menuIcons } from '../render/icons';
 import { CULTIVOS, MENUS, UI, type MenuId } from '../textos';
@@ -70,7 +70,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         const locked = !cropUnlocked(s, c);
         setDisabled(btn, locked);
         btn.setAttribute('aria-pressed', String(selected === c));
-        const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(CROPS[c].value)}). ${UI.semillaAyuda}`;
+        const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}`;
         if (btn.title !== title) btn.title = title;
       }
 

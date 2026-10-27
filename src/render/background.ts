@@ -1,6 +1,6 @@
 // Fondo del mundo: hierba y camino (fijos) y el bancal (se redibuja al ampliarlo).
-// El granero, el tablón y el árbol viejo son sprites aparte (landmarks.ts) porque se pueden pulsar.
-import { DOOR, FIELD, OLD_TREE, WORLD } from '../sim/config';
+// El granero, la casa de gnomos, el tablón y el árbol viejo son sprites aparte (landmarks.ts) porque se pueden pulsar.
+import { DOOR, FIELD, HOUSE, OLD_TREE, WORLD } from '../sim/config';
 import { makeCanvas, rng } from './pixelart';
 
 function paintGrass(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number) {
@@ -50,6 +50,10 @@ export function drawBackground(): HTMLCanvasElement {
   ctx.beginPath();
   ctx.ellipse(OLD_TREE.x + OLD_TREE.w / 2, OLD_TREE.y + OLD_TREE.h - 1, OLD_TREE.w / 2 - 2, 3, 0, 0, Math.PI * 2);
   ctx.fill();
+  // y bajo la casa de gnomos
+  ctx.beginPath();
+  ctx.ellipse(HOUSE.x + HOUSE.w / 2, HOUSE.y + HOUSE.h - 1, HOUSE.w / 2 - 3, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // flores, lejos del granero, del árbol y de donde puede llegar a crecer el bancal
   const fx0 = FIELD.x - 8, fy0 = FIELD.y - 8;
@@ -61,6 +65,7 @@ export function drawBackground(): HTMLCanvasElement {
     if (x > fx0 && x < fx1 && y > fy0 && y < fy1) continue;
     if (x < FIELD.x && y < DOOR.y + 10) continue;
     if (x >= OLD_TREE.x - 2 && x <= OLD_TREE.x + OLD_TREE.w + 2 && y >= OLD_TREE.y - 2 && y <= OLD_TREE.y + OLD_TREE.h + 2) continue;
+    if (x >= HOUSE.x - 2 && x <= HOUSE.x + HOUSE.w + 2 && y >= HOUSE.y - 2 && y <= HOUSE.y + HOUSE.h + 2) continue;
     rect(x - 1, y, 1, 1, petal);
     rect(x + 1, y, 1, 1, petal);
     rect(x, y - 1, 1, 1, petal);

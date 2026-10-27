@@ -1,11 +1,11 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, CROPS, FIELD, GROUP_PALETTE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WILT_WARNING } from '../sim/config';
-import { basketMax, fieldSize, groupOf, hasPorters, isOpen, plotAt, plotOrigin } from '../sim/sim';
+import { BARN, BASKET, BOARD, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WILT_WARNING } from '../sim/config';
+import { basketMax, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin } from '../sim/sim';
 import type { GameState, Gnome } from '../sim/types';
-import { MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
+import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
-import { drawBarn, drawBoard, drawOldTree, outlined } from './landmarks';
+import { drawBarn, drawBoard, drawHouse, drawOldTree, outlined } from './landmarks';
 import { frameIndex, type Atlas } from './sprites';
 
 const FONT = ['Pixelify Sans', 'monospace'];
@@ -15,6 +15,8 @@ const BASKET_SPRITE_H = 9;
 /** Elemento del huerto que abre un menú al pulsarlo. */
 interface Landmark {
   menu: MenuId;
+  /** nombre al pasar el ratón, si no es el del menú (la casa abre el granero) */
+  label?: { lugar: string; sub: string };
   sprite: Sprite;
   normal: Texture;
   hover: Texture;
@@ -56,6 +58,11 @@ export class SceneView {
   private sparkles: Sprite[] = [];
   private basket: Sprite;
   private basketCount: Text;
+  private house: Landmark;
+  private houseCount: Text;
+  /** texturas de la casa por nivel, normal y resaltada */
+  private houseTextures = new Map<number, { normal: Texture; hover: Texture; w: number; h: number }>();
+  private houseLevel = -1;
   private landmarks: Landmark[] = [];
   private hovered: Landmark | null = null;
   private gnomes = new Map<number, GnomeView>();
@@ -84,18 +91,24 @@ export class SceneView {
       this.entities.addChild(plant, sparkle);
     }
 
-    const addLandmark = (menu: MenuId, canvas: HTMLCanvasElement, x: number, y: number) => {
+    const addLandmark = (menu: MenuId, canvas: HTMLCanvasElement, x: number, y: number, label?: Landmark['label']) => {
       const normal = Texture.from(canvas);
       const hover = Texture.from(outlined(canvas));
       const sprite = new Sprite(normal);
       sprite.position.set(x, y);
       sprite.zIndex = y + canvas.height;
       this.entities.addChild(sprite);
-      this.landmarks.push({ menu, sprite, normal, hover, x, y, w: canvas.width, h: canvas.height });
+      const lm: Landmark = { menu, label, sprite, normal, hover, x, y, w: canvas.width, h: canvas.height };
+      this.landmarks.push(lm);
+      return lm;
     };
     addLandmark('contratar', drawBarn(), BARN.x - 1, BARN.y);
     addLandmark('grupos', drawBoard(), BOARD.x, BOARD.y);
     addLandmark('arbol', drawOldTree(), OLD_TREE.x, OLD_TREE.y);
+    // la casa se apoya en la base de su caja; syncHouse cambia el dibujo cuando se amplía
+    const house0 = drawHouse(0);
+    this.house = addLandmark('contratar', house0, HOUSE.x, HOUSE.y + HOUSE.h - house0.height, { lugar: CASA.nombre, sub: MENUS.contratar.sub });
+    this.houseTextures.set(0, { normal: this.house.normal, hover: this.house.hover, w: house0.width, h: house0.height });
 
     this.basket = new Sprite(atlas.basket[0]);
     this.basket.position.set(BASKET.x - BASKET_SPRITE_W / 2, BASKET.y - 4 - BASKET_SPRITE_H);
@@ -105,10 +118,12 @@ export class SceneView {
     const tagStyle = { fontFamily: FONT, fontSize: 14, fill: '#f4f4f4', stroke: { color: '#1a1c2c', width: 4 }, align: 'center' as const };
     this.basketCount = new Text({ text: '', style: tagStyle });
     this.basketCount.anchor.set(0.5, 1);
+    this.houseCount = new Text({ text: '', style: tagStyle });
+    this.houseCount.anchor.set(0.5, 1);
     this.nameTag = new Text({ text: '', style: tagStyle });
     this.nameTag.anchor.set(0.5, 1);
     this.nameTag.visible = false;
-    this.overlay.addChild(this.basketCount, this.nameTag);
+    this.overlay.addChild(this.basketCount, this.houseCount, this.nameTag);
 
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
@@ -142,6 +157,7 @@ export class SceneView {
     this.layout(s);
     this.syncPlants(s);
     this.syncBasket(s);
+    this.syncHouse(s);
     this.syncGnomes(s);
     this.syncMarks(s);
     this.syncFloats(s, dt);
@@ -156,6 +172,34 @@ export class SceneView {
     const old = this.field.texture;
     this.field.texture = Texture.from(drawField(f.cols, f.rows));
     if (old !== Texture.EMPTY) old.destroy(true);
+  }
+
+  /** Dibujo de la casa según su nivel (cada nivel se dibuja una vez) y cartel de camas ocupadas. */
+  private syncHouse(s: GameState) {
+    const lm = this.house;
+    if (s.house !== this.houseLevel) {
+      this.houseLevel = s.house;
+      let tex = this.houseTextures.get(s.house);
+      if (!tex) {
+        const canvas = drawHouse(s.house);
+        tex = { normal: Texture.from(canvas), hover: Texture.from(outlined(canvas)), w: canvas.width, h: canvas.height };
+        this.houseTextures.set(s.house, tex);
+      }
+      lm.normal = tex.normal;
+      lm.hover = tex.hover;
+      lm.w = tex.w;
+      lm.h = tex.h;
+      lm.y = HOUSE.y + HOUSE.h - tex.h;
+      const hovered = this.hovered === lm;
+      lm.sprite.texture = hovered ? lm.hover : lm.normal;
+      lm.sprite.position.set(lm.x - (hovered ? 1 : 0), lm.y - (hovered ? 1 : 0));
+    }
+    const beds = houseCapacity(s);
+    this.houseCount.visible = this.hovered !== lm;
+    this.houseCount.text = `${s.gnomes.length}/${beds}`;
+    this.houseCount.style.fill = s.gnomes.length >= beds ? '#e8687d' : '#f4f4f4';
+    const p = this.toScreen(HOUSE.x + HOUSE.w / 2, lm.y - 2);
+    this.houseCount.position.set(p.x, p.y);
   }
 
   /** Elemento pulsable bajo un punto del mundo (por su caja, con un pequeño margen). */
@@ -185,7 +229,7 @@ export class SceneView {
     this.grass.tileScale.set(S);
     this.grass.tilePosition.set(this.world.x, this.world.y);
 
-    for (const t of [this.nameTag, this.basketCount]) {
+    for (const t of [this.nameTag, this.basketCount, this.houseCount]) {
       t.style.fontSize = Math.max(12, 4 * S);
       t.style.stroke = { color: '#1a1c2c', width: Math.max(3, S) };
     }
@@ -213,7 +257,7 @@ export class SceneView {
         continue;
       }
       const ripe = p.stage === RIPE;
-      const wilting = ripe && p.t >= CROPS[p.crop].keep * WILT_WARNING;
+      const wilting = ripe && p.t >= keepTime(s, p.crop) * WILT_WARNING;
       sp.texture = wilting ? this.atlas.passing[p.crop] : this.atlas.plants[p.crop][p.stage];
       sp.anchor.set(0.5, 0);
       // parte de las plantas en espejo, para que el bancal no parezca copiado y pegado
@@ -387,7 +431,8 @@ export class SceneView {
         this.nameTag.position.set(p.x, p.y);
         this.nameTag.visible = true;
       } else if (lm) {
-        this.nameTag.text = `${MENUS[lm.menu].lugar}\n${MENUS[lm.menu].sub}`;
+        const label = lm.label ?? MENUS[lm.menu];
+        this.nameTag.text = `${label.lugar}\n${label.sub}`;
         const p = this.toScreen(lm.x + lm.w / 2, lm.y - 2);
         this.nameTag.position.set(p.x, p.y);
         this.nameTag.visible = true;

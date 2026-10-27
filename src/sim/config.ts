@@ -11,8 +11,13 @@ export const OLD_TREE = { x: 4, y: 96, w: 40, h: 46 } as const;
 export const FIELD = { x: 112, y: 58, cell: 18, maxCols: 9, maxRows: 6, startCols: 3, startRows: 3 } as const;
 /** cesta del bancal: (x, y) es donde se ponen los gnomos para usarla */
 export const BASKET = { x: 100, y: DOOR.y + 8, base: 30, perLevel: 15 } as const;
-/** donde pasean los gnomos sin trabajo: la hierba junto al árbol viejo */
-export const IDLE_AREA = { x0: 48, x1: 100, y0: 104, y1: 142 } as const;
+/**
+ * Casa de gnomos: el primer edificio. Cada nivel añade camas; sin cama libre no se puede contratar.
+ * (x, y, w, h) es su caja en el mundo; se pulsa para abrir el granero (contratar y ampliar la casa).
+ */
+export const HOUSE = { x: 56, y: 96, w: 30, h: 28, base: 8, perLevel: 4, max: 8, cost: 60, mult: 1.9 } as const;
+/** donde pasean los gnomos sin trabajo: la hierba delante de su casa, junto al árbol viejo */
+export const IDLE_AREA = { x0: 50, x1: 104, y0: 128, y1: 146 } as const;
 
 export const STAGES = 5;
 export const RIPE = STAGES - 1;
@@ -27,10 +32,12 @@ export interface CropDef {
   keep: number;
 }
 export const CROPS: Record<CropId, CropDef> = {
-  zanahoria: { value: 2, grow: 10, keep: 20 },
-  trigo: { value: 5, grow: 16, keep: 45 },
-  tomate: { value: 12, grow: 28, keep: 20 },
-  calabaza: { value: 40, grow: 60, keep: 90 },
+  // Rápido y laborioso → lento y cómodo. Contando ~10 s de espera entre madurar y volver a sembrar,
+  // monedas/s por parcela: 0,25 → 0,22 → 0,19 → 0,16; monedas por viaje: 5 → 9 → 18 → 45.
+  zanahoria: { value: 5, grow: 10, keep: 20 },
+  trigo: { value: 9, grow: 31, keep: 60 },
+  tomate: { value: 18, grow: 85, keep: 30 },
+  calabaza: { value: 45, grow: 270, keep: 120 },
 };
 /** a partir de esta fracción del aguante, la planta amarillea: deja al menos 10 s de aviso */
 export const WILT_WARNING = 0.5;
@@ -43,7 +50,8 @@ export const JOBS: Record<JobId, { base: number }> = {
   porteador: { base: 45 },
 };
 export const JOB_IDS: JobId[] = ['recolector', 'sembrador', 'porteador'];
-export const COST_GROWTH = 1.18;
+export const COST_GROWTH = 1.3;
+/** tope absoluto; el tope real lo marca la casa de gnomos (HOUSE) */
 export const MAX_GNOMES = 40;
 export const PORTER_CAPACITY = 5;
 export const MAX_GROUPS = 20;
@@ -76,17 +84,24 @@ export interface NodeDef {
   y: number;
 }
 export const TREE: Record<NodeId, NodeDef> = {
-  botas: { branch: 'gnomos', base: 30, mult: 2, max: 5, parent: null, x: 24, y: 70 },
-  cafe: { branch: 'gnomos', base: 40, mult: 2.3, max: 4, parent: 'botas', x: 9, y: 47 },
-  saco: { branch: 'gnomos', base: 50, mult: 2.4, max: 4, parent: 'botas', x: 31, y: 47 },
-  porteadores: { branch: 'gnomos', base: 80, mult: 1, max: 1, parent: 'saco', x: 31, y: 26 },
-  cesta: { branch: 'gnomos', base: 150, mult: 2, max: 3, parent: 'porteadores', x: 31, y: 6 },
-  bancal: { branch: 'bancal', base: 25, mult: 1.55, max: 9, parent: null, x: 50, y: 62 },
-  trigo: { branch: 'cultivos', base: 60, mult: 1, max: 1, parent: null, x: 76, y: 70 },
-  abono: { branch: 'cultivos', base: 45, mult: 2.2, max: 5, parent: 'trigo', x: 91, y: 47 },
-  tomate: { branch: 'cultivos', base: 250, mult: 1, max: 1, parent: 'trigo', x: 69, y: 47 },
-  calabaza: { branch: 'cultivos', base: 1200, mult: 1, max: 1, parent: 'tomate', x: 69, y: 26 },
+  botas: { branch: 'gnomos', base: 90, mult: 2, max: 5, parent: null, x: 24, y: 70 },
+  cafe: { branch: 'gnomos', base: 120, mult: 2.3, max: 4, parent: 'botas', x: 9, y: 47 },
+  saco: { branch: 'gnomos', base: 150, mult: 2.4, max: 4, parent: 'botas', x: 31, y: 47 },
+  porteadores: { branch: 'gnomos', base: 240, mult: 1, max: 1, parent: 'saco', x: 31, y: 26 },
+  cesta: { branch: 'gnomos', base: 450, mult: 2, max: 3, parent: 'porteadores', x: 31, y: 6 },
+  carretilla: { branch: 'gnomos', base: 600, mult: 2.5, max: 3, parent: 'porteadores', x: 14, y: 20 },
+  bancal: { branch: 'bancal', base: 75, mult: 1.55, max: 9, parent: null, x: 50, y: 62 },
+  trigo: { branch: 'cultivos', base: 180, mult: 1, max: 1, parent: null, x: 76, y: 70 },
+  abono: { branch: 'cultivos', base: 135, mult: 2.2, max: 5, parent: 'trigo', x: 91, y: 47 },
+  tomate: { branch: 'cultivos', base: 750, mult: 1, max: 1, parent: 'trigo', x: 69, y: 47 },
+  calabaza: { branch: 'cultivos', base: 3000, mult: 1, max: 1, parent: 'tomate', x: 69, y: 26 },
+  conservas: { branch: 'cultivos', base: 400, mult: 2.5, max: 3, parent: 'abono', x: 91, y: 26 },
+  mercado: { branch: 'cultivos', base: 1200, mult: 1.8, max: 5, parent: 'conservas', x: 80, y: 7 },
 };
+/** efectos de los nodos nuevos de la iteración 5 */
+export const CARRETILLA_PER_LEVEL = 3;
+export const CONSERVAS_PER_LEVEL = 0.25;
+export const MERCADO_PER_LEVEL = 0.15;
 export const NODE_IDS = Object.keys(TREE) as NodeId[];
 export const TREE_ROOT = { x: 50, y: 90 } as const;
 

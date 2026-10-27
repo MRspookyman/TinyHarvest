@@ -4,8 +4,8 @@ import { SceneView } from './render/scene';
 import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
-  buyNode, clickPlot, createGroup, cropUnlocked, deleteGroup, hire, hireCost, moveGnome, nodeCost, renameGroup,
-  setGroupColor, setGroupSeed, setPriority, tick,
+  buyHouse, buyNode, clickPlot, createGroup, cropUnlocked, deleteGroup, hire, hireCost, houseCapacity, houseCost, houseMaxed,
+  moveGnome, nodeCost, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
 } from './sim/sim';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
@@ -43,6 +43,7 @@ async function start() {
   const actions: GameActions = {
     hire: job => hire(state, job, rng),
     buyNode: id => buyNode(state, id),
+    buyHouse: () => buyHouse(state),
     createGroup: () => createGroup(state),
     renameGroup: (id, name) => renameGroup(state, id, name),
     setGroupColor: (id, color) => setGroupColor(state, id, color),
@@ -97,12 +98,17 @@ async function start() {
 
 /**
  * Solo en desarrollo, para revisar sin jugar desde cero:
- * ?monedas=500&recolectores=3&sembradores=1&porteadores=1&bancal=4
- * (porteadores y bancal compran también lo necesario en el árbol)
+ * ?monedas=500&recolectores=3&sembradores=1&porteadores=1&bancal=4&casa=2
+ * (porteadores y bancal compran también lo necesario en el árbol; casa amplía la casa de gnomos N niveles,
+ * y si los gnomos pedidos no caben, se amplía lo que haga falta)
  */
 function applyDevParams(state: GameState) {
   const q = new URLSearchParams(location.search);
   const n = (k: string) => Math.max(0, Math.floor(Number(q.get(k)) || 0));
+  const freeHouse = () => {
+    state.coins += houseCost(state);
+    return buyHouse(state);
+  };
   if (n('porteadores')) {
     for (const id of ['botas', 'saco', 'porteadores'] as const) {
       state.coins += nodeCost(state, id);
@@ -113,9 +119,11 @@ function applyDevParams(state: GameState) {
     state.coins += nodeCost(state, 'bancal');
     buyNode(state, 'bancal');
   }
+  for (let i = 0; i < n('casa'); i++) freeHouse();
   const jobs = { recolectores: 'recolector', sembradores: 'sembrador', porteadores: 'porteador' } as const;
   for (const [param, job] of Object.entries(jobs)) {
     for (let i = 0; i < n(param); i++) {
+      while (state.gnomes.length >= houseCapacity(state) && !houseMaxed(state)) freeHouse();
       state.coins += hireCost(state, job);
       hire(state, job, rng);
     }

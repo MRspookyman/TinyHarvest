@@ -3,9 +3,9 @@ export type JobId = 'recolector' | 'sembrador' | 'porteador';
 export type Priority = 'cercano' | 'valioso' | 'urgente' | `solo_${CropId}`;
 /** Nodos del árbol de mejoras. Los cultivos nuevos y la ampliación del bancal también son nodos. */
 export type NodeId =
-  | 'botas' | 'cafe' | 'saco' | 'porteadores' | 'cesta'
+  | 'botas' | 'cafe' | 'saco' | 'porteadores' | 'cesta' | 'carretilla'
   | 'bancal'
-  | 'trigo' | 'abono' | 'tomate' | 'calabaza';
+  | 'trigo' | 'abono' | 'tomate' | 'calabaza' | 'conservas' | 'mercado';
 export type Branch = 'gnomos' | 'bancal' | 'cultivos';
 export type Pose = 'idle' | 'walk' | 'carry' | 'harvest' | 'complain' | 'sleep';
 export type Rng = () => number;
@@ -99,6 +99,8 @@ export interface GameState {
   manualHarvests: number;
   /** cultivos que se han echado a perder en esta partida */
   rotted: number;
+  /** nivel de la casa de gnomos (0 = la casa inicial) */
+  house: number;
   /** id del gnomo con la corona de cada oficio (el que más tareas lleva), o null */
   crowns: Record<JobId, number | null>;
   /** más reciente primero */

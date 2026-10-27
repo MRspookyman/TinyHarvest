@@ -1,15 +1,23 @@
-// Granero: contratar gnomos.
-import { JOB_IDS, MAX_GNOMES } from '../../sim/config';
-import { hireCost, jobUnlocked } from '../../sim/sim';
+// Granero: ampliar la casa de gnomos y contratar gnomos.
+import { JOB_IDS } from '../../sim/config';
+import { hireCost, houseCapacity, houseCost, houseMaxed, jobUnlocked } from '../../sim/sim';
 import type { GameState, JobId } from '../../sim/types';
-import { jobIcons } from '../../render/icons';
-import { ARBOL, OFICIOS, UI } from '../../textos';
-import { html, pixelImg, setDisabled, setText, type GameActions } from '../dom';
+import { houseIcon, jobIcons } from '../../render/icons';
+import { ARBOL, CASA, OFICIOS, UI } from '../../textos';
+import { html, pixelImg, setDisabled, setText, toggleClass, type GameActions } from '../dom';
 import type { Menu } from '../windows';
 
 export function createHireMenu(actions: GameActions): Menu {
   const el = html(`
     <div class="hire">
+      <article class="job house" data-house>
+        ${pixelImg(houseIcon, 'px job-icon house-icon')}
+        <div class="job-text">
+          <header><b>${CASA.nombre}</b><span class="muted" data-beds></span></header>
+          <p data-house-desc></p>
+        </div>
+        <button type="button" class="btn" data-buy-house></button>
+      </article>
       ${JOB_IDS.map(j => `
         <article class="job" data-job="${j}">
           ${pixelImg(jobIcons[j], 'px job-icon')}
@@ -23,24 +31,39 @@ export function createHireMenu(actions: GameActions): Menu {
     </div>`);
 
   el.addEventListener('click', e => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-hire]');
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-buy-house]')) return actions.buyHouse();
+    const btn = target.closest<HTMLButtonElement>('[data-hire]');
     if (btn) actions.hire(btn.dataset.hire as JobId);
   });
+
+  const house = el.querySelector<HTMLElement>('[data-house]')!;
+  const houseBtn = house.querySelector<HTMLButtonElement>('[data-buy-house]');
 
   return {
     el,
     update(s: GameState) {
-      const full = s.gnomes.length >= MAX_GNOMES;
+      const beds = houseCapacity(s);
+      const full = s.gnomes.length >= beds;
+      const maxed = houseMaxed(s);
+      const cost = houseCost(s);
+      const bedsEl = house.querySelector('[data-beds]');
+      setText(bedsEl, CASA.camas(s.gnomes.length, beds));
+      toggleClass(bedsEl, 'full', full);
+      setText(house.querySelector('[data-house-desc]'), maxed ? CASA.maximo : CASA.desc);
+      setText(houseBtn, maxed ? UI.alMaximo : CASA.ampliar(cost));
+      setDisabled(houseBtn, maxed || s.coins < cost);
+
       for (const j of JOB_IDS) {
         const card = el.querySelector<HTMLElement>(`[data-job="${j}"]`)!;
         const unlocked = jobUnlocked(s, j);
-        const cost = hireCost(s, j);
+        const jobCost = hireCost(s, j);
         const btn = card.querySelector<HTMLButtonElement>('[data-hire]');
         card.classList.toggle('locked', !unlocked);
         card.querySelector<HTMLElement>('[data-lock]')!.hidden = unlocked;
         setText(card.querySelector('[data-count]'), UI.tienes(s.gnomes.filter(g => g.job === j).length));
-        setText(btn, full ? UI.lleno : UI.contratar(cost));
-        setDisabled(btn, !unlocked || full || s.coins < cost);
+        setText(btn, full ? CASA.lleno : UI.contratar(jobCost));
+        setDisabled(btn, !unlocked || full || s.coins < jobCost);
       }
     },
   };

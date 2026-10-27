@@ -1,6 +1,7 @@
-// Elementos del huerto que abren menús: granero (contratar), tablón (grupos) y árbol viejo (mejoras).
+// Elementos del huerto que abren menús: granero (contratar), casa de gnomos (contratar y ampliar),
+// tablón (grupos) y árbol viejo (mejoras).
 // Cada uno tiene su versión con contorno claro para cuando el ratón pasa por encima.
-import { BOARD, OLD_TREE } from '../sim/config';
+import { BOARD, HOUSE, OLD_TREE } from '../sim/config';
 import { makeCanvas } from './pixelart';
 
 type Ctx = CanvasRenderingContext2D;
@@ -112,6 +113,115 @@ export function drawOldTree(): HTMLCanvasElement {
     rect(ctx, x, y, 2, 2, '#ffcd75');
     rect(ctx, x + 1, y + 1, 1, 1, '#ef7d57');
   }
+  return c;
+}
+
+/** Medidas de la casa-seta según lo ampliada que esté: choza, casita con chimenea y casa de dos pisos. */
+const HOUSE_TIERS = [
+  { wallW: 14, wallH: 10, capW: 24, capH: 9 },
+  { wallW: 18, wallH: 12, capW: 28, capH: 11 },
+  { wallW: 20, wallH: 16, capW: 30, capH: 10 },
+] as const;
+/** motas blancas del sombrero, en orden de aparición (dx desde el centro, dy desde lo alto del sombrero) */
+const CAP_SPOTS: [number, number][] = [[-6, 3], [4, 2], [-1, 5], [8, 5], [-10, 6], [1, 1], [-4, 7], [6, 7], [11, 7]];
+
+/**
+ * Casa de gnomos con forma de seta, HOUSE.w de ancho y como mucho HOUSE.h de alto.
+ * Niveles 0–2: choza; 3–5: más grande, con chimenea y ventana; 6–8: dos pisos y banderín.
+ * Dentro de cada etapa, cada nivel añade una mota al sombrero y una flor junto a la puerta.
+ * Se recorta por arriba: se coloca con la base en HOUSE.y + HOUSE.h.
+ */
+export function drawHouse(level: number): HTMLCanvasElement {
+  const { w, h } = HOUSE;
+  const tier = level >= 6 ? 2 : level >= 3 ? 1 : 0;
+  const { wallW, wallH, capW, capH } = HOUSE_TIERS[tier];
+  const full = makeCanvas(w, h);
+  const ctx = full.getContext('2d')!;
+  const cx = w / 2;
+  const wx0 = cx - wallW / 2, wx1 = cx + wallW / 2 - 1;
+  const wallTop = h - 1 - wallH;
+  const capTop = wallTop - capH + 2;
+
+  // chimenea (detrás del sombrero, que tapa su base)
+  if (tier >= 1) {
+    const chx = cx + 6, chTop = capTop - 2;
+    rect(ctx, chx, chTop, 4, 7, '#1a1c2c');
+    rect(ctx, chx + 1, chTop + 1, 2, 6, '#8b5a3c');
+    rect(ctx, chx + 1, chTop + 3, 2, 1, '#5a3a2a');
+    rect(ctx, chx + 2, chTop - 2, 1, 1, '#94b0c2');
+    rect(ctx, chx + 3, chTop - 3, 1, 1, '#94b0c2');
+  }
+  // banderín en lo alto
+  if (tier === 2) {
+    rect(ctx, cx - 1, 0, 1, capTop + 1, '#5a3a2a');
+    rect(ctx, cx, 0, 4, 1, '#41a6f6');
+    rect(ctx, cx, 1, 2, 1, '#41a6f6');
+    rect(ctx, cx + 2, 1, 1, 1, '#3b5dc9');
+    rect(ctx, cx, 2, 1, 1, '#3b5dc9');
+  }
+
+  // paredes: el pie de la seta
+  rect(ctx, wx0, wallTop, wallW, wallH, '#1a1c2c');
+  rect(ctx, wx0 + 1, wallTop, wallW - 2, wallH - 1, '#f4f4f4');
+  rect(ctx, wx1 - 2, wallTop, 2, wallH - 1, '#94b0c2');
+  rect(ctx, wx0 - 1, h - 1, wallW + 2, 1, '#2e9a58');
+  // puerta redondeada con pomo
+  const doorH = tier === 0 ? 7 : 8;
+  const dx = cx - 3, dy = h - 1 - doorH;
+  rect(ctx, dx + 1, dy, 4, 1, '#1a1c2c');
+  rect(ctx, dx, dy + 1, 6, doorH, '#1a1c2c');
+  rect(ctx, dx + 1, dy + 1, 4, doorH - 1, '#8b5a3c');
+  rect(ctx, dx + 3, dy + 1, 2, doorH - 1, '#5a3a2a');
+  rect(ctx, dx + 3, dy + Math.floor(doorH / 2) + 1, 1, 1, '#ffcd75');
+  rect(ctx, dx - 1, h - 1, 8, 1, '#94b0c2');
+  // flores junto a la puerta: una por nivel dentro de la etapa
+  const flowers = level % 3;
+  for (let i = 0; i < flowers; i++) {
+    const fx = i === 0 ? dx - 3 : dx + 8;
+    rect(ctx, fx, h - 3, 1, 2, '#257179');
+    rect(ctx, fx - 1, h - 4, 3, 1, i === 0 ? '#ef7d57' : '#ffcd75');
+    rect(ctx, fx, h - 5, 1, 1, i === 0 ? '#ef7d57' : '#ffcd75');
+    rect(ctx, fx, h - 4, 1, 1, '#f4f4f4');
+  }
+  // ventanas con luz: una a cada lado desde la casita; dos más arriba en la de dos pisos
+  const windows: [number, number][] = [];
+  if (tier >= 1) windows.push([wx0 + 1, h - 9], [wx1 - 4, h - 9]);
+  if (tier === 2) {
+    windows.push([wx0 + 3, wallTop + 2], [wx1 - 6, wallTop + 2]);
+    rect(ctx, wx0 + 1, wallTop + 7, wallW - 2, 1, '#94b0c2');
+  }
+  for (const [x, y] of windows) {
+    rect(ctx, x, y, 4, 4, '#1a1c2c');
+    rect(ctx, x + 1, y + 1, 2, 2, '#ffcd75');
+  }
+
+  // sombrero rojo con motas
+  const inCap = (x: number, y: number) => {
+    if (y < capTop || y >= capTop + capH) return false;
+    const dy = (capTop + capH - 0.5 - y) / capH;
+    return ((x + 0.5 - cx) / (capW / 2)) ** 2 + dy * dy <= 1;
+  };
+  for (let y = capTop; y < capTop + capH; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!inCap(x, y)) continue;
+      const edge = !inCap(x - 1, y) || !inCap(x + 1, y) || !inCap(x, y - 1) || y === capTop + capH - 1;
+      let color = '#b13e53';
+      if (edge) color = '#1a1c2c';
+      else if (y === capTop + capH - 2) color = '#93324a';
+      else if (x < cx - 2 && y < capTop + 3) color = '#e8687d';
+      rect(ctx, x, y, 1, 1, color);
+    }
+  }
+  for (const [sx, sy] of CAP_SPOTS.slice(0, 1 + level)) {
+    const x = Math.round(cx + sx), y = capTop + sy;
+    if (y >= capTop + capH - 2 || !inCap(x - 1, y) || !inCap(x + 2, y)) continue;
+    rect(ctx, x, y, 2, 1, '#f4f4f4');
+  }
+
+  // recorta lo vacío de arriba para que la caja de la casa se ajuste a lo dibujado
+  const top = tier === 2 ? 0 : Math.max(0, tier === 1 ? capTop - 5 : capTop);
+  const c = makeCanvas(w, h - top);
+  c.getContext('2d')!.drawImage(full, 0, -top);
   return c;
 }
 

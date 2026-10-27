@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.10 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.11 · **Última actualización:** 2026-10-27
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -195,7 +195,7 @@ npm run dev      # abre la URL que muestra Vite
 npm test         # tests de la simulación
 npm run build    # genera dist/ para subir a itch.io
 ```
-**Atajos de revisión (solo en `npm run dev`):** `?monedas=500&recolectores=3&sembradores=1` empieza una partida limpia con esos gnomos y monedas.
+**Atajos de revisión (solo en `npm run dev`):** `?monedas=500&recolectores=3&sembradores=1&porteadores=1&bancal=4&casa=2` empieza una partida limpia con esos gnomos, monedas, bancal y casa (si no caben los gnomos, la casa se amplía sola).
 
 **Estructura**
 - `src/sim/`: simulación pura (estado, reglas, IA de los gnomos, guardado), con tests.
@@ -369,6 +369,50 @@ Minutos hasta completar el árbol según dos palancas (bot activo / tranquilo):
 - **El coste del árbol es lo que marca la duración.** El coste por gnomo solo retrasa los 40 gnomos: a 1,30 se llega en 51–59 min, frente a 18–24 min ahora.
 - **Punto de partida para la iteración 5: coste por gnomo 1,30 y árbol ×3** (58–66 min). Se aplicará junto con B2–B5, que también cambian la economía, y se ajustará con `npm run balance`.
 
+### Iteración 5: economía y ritmo (hecha y probada)
+
+| Cambio | Detalle |
+|---|---|
+| **Ventajas y costes por cultivo** (B2) | Zanahoria (vale 5, crece en 10 s, aguanta 20 s), trigo (9, 31 s, 60 s), tomate (18, 85 s, 30 s), calabaza (45, 270 s, 120 s). Contando la espera entre madurar y volver a sembrar, cuanto más rápido el cultivo, más monedas por parcela (0,25 → 0,16 monedas/s); cuanto más lento, más monedas por viaje (5 → 45). Con muchos gnomos conviene la zanahoria; con pocos, la calabaza. |
+| **Contratar más caro** (B3) | Cada gnomo del mismo oficio cuesta un 30 % más que el anterior (antes, un 18 %). Los nodos del árbol cuestan el triple. |
+| **Casa de gnomos** (B4) | Primer edificio: una casa-seta delante del árbol viejo, donde pasean los gnomos sin trabajo. Empieza con 8 camas y cada ampliación añade 4 (8 niveles, hasta 40). Sin cama libre no se contrata. Encima, un contador `gnomos/camas` (en rojo si está llena). La casa crece a la vista: choza, luego chimenea y ventanas, luego dos pisos con banderín. Se pulsa para abrir el granero, que tiene una fila «Casa de gnomos» con el botón *Ampliar*. |
+| **Nodos nuevos** (B5) | *Carretilla con una rueda de más*: el porteador lleva 3 cultivos más por viaje y nivel. *Cestos con paja*: lo maduro aguanta un 25 % más por nivel. *Puesto en el mercado*: todo se vende un 15 % más caro por nivel. |
+| **Bot de equilibrio** | Elige cultivo según sus gnomos (cada 30 s, lo que más rinde con su plantilla) y amplía la casa. Añade hitos nuevos, el hueco más largo sin compras y la pérdida por minuto, y una sección e) con el mejor cultivo según la plantilla. |
+
+Las partidas anteriores siguen valiendo; si tienen más gnomos que camas, la casa se amplía sola al cargar.
+
+**Prueba (2026-10-27):** `tsc`, los 34 tests (3 nuevos) y `npm run build` pasan. En Chrome se ha comprobado lo siguiente:
+- La casa se ve con su contador y se resalta al pasar el ratón; al pulsarla se abre el granero.
+- Al ampliarla cambia el dibujo y el contador.
+- Con la casa llena, el contador sale en rojo y no se puede contratar.
+- El árbol muestra los tres nodos nuevos y su «Ahora: …».
+- No hay errores en la consola.
+
+**Resultados del bot (`npm run balance`)**
+
+| Medida | Activo (1 clic/s) | Tranquilo (1 clic/5 s) | Antes (it. 4) |
+|---|---|---|---|
+| Árbol completo | **59 min** | **65 min** | 23 / 29 min |
+| Casa al máximo / 40 gnomos | 51 / 52 min | 56 / 58 min | — / 18–24 min |
+| Hueco más largo sin nada que comprar | 4,2 min (al final) | 4,4 min | — |
+| Monedas/s en el min 30 / 60 | 20 / 51 | 17 / 43 | — |
+
+El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a medias, monedas/s):
+
+| Plantilla | Zanahoria | Trigo | Tomate | Calabaza |
+|---|---|---|---|---|
+| 2 rec + 2 sem | 2,55 | 4,46 | 6,66 | **7,72** |
+| 4 + 3 | 4,83 | 8,05 | **11,19** | 8,10 |
+| 8 + 5 | 9,03 | **13,74** | 12,60 | 8,18 |
+| 12 + 8 | 12,57 | **14,84** | 13,02 | 8,25 |
+| 20 + 12 | **17,40** | 15,63 | 12,99 | 8,10 |
+| 28 + 12 | **17,48** | 15,53 | 13,11 | 8,18 |
+
+- **Cada cultivo es el mejor para alguna plantilla**: calabaza con muy pocos gnomos, tomate con pocos, trigo con plantilla media y zanahoria con muchos. Elegir semilla por grupo ya es una decisión de verdad.
+- **La duración se cumple:** árbol completo en 59 min (activo) y 65 min (tranquilo). El último nodo se queda un poco por encima de los 60 min del objetivo para el jugador tranquilo; se acepta.
+- **La podredumbre aparece con plantillas justas** (zanahoria con 8 + 5: 26 % perdido; tomate con 4 + 3: 6,5 %) y no aparece con plantillas holgadas. El bot de ritmo no pierde nada porque contrata todo lo que puede. Como siempre tiene muchos gnomos, siembra zanahoria toda la partida.
+- **Pendiente:** al acabar el árbol (min 59–65) vuelve la meseta sin nada que comprar. Es lo que resolverá el prestigio (iteración 8).
+
 ---
 
 ## 9. 🗺️ Backlog y hoja de ruta
@@ -393,10 +437,10 @@ Minutos hasta completar el árbol según dos palancas (bot activo / tranquilo):
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
 | B1 | **Bot de equilibrio** (`npm run balance`): mide el ritmo en cada iteración | S | Alto (herramienta) | — | ✅ It4 |
-| B2 | **Ventajas y costes por cultivo:** rápido y laborioso frente a lento y cómodo | S | Alto | A2 | It5 |
-| B3 | **Contratar más caro** (×1,30 por gnomo y árbol ×3 como punto de partida; ver el estudio de la sección 8) | S | Medio | B1 | It5 |
-| B4 | **Casa de gnomos:** el tope de gnomos depende de este edificio (el primer edificio del juego) | M | Alto | — | It5 |
-| B5 | **Más nodos en el árbol** (más niveles, ramas nuevas) | M | Medio | B1 | It5 |
+| B2 | **Ventajas y costes por cultivo:** rápido y laborioso frente a lento y cómodo | S | Alto | A2 | ✅ It5 |
+| B3 | **Contratar más caro** (×1,30 por gnomo y árbol ×3, ajustado con el bot) | S | Medio | B1 | ✅ It5 |
+| B4 | **Casa de gnomos:** el tope de gnomos depende de este edificio (el primer edificio del juego) | M | Alto | — | ✅ It5 |
+| B5 | **Más nodos en el árbol** (carretilla, cestos con paja, puesto en el mercado) | M | Medio | B1 | ✅ It5 |
 | B6 | **Multiplicador de organización:** premiar una cadena de trabajo eficiente | M | Medio | A1, A2 | It7 |
 
 **C. Contenido**
@@ -413,11 +457,17 @@ Minutos hasta completar el árbol según dos palancas (bot activo / tranquilo):
 
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
-| D1 | **Ficha de gnomo al hacer clic** (ahora al pasar el ratón solo sale el nombre) | S–M | Medio | — | It6 |
-| D2 | **Rasgos con efectos** («Perezoso: −10 % velocidad») | M | Alto | D1 | It6 |
+| D1 | **Ficha de gnomo al hacer clic, y la cámara lo sigue** (ahora al pasar el ratón solo sale el nombre) | S–M | Medio | — | It6 |
+| D2 | **Rasgos con efectos que se ven** (el perezoso anda despacio y se sienta a «pensar», el glotón se come una zanahoria, el cotilla se para a hablar, el nervioso corre) | M | Alto | D1 | It6 |
 | D3 | **Gnomos legendarios** | S | Medio | D2 | It6 |
-| D4 | **Eventos humorísticos** (sindicato gnomo, lluvia de ranas) | M | Medio | — | It6 |
+| D4 | **Pequeños sucesos cada 30–90 s** (un cuervo que espantar, un caracol que cruza, un topo) y alguno raro (lluvia de ranas, un gnomo que se cree espantapájaros, el sindicato gnomo) | M | Medio | — | It6 |
 | D5 | **Ranking de gnomos:** el más trabajador, el que más monedas aporta, el más andarín, el más dormilón… con corona para el líder en el huerto | S–M | Medio | — | ✅ It4 (pedido del autor) |
+| D6 | **Bocadillos de intención:** antes de salir, el gnomo enseña qué va a hacer (🍅, 🧺, 💤, ❤️ al plantar, 😤 si le quitan la parcela) | S | Alto | — | It6 |
+| D7 | **Reacciones entre gnomos:** se saludan al cruzarse, a veces chocan, discuten por una parcela; aplausos o refunfuños cuando cambia una corona | S–M | Alto | — | It6 |
+| D8 | **Más vida en la cosecha:** el cultivo vuela al saco, el saco engorda, el porteador lleva carretilla, el granero abre la puerta y crece un montoncito | S | Medio | — | It6 |
+| D9 | **Ociosos con gracia:** se sientan en una calabaza, juegan a las cartas, persiguen mariposas | S | Medio | — | It6 |
+| D10 | **Medir la vida:** «momentos llamativos por minuto» en `npm run balance` (objetivo: algo distinto cada 10–20 s sin repetirse demasiado) | S | Medio (herramienta) | D6–D9 | It6 |
+| D11 | **Día y noche, y tiempo** (atardecer, luciérnagas, farolillos; la lluvia acelera el crecimiento) | M–L | Medio | — | Más adelante |
 
 **E. Largo plazo**
 
@@ -442,7 +492,7 @@ Minutos hasta completar el árbol según dos palancas (bot activo / tranquilo):
 ```mermaid
 flowchart LR
   I4["It4 · Que organizar importe<br/>F1 B1 A1 A2 A3 A4 D5"] --> I5["It5 · Economía y ritmo<br/>B2 B3 B4 B5"]
-  I5 --> I6["It6 · Personalidad<br/>D1 D2 D3 D4 F2"]
+  I5 --> I6["It6 · Vida en el huerto<br/>D6 D7 D8 D9 D10 D1 D2 D3 D4 F2"]
   I6 --> I7["It7 · Contenido<br/>C1 C2 C3 B6"]
   I7 --> I8["It8 · Prestigio<br/>E1 F5"]
   I8 --> L["Después<br/>A5 C4 C5 E2 F3 F4 F6"]
@@ -452,7 +502,7 @@ flowchart LR
 |---|---|---|
 | **4 · Que organizar importe** | Cumplir el criterio de la demo que falta: cambiar la prioridad de un grupo se nota | Con gnomos de sobra, «cercano» y «valioso» dan resultados claramente distintos; se puede pasar el huerto entero a calabaza sin cazar parcelas vacías a clics; el ranking muestra quién destaca |
 | **5 · Economía y ritmo** | Que la temporada dure lo previsto (~1 h hasta que exista el prestigio) | Árbol completo en unos 45–60 min (medido con `npm run balance`); siempre hay algo útil que comprar; la zanahoria sigue sirviendo; con plantillas justas aparece algo de podredumbre |
-| **6 · Personalidad** | Que sea entretenido dejarlo un minuto y solo mirar | Al hacer clic en un gnomo sale su ficha; los rasgos cambian cómo trabaja; aparecen eventos de vez en cuando |
+| **6 · Vida en el huerto** | Que sea entretenido dejarlo un minuto y solo mirar | Algo distinto pasa en pantalla cada 10–20 s (medido con `npm run balance`); los bocadillos dicen qué va a hacer cada gnomo; al hacer clic en un gnomo la cámara lo sigue y sale su ficha; los rasgos se notan sin abrir menús |
 | **7 · Contenido** | Un oficio nuevo, una amenaza y más cultivos | Regador y guardián con un papel claro; fresa y melón tienen sus propias ventajas y costes |
 | **8 · Prestigio** | Que la partida tenga un final y vuelva a empezar | Reiniciar tras 1–2 h da semillas doradas que se notan en la siguiente temporada |
 
@@ -499,6 +549,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.11 (2026-10-27):** iteración 5, «economía y ritmo». Cada cultivo tiene su ventaja (rápido y laborioso frente a lento y cómodo) y es el mejor para alguna plantilla. Gnomos un 30 % más caros, árbol ×3, casa de gnomos (primer edificio, de 8 a 40 camas) y tres nodos nuevos (carretilla, cestos con paja, mercado). Árbol completo en 59–65 min según el bot. Bloque «vida en el huerto» añadido al backlog para la iteración 6 (D6–D11).
 - **v0.10 (2026-10-27):** respondidas con simulaciones las tres preguntas abiertas. Podredumbre: los aguantes se quedan, pero el aviso no se veía, así que ahora hay sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder). Corona: una por oficio y solo fama. Duración sin prestigio: ~1 h, con ×1,30 por gnomo y árbol ×3 como punto de partida para la iteración 5.
 - **v0.9 (2026-10-27):** iteración 4, «que organizar importe». Semilla por grupo, podredumbre visible, «valioso» con paseo, prioridad «Lo que se va a estropear antes», reserva de la cesta, ranking «Gnomos del mes» con corona para el más trabajador, bot de equilibrio (`npm run balance`) y repositorio git. Backlog y hoja de ruta en la sección 9. Las partidas de la iteración 3 siguen valiendo.
 - **v0.8 (2026-10-27):** iteración 3 probada en el navegador. Arreglado el diario, que se salía de la pantalla. Añadidos el estudio de equilibrio (bot de 3 h: el contenido se acaba en 23–31 min, cada cultivo supera al anterior en todo y las prioridades solo cuentan cuando faltan gnomos) y la propuesta de la iteración 4.

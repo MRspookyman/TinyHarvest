@@ -1,6 +1,6 @@
 // Árbol viejo: el árbol de mejoras. Crece hacia arriba desde la raíz; cada nodo cuelga de su padre.
-import { NODE_IDS, TREE, TREE_ROOT } from '../../sim/config';
-import { fieldSize, nodeCost, nodeMaxed, nodeReachable } from '../../sim/sim';
+import { CONSERVAS_PER_LEVEL, MERCADO_PER_LEVEL, NODE_IDS, TREE, TREE_ROOT } from '../../sim/config';
+import { fieldSize, nodeCost, nodeMaxed, nodeReachable, porterCapacity } from '../../sim/sim';
 import type { GameState, NodeId } from '../../sim/types';
 import { nodeIcons, rootIcon } from '../../render/icons';
 import { ARBOL, RAMAS, UI } from '../../textos';
@@ -106,7 +106,9 @@ export function createTreeMenu(actions: GameActions): Menu {
       else if (id === 'bancal') {
         const f = fieldSize(s);
         extra = `${UI.ahora}: ${UI.bancalTam(f.cols, f.rows)}`;
-      }
+      } else if (id === 'carretilla') extra = `${UI.ahora}: ${UI.porViaje(porterCapacity(s))}`;
+      else if (id === 'conservas') extra = `${UI.ahora}: ${UI.masAguante(Math.round(CONSERVAS_PER_LEVEL * s.tree.conservas * 100))}`;
+      else if (id === 'mercado') extra = `${UI.ahora}: ${UI.masCaro(Math.round(MERCADO_PER_LEVEL * s.tree.mercado * 100))}`;
       setText(el.querySelector('[data-d-extra]'), extra);
       buy.hidden = false;
       setText(buy, maxed ? UI.alMaximo : UI.comprar(cost));
