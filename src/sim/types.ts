@@ -99,8 +99,8 @@ export interface GameState {
   manualHarvests: number;
   /** cultivos que se han echado a perder en esta partida */
   rotted: number;
-  /** id del gnomo con la corona (el más trabajador), o null */
-  crown: number | null;
+  /** id del gnomo con la corona de cada oficio (el que más tareas lleva), o null */
+  crowns: Record<JobId, number | null>;
   /** más reciente primero */
   log: string[];
   /** salida para el render; no se guarda */

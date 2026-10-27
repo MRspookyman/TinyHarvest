@@ -211,6 +211,9 @@ img.crown-icon { display: inline-block; width: 14px; height: 10px; margin: 0 2px
 .rank-card li { display: grid; grid-template-columns: 22px 16px minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 0.85rem; counter-increment: rank; }
 .rank-card li::before { content: counter(rank) 'º'; font-weight: 700; color: var(--ink-soft); }
 .rank-card li:first-child::before { color: var(--gold-dark); }
+/* coronas: una por oficio, sin puesto */
+.rank-card ol.crowns li { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.rank-card ol.crowns li::before { content: none; display: none; }
 .rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-value { font-weight: 700; white-space: nowrap; }
 .rank-card > p { font-size: 0.85rem; }

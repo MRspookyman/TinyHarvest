@@ -36,7 +36,7 @@ export function createState(rng: Rng): GameState {
     nextId: 1,
     manualHarvests: 0,
     rotted: 0,
-    crown: null,
+    crowns: { recolector: null, sembrador: null, porteador: null },
     log: [LOG.inicio],
     events: [],
   };
@@ -62,7 +62,7 @@ export interface SaveData {
   nextId: number;
   manualHarvests: number;
   rotted: number;
-  crown: number | null;
+  crowns: Record<JobId, number | null>;
   plots: { crop: CropId; stage: number; t: number }[];
   gnomes: { id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[]; stats: GnomeStats }[];
   log: string[];
@@ -81,7 +81,7 @@ export function serialize(s: GameState): SaveData {
     nextId: s.nextId,
     manualHarvests: s.manualHarvests,
     rotted: s.rotted,
-    crown: s.crown,
+    crowns: { ...s.crowns },
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t })),
     gnomes: s.gnomes.map(g => ({ id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry], stats: { ...g.stats } })),
     log: s.log.slice(0, 15),
@@ -145,7 +145,10 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
       });
     s.nextId = Math.max(s.nextId, ...s.gnomes.map(g => g.id + 1));
   }
-  s.crown = s.gnomes.some(g => g.id === d.crown) ? (d.crown as number) : null;
+  for (const j of JOB_IDS) {
+    const id = d.crowns?.[j];
+    s.crowns[j] = s.gnomes.some(g => g.id === id && g.job === j) ? (id as number) : null;
+  }
   if (Array.isArray(d.log)) s.log = d.log.filter((l): l is string => typeof l === 'string').slice(0, 15);
   return s;
 }

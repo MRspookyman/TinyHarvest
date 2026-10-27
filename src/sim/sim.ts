@@ -243,7 +243,7 @@ export function tick(s: GameState, dt: number, rng: Rng) {
     if (p.stage === RIPE) p.t = 0;
   }
   for (const g of s.gnomes) updateGnome(s, g, dt, rng);
-  updateCrown(s);
+  updateCrowns(s);
 }
 
 function rot(s: GameState, p: Plot, rng: Rng) {
@@ -253,15 +253,22 @@ function rot(s: GameState, p: Plot, rng: Rng) {
   if (rng() < 0.25) log(s, LOG.podrido(CULTIVOS[p.crop].uno));
 }
 
-/** La corona pasa al gnomo más trabajador, si le saca al líder actual una ventaja clara. */
-function updateCrown(s: GameState) {
-  let leader: Gnome | null = null;
-  for (const g of s.gnomes) if (!leader || g.stats.tasks > leader.stats.tasks) leader = g;
-  if (!leader || leader.stats.tasks === 0 || leader.id === s.crown) return;
-  const holder = s.gnomes.find(g => g.id === s.crown);
-  if (holder && leader.stats.tasks < holder.stats.tasks + CROWN_MARGIN) return;
-  log(s, holder ? LOG.corona(leader.name, holder.name) : LOG.primeraCorona(leader.name));
-  s.crown = leader.id;
+/**
+ * Una corona por oficio para el que más tareas lleva. Cada oficio compite solo con los suyos porque sus
+ * tareas duran distinto: un porteador nunca hará tantas como un recolector.
+ * Para quitársela al líder hay que sacarle CROWN_MARGIN tareas.
+ */
+function updateCrowns(s: GameState) {
+  for (const job of Object.keys(s.crowns) as JobId[]) {
+    let leader: Gnome | null = null;
+    for (const g of s.gnomes) if (g.job === job && (!leader || g.stats.tasks > leader.stats.tasks)) leader = g;
+    if (!leader || leader.stats.tasks === 0 || leader.id === s.crowns[job]) continue;
+    const holder = s.gnomes.find(g => g.id === s.crowns[job]);
+    if (holder && leader.stats.tasks < holder.stats.tasks + CROWN_MARGIN) continue;
+    const oficio = OFICIOS[job].nombre.toLowerCase();
+    log(s, holder ? LOG.corona(leader.name, holder.name, oficio) : LOG.primeraCorona(leader.name, oficio));
+    s.crowns[job] = leader.id;
+  }
 }
 
 function updateGnome(s: GameState, g: Gnome, dt: number, rng: Rng) {

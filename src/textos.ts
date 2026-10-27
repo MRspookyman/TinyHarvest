@@ -95,13 +95,13 @@ export const GRUPOS = {
 
 /** Ventana del ranking. Cada categoría muestra el podio de los gnomos actuales. */
 export const RANKING = {
-  ayuda: 'El más trabajador lleva la corona en el huerto. Para quitársela hay que sacarle ventaja.',
-  corona: 'Lleva la corona',
+  ayuda: 'En cada oficio, el que más tareas lleva luce corona en el huerto. Para quitársela hay que sacarle ventaja. La corona es solo fama: no da ninguna ventaja.',
+  corona: (oficio: string) => `Mejor ${oficio} del mes`,
   nadie: 'Nadie todavía.',
   perdidos: (n: number) => (n === 1 ? '1 cultivo echado a perder' : `${n} cultivos echados a perder`),
   aMano: (n: number) => (n === 1 ? 'Tú: 1 recogido a mano' : `Tú: ${n} recogidos a mano`),
   categorias: {
-    tasks: { titulo: 'El más trabajador', unidad: 'tareas' },
+    tasks: { titulo: 'Los mejores de cada oficio', unidad: 'tareas; cada oficio compite con los suyos' },
     value: { titulo: 'El que más monedas genera', unidad: 'monedas cosechadas' },
     plants: { titulo: 'Mejor sembrador', unidad: 'siembras' },
     delivered: { titulo: 'El que más lleva al granero', unidad: 'cultivos' },
@@ -134,6 +134,6 @@ export const LOG = {
   grupoBorrado: (a: string, b: string) => `«${a}» se disuelve. Sus miembros vuelven a «${b}» con la cabeza gacha.`,
   podrido: (uno: string) => `Se ha echado a perder ${uno}. Huele a reproche.`,
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
-  primeraCorona: (n: string) => `${n} es el primer gnomo del mes. Nadie sabe quién decide esto, pero ya lleva corona.`,
-  corona: (nuevo: string, viejo: string) => `${nuevo} le quita la corona a ${viejo}. Dice que no le importa, pero no se la quita ni para dormir.`,
+  primeraCorona: (n: string, oficio: string) => `${n} es el primer «mejor ${oficio} del mes». Nadie sabe quién decide esto, pero ya lleva corona.`,
+  corona: (nuevo: string, viejo: string, oficio: string) => `${nuevo} le quita a ${viejo} la corona de mejor ${oficio}. Dice que no le importa, pero no se la quita ni para dormir.`,
 };

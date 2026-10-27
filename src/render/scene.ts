@@ -11,8 +11,6 @@ import { frameIndex, type Atlas } from './sprites';
 const FONT = ['Pixelify Sans', 'monospace'];
 const BASKET_SPRITE_W = 12;
 const BASKET_SPRITE_H = 9;
-/** tinte de la planta madura que lleva demasiado esperando */
-const WILT_TINT = 0xd8c890;
 
 /** Elemento del huerto que abre un menú al pulsarlo. */
 interface Landmark {
@@ -207,7 +205,6 @@ export class SceneView {
       if (!open) continue;
       const o = plotOrigin(p);
       sp.zIndex = o.y + 15;
-      sp.tint = 0xffffff;
       if (p.stage < 0) {
         sp.texture = this.atlas.hole;
         sp.anchor.set(0, 0);
@@ -215,13 +212,12 @@ export class SceneView {
         sp.position.set(o.x + 6, o.y + 12);
         continue;
       }
-      sp.texture = this.atlas.plants[p.crop][p.stage];
+      const ripe = p.stage === RIPE;
+      const wilting = ripe && p.t >= CROPS[p.crop].keep * WILT_WARNING;
+      sp.texture = wilting ? this.atlas.passing[p.crop] : this.atlas.plants[p.crop][p.stage];
       sp.anchor.set(0.5, 0);
       // parte de las plantas en espejo, para que el bancal no parezca copiado y pegado
       sp.scale.x = (p.id * 7) % 3 === 0 ? -1 : 1;
-      const ripe = p.stage === RIPE;
-      const wilting = ripe && p.t >= CROPS[p.crop].keep * WILT_WARNING;
-      if (wilting) sp.tint = WILT_TINT;
       const bounce = ripe && !wilting && Math.sin(this.time * 5 + p.id * 1.7) > 0.6 ? -1 : 0;
       sp.position.set(o.x + 9, o.y + 2 + bounce);
       sparkle.zIndex = o.y + 16;
@@ -307,7 +303,7 @@ export class SceneView {
 
     v.bubble.visible = g.bubble !== null;
     // la corona flota sobre el gorro; se aparta mientras hay bocadillo
-    v.crown.visible = s.crown === g.id && g.bubble === null;
+    v.crown.visible = s.crowns[g.job] === g.id && g.bubble === null;
     if (v.crown.visible) v.crown.position.set(-3, -23 - (Math.floor(g.t * 2) % 2));
     if (g.bubble === 'zz') {
       v.bubble.texture = this.atlas.zz;
@@ -385,7 +381,8 @@ export class SceneView {
       const g = s.gnomes.find(g => Math.abs(pt.x - g.x) <= 6 && pt.y <= g.y && pt.y >= g.y - 16);
       lm = g ? null : this.landmarkAt(pt.x, pt.y);
       if (g) {
-        this.nameTag.text = `${g.name}\n${OFICIOS[g.job].nombre} · ${groupOf(s, g).name}${s.crown === g.id ? `\n${RANKING.corona}` : ''}`;
+        const crowned = s.crowns[g.job] === g.id ? `\n${RANKING.corona(OFICIOS[g.job].nombre.toLowerCase())}` : '';
+        this.nameTag.text = `${g.name}\n${OFICIOS[g.job].nombre} · ${groupOf(s, g).name}${crowned}`;
         const p = this.toScreen(g.x, g.y - 18);
         this.nameTag.position.set(p.x, p.y);
         this.nameTag.visible = true;

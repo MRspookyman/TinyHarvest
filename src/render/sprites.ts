@@ -121,7 +121,7 @@ const ZZ: PixelMap = [
 ];
 const ALERT: PixelMap = ['.OOOOOOO.', 'OWWWWWWWO', 'OWWRWRWWO', 'OWWRWRWWO', 'OWWWWWWWO', 'OWWRWRWWO', '.OOOOOOO.', '..OO.....'];
 const SPARKLE: PixelMap = ['.W.', 'WYW', '.W.'];
-/** corona del gnomo más trabajador */
+/** corona del mejor de cada oficio */
 const CROWN: PixelMap = ['.Y.Y.Y.', 'OYOYOYO', 'OYYRYYO', 'OYYYYYO', '.OOOOO.'];
 const CROWN_PAL: Palette = { O: '#1a1c2c', Y: '#ffcd75', R: '#b13e53' };
 const FLY: PixelMap = ['w.w', '.K.'];
@@ -131,6 +131,8 @@ export const PLANT_PAL: Palette = {
   D: '#1c3b33', G: '#38b764', g: '#257179', l: '#a7f070', m: '#8f5c3e', h: '#4a2c20',
   C: '#ef7d57', c: '#b8503a', Y: '#ffcd75', U: '#c28a3a', T: '#d9a066', K: '#1a1c2c', w: '#a8723f',
   R: '#e04a5f', r: '#8e2f44', W: '#f4f4f4',
+  // moho de lo echado a perder: grises verdosos que no se confunden con la tierra ni con lo maduro
+  x: '#5d5a4e', z: '#8b8466', q: '#3f3a32',
 };
 
 // El trigo y la calabaza se generan con un pequeño lienzo de caracteres en vez de dibujarse a mano.
@@ -280,22 +282,34 @@ const TOMATO_RIPE = [
 const TOMATO_GREEN = TOMATO_RIPE.map(r => r.replace(/R/g, 'l').replace(/r/g, 'G'));
 const SPROUT_STAKE = SPROUT.map((r, i) => (i >= 4 && i <= 12 ? r.slice(0, 10) + 'w' + r.slice(11) : r));
 
-/** Planta echada a perder: la madura con los verdes y los frutos apagados a marrones. */
-const WILT: Record<string, string> = { G: 'U', l: 'T', g: 'm', C: 'c', R: 'r', Y: 'U', W: 'T' };
-const wilt = (m: PixelMap): PixelMap => m.map(r => r.replace(/[GlgCRYW]/g, ch => WILT[ch]));
+const recolor = (map: Record<string, string>) => (m: PixelMap): PixelMap =>
+  m.map(r => r.replace(/./g, ch => map[ch] ?? ch));
+/** Madura que lleva mucho esperando: las hojas amarillean y el trigo se oscurece; el fruto aún vale. */
+const passing = recolor({ G: 'U', l: 'Y', g: 'G', Y: 'U', U: 'm' });
+/** Echada a perder: todo pasa a grises de moho y el fruto a marrón. */
+const rotten = recolor({ G: 'x', g: 'q', l: 'z', C: 'm', c: 'h', R: 'm', r: 'h', Y: 'z', U: 'x', T: 'x', W: 'z' });
+
+const RIPE_MAPS: Record<CropId, PixelMap> = { zanahoria: CARROT_RIPE, trigo: wheat(4), tomate: TOMATO_RIPE, calabaza: pumpkin(4) };
 
 /** Fases por cultivo: semilla, brote, joven, creciendo, madura y echada a perder (índice ROTTEN). */
 export const PLANT_MAPS: Record<CropId, PixelMap[]> = {
-  zanahoria: [SEED, SPROUT, CARROT_YOUNG, CARROT_GROWING, CARROT_RIPE, wilt(CARROT_RIPE)],
-  trigo: [SEED, SPROUT, wheat(2), wheat(3), wheat(4), wilt(wheat(4))],
-  tomate: [SEED, SPROUT_STAKE, TOMATO_YOUNG, TOMATO_GREEN, TOMATO_RIPE, wilt(TOMATO_RIPE)],
-  calabaza: [SEED, SPROUT, pumpkin(2), pumpkin(3), pumpkin(4), wilt(pumpkin(4))],
+  zanahoria: [SEED, SPROUT, CARROT_YOUNG, CARROT_GROWING, RIPE_MAPS.zanahoria, rotten(RIPE_MAPS.zanahoria)],
+  trigo: [SEED, SPROUT, wheat(2), wheat(3), RIPE_MAPS.trigo, rotten(RIPE_MAPS.trigo)],
+  tomate: [SEED, SPROUT_STAKE, TOMATO_YOUNG, TOMATO_GREEN, RIPE_MAPS.tomate, rotten(RIPE_MAPS.tomate)],
+  calabaza: [SEED, SPROUT, pumpkin(2), pumpkin(3), RIPE_MAPS.calabaza, rotten(RIPE_MAPS.calabaza)],
+};
+/** Aviso: la planta madura que está a punto de echarse a perder. */
+export const PASSING_MAPS: Record<CropId, PixelMap> = {
+  zanahoria: passing(RIPE_MAPS.zanahoria), trigo: passing(RIPE_MAPS.trigo),
+  tomate: passing(RIPE_MAPS.tomate), calabaza: passing(RIPE_MAPS.calabaza),
 };
 
 // ---------- Atlas ----------
 export interface Atlas {
   gnome: Record<JobId, Record<Pose, Texture[]>>;
   plants: Record<CropId, Texture[]>;
+  /** madura a punto de echarse a perder */
+  passing: Record<CropId, Texture>;
   items: Record<CropId, Texture>;
   /** cesta con 0..4 niveles de montón */
   basket: Texture[];
@@ -329,6 +343,7 @@ export function buildAtlas(): Atlas {
   return {
     gnome: { recolector: gnomeFrames('recolector'), sembrador: gnomeFrames('sembrador'), porteador: gnomeFrames('porteador') },
     plants: byCrop(c => PLANT_MAPS[c].map(m => tex(m, PLANT_PAL))),
+    passing: byCrop(c => tex(PASSING_MAPS[c], PLANT_PAL)),
     items: byCrop(c => tex(ITEMS[c], { ...PLANT_PAL, R: '#b13e53' })),
     basket: BASKET_PILES.map((_, level) => Texture.from(basketCanvas(level))),
     rings: GROUP_PALETTE.map(color => tex(RING, { X: color })),

@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.9 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.10 · **Última actualización:** 2026-10-27
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -285,12 +285,12 @@ Las soluciones están en el backlog (sección 9): A1, A2, A3, A4, B2 y B3–B6.
 | Cambio | Detalle |
 |---|---|
 | **Semilla por grupo** (A1) | En el tablón, cada grupo tiene «Siembran»: *Lo mismo que había* (por defecto) o un cultivo desbloqueado. Los sembradores plantan esa semilla en lo vacío y en lo echado a perder. Ya no hace falta cazar parcelas vacías a clics. |
-| **Podredumbre** (A2) | Lo maduro aguanta un tiempo y después se echa a perder: zanahoria 20 s, trigo 45 s, tomate 20 s, calabaza 90 s. Al 60 % del aguante la planta pierde color y deja de saltar; echada a perder se vuelve marrón y le da vueltas una mosca. No da monedas. El sembrador la arranca y replanta (tarda 0,8 s más), y un clic tuyo también. |
+| **Podredumbre** (A2) | Lo maduro aguanta un tiempo y después se echa a perder: zanahoria 20 s, trigo 45 s, tomate 20 s, calabaza 90 s. A mitad del aguante **amarillea** (hojas ocres, trigo más oscuro) y deja de saltar. Echada a perder se vuelve **gris de moho** y le da vueltas una mosca. No da monedas. El sembrador la arranca y replanta (tarda 0,8 s más), y un clic tuyo también. |
 | **«Valioso» con paseo** (A3) | Elige el mayor valor por paseo: `valor / (distancia + 30)`. Un tomate al lado gana a una calabaza al fondo del bancal. |
 | **Prioridad nueva: «Lo que se va a estropear antes»** | Va a lo maduro con menos margen antes de echarse a perder, contando el paseo. Lo que ya no da tiempo a salvar queda para el final. |
 | **Reserva de la cesta** (A4) | Cada porteador que va a la cesta se reserva 5 cultivos; si no queda nada para otro, ese no va. |
-| **Ranking «Gnomos del mes»** (D5) | Botón *Ranking* en la barra. Es un podio de 3 en siete categorías: más trabajador (tareas), el que más monedas genera (valor cosechado), mejor sembrador, el que más lleva al granero, el más andarín (pasos), el más dormilón y el más quejica. Arriba: quién lleva la corona, lo que has recogido tú a mano y los cultivos echados a perder. |
-| **Corona** | El más trabajador lleva una corona dorada sobre el gorro. Para quitársela hay que sacarle 3 tareas de ventaja, y el diario lo cuenta («X le quita la corona a Y…»). |
+| **Ranking «Gnomos del mes»** (D5) | Botón *Ranking* en la barra. Arriba: lo que has recogido tú a mano y los cultivos echados a perder. Primera tarjeta: **el mejor de cada oficio** (los que llevan corona). Después, un podio de 3 en seis categorías: el que más monedas genera (valor cosechado), mejor sembrador, el que más lleva al granero, el más andarín (pasos), el más dormilón y el más quejica. |
+| **Coronas** | Una por oficio: el recolector, el sembrador y el porteador con más tareas llevan una corona dorada sobre el gorro. Para quitársela hay que sacarle 3 tareas de ventaja, y el diario lo cuenta («X le quita a Y la corona de mejor recolector…»). Solo dan fama. |
 | **Bot de equilibrio** (B1) | `npm run balance` (fichero `balance/ritmo.balance.ts`). Imprime el ritmo con dos perfiles de jugador, la comparación de prioridades con distintas plantillas, el tiempo que tarda en cambiar la semilla y la tabla de cultivos. No entra en `npm test`. |
 | **Git** (F1) | Repositorio local con un commit por iteración. |
 
@@ -319,6 +319,56 @@ Prioridades: bancal de 9×6 con los cuatro cultivos por columnas, 10 min, sin cl
 - **Cambiar de semilla:** con 6 recolectores y 4 sembradores, el 96 % del bancal pasa de zanahoria a calabaza en 1 minuto, sin clics.
 - **El ritmo no cambia**, como era de esperar: árbol completo a los 22,7 min (activo) y 28,7 min (tranquilo), y después ~68–69 monedas/s. El bot contrata de más y no se le estropea nada. Esto es trabajo de la iteración 5.
 
+### Estudio de las preguntas abiertas (tras la iteración 4)
+
+El autor no puede jugar, así que las tres preguntas se han respondido con simulaciones (script desechable con el mismo motor del juego) y con capturas del juego.
+
+**1. ¿Se nota la podredumbre y son justos los aguantes?**
+
+Porcentaje de lo maduro que se echa a perder en 10 min (bancal de 9×6 de un solo cultivo, «cercano», sin porteadores):
+
+| Cultivo | Mejoras | 2 rec + 2 sem | 4 + 3 | 6 + 4 | 9 + 6 | 12 + 8 |
+|---|---|---|---|---|---|---|
+| Zanahoria | ninguna | 80 % | 74 % | 70 % | 56 % | 46 % |
+| Zanahoria | a tope | 46 % | 22 % | 9 % | 0 % | 0 % |
+| Trigo | ninguna | 75 % | 61 % | 49 % | 36 % | 28 % |
+| Trigo | a tope | 28 % | 7 % | 0 % | 0 % | 0 % |
+| Tomate | ninguna | 81 % | 72 % | 59 % | 41 % | 30 % |
+| Tomate | a tope | 32 % | 3 % | 1 % | 0 % | 0 % |
+| Calabaza | ninguna | 56 % | 34 % | 20 % | 7 % | 0 % |
+| Calabaza | a tope | 0 % | 0 % | 0 % | 0 % | 0 % |
+
+- **Los aguantes son justos.** Las pérdidas solo aparecen cuando el bancal crece más que la plantilla o que las mejoras, y se arreglan contratando, mejorando o reorganizando. Con mejoras a tope bastan 4 recolectores para cualquier cultivo. Las mejoras de gnomos se vuelven más valiosas, que es lo que se busca.
+- **En la partida del bot no se pierde nada**, porque contrata en cuanto puede. Con contratar más caro (iteración 5) aparecerá la escasez y la podredumbre tendrá papel. No hace falta tocar los aguantes ahora.
+- **Lo que fallaba era el aviso.** En una hoja de comparación, el tinte de «a punto de estropearse» casi no se distinguía, y el trigo echado a perder era idéntico al maduro (ya era amarillo). **Arreglado:** sprites propios para cada estado (verde → amarillo → gris de moho), y el aviso empieza a mitad del aguante en vez de al 60 %. Así hay al menos 10 s de aviso (zanahoria y tomate) y hasta 45 s (calabaza).
+
+**2. ¿Debe la corona dar algún premio?**
+
+Corona en 60 min (bancal de 9×6 mezclado, 12 rec + 8 sem + 4 port), con un premio de velocidad para el coronado:
+
+| Premio | Cambios de corona (rec / sem / port) | Gnomos distintos coronados | Ventaja final del 1º (tareas) |
+|---|---|---|---|
+| Ninguno | **15 / 11 / 5** | 6 / 4 / 4 | 3 / 1 / 10 |
+| +10 % | 2 / 1 / 3 | 3 / 2 / 3 | 54 / 106 / 77 |
+| +25 % | 1 / 1 / 2 | 2 / 2 / 2 | 128 / 177 / 104 |
+
+- **Sin premio.** Cualquier premio hace que el coronado se escape: con un 10 % ya casi no hay cambios de corona, y la gracia de la dinámica es que la corona cambie de cabeza.
+- **Una corona por oficio, no una sola.** Con una sola corona por tareas, los recolectores la tenían el 100 % del tiempo (hacen 801 tareas por hora, frente a 701 los sembradores y 534 los porteadores). Midiéndolo frente a la media de cada oficio, pasaban a tenerla los sembradores el 98 % del tiempo. Con una corona por oficio, todos compiten con los suyos y hay unos 31 cambios por hora.
+
+**3. ¿Cuánto debe durar la temporada antes de que exista el prestigio?**
+
+Minutos hasta completar el árbol según dos palancas (bot activo / tranquilo):
+
+| ×coste por gnomo | Coste del árbol ×1 | ×2 | ×3 |
+|---|---|---|---|
+| 1,18 (ahora) | 23 / 29 | 41 / 48 | 58 / 67 |
+| 1,25 | 23 / 29 | 41 / 49 | 59 / 68 |
+| 1,30 | 22 / 27 | 41 / 47 | 58 / 66 |
+
+- **Decisión: sin prestigio, la temporada dura ~1 h (árbol completo en 45–60 min).** Las 1–2 h quedan para cuando exista el prestigio. Alargarla más ahora solo alargaría la espera sin nada nuevo que hacer.
+- **El coste del árbol es lo que marca la duración.** El coste por gnomo solo retrasa los 40 gnomos: a 1,30 se llega en 51–59 min, frente a 18–24 min ahora.
+- **Punto de partida para la iteración 5: coste por gnomo 1,30 y árbol ×3** (58–66 min). Se aplicará junto con B2–B5, que también cambian la economía, y se ajustará con `npm run balance`.
+
 ---
 
 ## 9. 🗺️ Backlog y hoja de ruta
@@ -344,7 +394,7 @@ Prioridades: bancal de 9×6 con los cuatro cultivos por columnas, 10 min, sin cl
 |---|---|---|---|---|---|
 | B1 | **Bot de equilibrio** (`npm run balance`): mide el ritmo en cada iteración | S | Alto (herramienta) | — | ✅ It4 |
 | B2 | **Ventajas y costes por cultivo:** rápido y laborioso frente a lento y cómodo | S | Alto | A2 | It5 |
-| B3 | **Contratar más caro** (×1,25–1,3 por gnomo) | S | Medio | B1 | It5 |
+| B3 | **Contratar más caro** (×1,30 por gnomo y árbol ×3 como punto de partida; ver el estudio de la sección 8) | S | Medio | B1 | It5 |
 | B4 | **Casa de gnomos:** el tope de gnomos depende de este edificio (el primer edificio del juego) | M | Alto | — | It5 |
 | B5 | **Más nodos en el árbol** (más niveles, ramas nuevas) | M | Medio | B1 | It5 |
 | B6 | **Multiplicador de organización:** premiar una cadena de trabajo eficiente | M | Medio | A1, A2 | It7 |
@@ -401,7 +451,7 @@ flowchart LR
 | Iteración | Objetivo | Se da por buena cuando… |
 |---|---|---|
 | **4 · Que organizar importe** | Cumplir el criterio de la demo que falta: cambiar la prioridad de un grupo se nota | Con gnomos de sobra, «cercano» y «valioso» dan resultados claramente distintos; se puede pasar el huerto entero a calabaza sin cazar parcelas vacías a clics; el ranking muestra quién destaca |
-| **5 · Economía y ritmo** | Que la temporada dure lo previsto | Árbol completo en unos 45–60 min (medido con `npm run balance`); siempre hay algo útil que comprar; la zanahoria sigue sirviendo |
+| **5 · Economía y ritmo** | Que la temporada dure lo previsto (~1 h hasta que exista el prestigio) | Árbol completo en unos 45–60 min (medido con `npm run balance`); siempre hay algo útil que comprar; la zanahoria sigue sirviendo; con plantillas justas aparece algo de podredumbre |
 | **6 · Personalidad** | Que sea entretenido dejarlo un minuto y solo mirar | Al hacer clic en un gnomo sale su ficha; los rasgos cambian cómo trabaja; aparecen eventos de vez en cuando |
 | **7 · Contenido** | Un oficio nuevo, una amenaza y más cultivos | Regador y guardián con un papel claro; fresa y melón tienen sus propias ventajas y costes |
 | **8 · Prestigio** | Que la partida tenga un final y vuelva a empezar | Reiniciar tras 1–2 h da semillas doradas que se notan en la siguiente temporada |
@@ -416,9 +466,7 @@ flowchart LR
 
 ## ❓ Preguntas abiertas
 
-- [ ] ¿El ranking debería dar algo más que fama (por ejemplo, un pequeño bonus al «gnomo del mes»)? Por ahora solo da fama y corona.
-- [ ] Ritmo objetivo: ¿la temporada debe durar 1–2 h ya en la demo, o vale con ~45 min hasta que exista el prestigio?
-- [ ] Tras jugar la iteración 4: ¿se entiende y se nota la podredumbre? ¿Los aguantes (20–90 s) son justos?
+- [ ] Cuando el autor pueda jugar: ¿es entretenido dejarlo un minuto y solo mirar? (último criterio de la demo)
 
 ---
 
@@ -443,11 +491,15 @@ flowchart LR
 | 15 | Hoja de ruta | Opción A: mecánica antes que números (sección 9.2) |
 | 16 | Ranking | Ranking de gnomos en la iteración 4, a petición del autor |
 | 17 | Control de versiones | Repositorio git local desde la iteración 4 |
+| 18 | Podredumbre | Aguantes sin cambios (20–90 s). Aviso con sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder) |
+| 19 | Corona | Una por oficio, solo fama, sin premio: un premio hace que el coronado no la pierda nunca |
+| 20 | Duración sin prestigio | ~1 h (árbol completo en 45–60 min); 1–2 h cuando exista el prestigio. Punto de partida: ×1,30 por gnomo y árbol ×3 |
 
 ---
 
 ## 📝 Historial de cambios
 
+- **v0.10 (2026-10-27):** respondidas con simulaciones las tres preguntas abiertas. Podredumbre: los aguantes se quedan, pero el aviso no se veía, así que ahora hay sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder). Corona: una por oficio y solo fama. Duración sin prestigio: ~1 h, con ×1,30 por gnomo y árbol ×3 como punto de partida para la iteración 5.
 - **v0.9 (2026-10-27):** iteración 4, «que organizar importe». Semilla por grupo, podredumbre visible, «valioso» con paseo, prioridad «Lo que se va a estropear antes», reserva de la cesta, ranking «Gnomos del mes» con corona para el más trabajador, bot de equilibrio (`npm run balance`) y repositorio git. Backlog y hoja de ruta en la sección 9. Las partidas de la iteración 3 siguen valiendo.
 - **v0.8 (2026-10-27):** iteración 3 probada en el navegador. Arreglado el diario, que se salía de la pantalla. Añadidos el estudio de equilibrio (bot de 3 h: el contenido se acaba en 23–31 min, cada cultivo supera al anterior en todo y las prioridades solo cuentan cuando faltan gnomos) y la propuesta de la iteración 4.
 - **v0.7 (2026-10-27):** iteración 3. Los menús se abren desde el huerto (granero, tablón y árbol viejo) y desde una barra pixel art. Ventanas de madera y pergamino. Árbol de mejoras con ramas en lugar de mejoras sueltas. Grupos ilimitados (hasta 20) con nombre, color de la paleta y prioridad propios, y gnomos que se arrastran entre grupos. La partida de la v0.6 no es compatible.

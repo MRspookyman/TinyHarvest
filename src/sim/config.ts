@@ -32,8 +32,8 @@ export const CROPS: Record<CropId, CropDef> = {
   tomate: { value: 12, grow: 28, keep: 20 },
   calabaza: { value: 40, grow: 60, keep: 90 },
 };
-/** a partir de esta fracción del aguante, la planta empieza a verse pasada */
-export const WILT_WARNING = 0.6;
+/** a partir de esta fracción del aguante, la planta amarillea: deja al menos 10 s de aviso */
+export const WILT_WARNING = 0.5;
 export const CROP_IDS: CropId[] = ['zanahoria', 'trigo', 'tomate', 'calabaza'];
 export const PRIORITIES: Priority[] = ['cercano', 'valioso', 'urgente', ...CROP_IDS.map(c => `solo_${c}` as const)];
 
@@ -53,7 +53,7 @@ export const GROUP_NAME_MAX = 24;
  * El sesgo evita que una parcela pegada al gnomo gane siempre por estar a distancia casi cero.
  */
 export const VALUE_DISTANCE_BIAS = 30;
-/** Para quitarle la corona al líder hay que sacarle al menos esta ventaja en tareas (evita cambios cada segundo). */
+/** Para quitarle la corona de su oficio al líder hay que sacarle al menos estas tareas (evita cambios cada segundo). */
 export const CROWN_MARGIN = 3;
 
 /** Colores para los grupos, sacados de la paleta del juego y elegidos para que se vean sobre la hierba. */

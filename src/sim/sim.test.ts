@@ -387,23 +387,25 @@ describe('ranking', () => {
     expect(g.stats.walked).toBeGreaterThan(0);
   });
 
-  it('la corona es del más trabajador y solo cambia de cabeza con ventaja clara', () => {
+  it('cada oficio tiene su corona, y solo cambia de cabeza con ventaja clara', () => {
     const rng = seeded(4);
     const s = createState(rng);
-    const a = hireFree(s, 'recolector', rng);
-    const b = hireFree(s, 'recolector', rng);
-    for (const g of [a, b]) park(g);
+    const [a, b] = [hireFree(s, 'recolector', rng), hireFree(s, 'recolector', rng)];
+    const p = hireFree(s, 'porteador', rng);
+    for (const g of [a, b, p]) park(g);
     tick(s, 1 / 30, rng);
-    expect(s.crown).toBe(null);
-    a.stats.tasks = 5;
+    expect(s.crowns).toEqual({ recolector: null, sembrador: null, porteador: null });
+    // el porteador hace menos tareas que los recolectores, pero es el mejor de su oficio
+    a.stats.tasks = 50;
+    p.stats.tasks = 10;
     tick(s, 1 / 30, rng);
-    expect(s.crown).toBe(a.id);
-    b.stats.tasks = 5 + CROWN_MARGIN - 1;
+    expect(s.crowns).toMatchObject({ recolector: a.id, porteador: p.id });
+    b.stats.tasks = 50 + CROWN_MARGIN - 1;
     tick(s, 1 / 30, rng);
-    expect(s.crown).toBe(a.id);
-    b.stats.tasks = 5 + CROWN_MARGIN;
+    expect(s.crowns.recolector).toBe(a.id);
+    b.stats.tasks = 50 + CROWN_MARGIN;
     tick(s, 1 / 30, rng);
-    expect(s.crown).toBe(b.id);
+    expect(s.crowns.recolector).toBe(b.id);
     expect(s.log[0]).toContain(b.name);
   });
 });
@@ -430,7 +432,7 @@ describe('guardado', () => {
     moveGnome(s, g.id, b.id);
     g.stats.tasks = 9;
     g.stats.walked = 120;
-    s.crown = g.id;
+    s.crowns.porteador = g.id;
     const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
     expect(loaded.coins).toBe(s.coins);
     expect(loaded.tree).toEqual(s.tree);
@@ -441,7 +443,7 @@ describe('guardado', () => {
     expect(loaded.groups[1]).toEqual({ id: b.id, name: 'Los Valientes', color: 7, priority: 'solo_tomate', seed: 'tomate' });
     expect(loaded.gnomes[0]).toMatchObject({ name: g.name, job: 'porteador', group: b.id, state: 'think' });
     expect(loaded.gnomes[0].stats).toMatchObject({ tasks: 9, walked: 120 });
-    expect(loaded).toMatchObject({ rotted: 3, crown: g.id });
+    expect(loaded).toMatchObject({ rotted: 3, crowns: { porteador: g.id, recolector: null } });
     expect(loaded.nextId).toBe(s.nextId);
     expect(loaded.nextGroupId).toBe(s.nextGroupId);
   });
@@ -452,14 +454,14 @@ describe('guardado', () => {
     const g = hireFree(s, 'recolector', rng);
     const old = JSON.parse(JSON.stringify(serialize(s)));
     delete old.rotted;
-    delete old.crown;
+    delete old.crowns;
     for (const gr of old.groups) delete gr.seed;
     for (const gn of old.gnomes) delete gn.stats;
     const loaded = deserialize(old, rng)!;
     expect(loaded.groups[0].seed).toBe(null);
     expect(loaded.gnomes[0]).toMatchObject({ name: g.name });
     expect(loaded.gnomes[0].stats.tasks).toBe(0);
-    expect(loaded).toMatchObject({ rotted: 0, crown: null });
+    expect(loaded).toMatchObject({ rotted: 0, crowns: { recolector: null, sembrador: null, porteador: null } });
   });
 
   it('rechaza partidas de otra versión', () => {
