@@ -2,7 +2,7 @@
 // Se dibujan en canvas y se pasan a la interfaz como data URL.
 import type { CropId, JobId, NodeId } from '../sim/types';
 import { makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
-import { BASE, basketCanvas, gnomeIcon, PLANT_MAPS, PLANT_PAL, SACK } from './sprites';
+import { BASE, basketCanvas, crownCanvas, gnomeIcon, PLANT_MAPS, PLANT_PAL, SACK } from './sprites';
 import type { MenuId } from '../textos';
 
 const P: Palette = {
@@ -132,6 +132,26 @@ const SOIL: PixelMap = [
   'OOOOOOOOOO',
 ];
 
+/** Podio con corona: oro en el centro, plata a la izquierda y bronce a la derecha. */
+const PODIUM_ICON: PixelMap = [
+  '.....Y..Y..Y....',
+  '....OYOOYOOYO...',
+  '....OYYYRYYYO...',
+  '....OYYYYYYYO...',
+  '.....OOOOOOO....',
+  '................',
+  '.....OOOOOOO....',
+  '.....OYYYYYO....',
+  '.OOOOOYYWYYO....',
+  '.OsssOYYYYYO....',
+  '.OsWsOYYYYYOOOOO',
+  '.OsssOYYYYYOCCCO',
+  '.OsssOYYYYYOCWCO',
+  '.OsssOYYYYYOCCCO',
+  '.OsssOYYYYYOCCCO',
+  'OOOOOOOOOOOOOOOO',
+];
+
 const url = (c: HTMLCanvasElement) => c.toDataURL();
 
 export const menuIcons: Record<MenuId, string> = {
@@ -139,7 +159,10 @@ export const menuIcons: Record<MenuId, string> = {
   grupos: url(mapCanvas(BOARD_ICON, P)),
   arbol: url(mapCanvas(TREE_ICON, P)),
   diario: url(mapCanvas(DIARY_ICON, P)),
+  ranking: url(mapCanvas(PODIUM_ICON, P)),
 };
+
+export const crownIcon = url(crownCanvas());
 
 export const cropIcons: Record<CropId, string> = {
   zanahoria: url(mapCanvas(PLANT_MAPS.zanahoria[4], PLANT_PAL)),

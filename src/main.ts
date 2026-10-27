@@ -5,7 +5,7 @@ import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
   buyNode, clickPlot, createGroup, cropUnlocked, deleteGroup, hire, hireCost, moveGnome, nodeCost, renameGroup,
-  setGroupColor, setPriority, tick,
+  setGroupColor, setGroupSeed, setPriority, tick,
 } from './sim/sim';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
@@ -14,6 +14,7 @@ import { createHud } from './ui/hud';
 import { createDiaryMenu } from './ui/menus/diary';
 import { createGroupsMenu } from './ui/menus/groups';
 import { createHireMenu } from './ui/menus/hire';
+import { createRankingMenu } from './ui/menus/ranking';
 import { createTreeMenu } from './ui/menus/tree';
 import { createWindows } from './ui/windows';
 
@@ -46,6 +47,7 @@ async function start() {
     renameGroup: (id, name) => renameGroup(state, id, name),
     setGroupColor: (id, color) => setGroupColor(state, id, color),
     setPriority: (id, p) => setPriority(state, id, p),
+    setGroupSeed: (id, crop) => setGroupSeed(state, id, crop),
     deleteGroup: id => deleteGroup(state, id),
     moveGnome: (gnome, group) => moveGnome(state, gnome, group),
     selectSeed: crop => {
@@ -65,6 +67,7 @@ async function start() {
     grupos: createGroupsMenu(actions),
     arbol: createTreeMenu(actions),
     diario: createDiaryMenu(actions),
+    ranking: createRankingMenu(),
   });
   const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m));
 

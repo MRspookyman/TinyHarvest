@@ -1,11 +1,14 @@
-import { CROP_IDS, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, JOB_IDS, MAX_GROUPS, NODE_IDS, PRIORITIES, RIPE, TREE } from './config';
+import { CROP_IDS, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, JOB_IDS, MAX_GROUPS, NODE_IDS, PRIORITIES, ROTTEN, TREE } from './config';
 import { GRUPOS, LOG } from '../textos';
-import type { CropId, GameState, Gnome, GnomeGroup, JobId, NodeId, Plot, Priority, Rng } from './types';
+import type { CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Priority, Rng } from './types';
+
+const STAT_KEYS: (keyof GnomeStats)[] = ['tasks', 'harvests', 'value', 'plants', 'delivered', 'walked', 'naps', 'complaints'];
+const emptyStats = (): GnomeStats => ({ tasks: 0, harvests: 0, value: 0, plants: 0, delivered: 0, walked: 0, naps: 0, complaints: 0 });
 
 export function makeGnome(id: number, name: string, job: JobId, group: number, x: number, y: number): Gnome {
   return {
     id, name, job, group, x, y, tx: x, ty: y,
-    state: 'think', task: null, pose: 'idle', timer: 0, t: 0, flip: false, carry: [], bubble: null,
+    state: 'think', task: null, pose: 'idle', timer: 0, t: 0, flip: false, carry: [], bubble: null, stats: emptyStats(),
   };
 }
 
@@ -28,10 +31,12 @@ export function createState(rng: Rng): GameState {
     basket: [],
     gnomes: [],
     hired: { recolector: 0, sembrador: 0, porteador: 0 },
-    groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano' }],
+    groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano', seed: null }],
     nextGroupId: 2,
     nextId: 1,
     manualHarvests: 0,
+    rotted: 0,
+    crown: null,
     log: [LOG.inicio],
     events: [],
   };
@@ -40,6 +45,8 @@ export function createState(rng: Rng): GameState {
 // ---------- Guardado ----------
 // Solo se guarda el estado duradero. Lo que el gnomo estaba haciendo se descarta
 // y al cargar vuelve a pensar; no se simula el tiempo que pasó fuera.
+// Los campos nuevos (semilla del grupo, estadísticas, podredumbre) son opcionales al cargar,
+// así que las partidas de la v3 siguen valiendo sin cambiar de versión.
 
 export const SAVE_VERSION = 3;
 
@@ -54,8 +61,10 @@ export interface SaveData {
   nextGroupId: number;
   nextId: number;
   manualHarvests: number;
+  rotted: number;
+  crown: number | null;
   plots: { crop: CropId; stage: number; t: number }[];
-  gnomes: { id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[] }[];
+  gnomes: { id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[]; stats: GnomeStats }[];
   log: string[];
 }
 
@@ -71,8 +80,10 @@ export function serialize(s: GameState): SaveData {
     nextGroupId: s.nextGroupId,
     nextId: s.nextId,
     manualHarvests: s.manualHarvests,
+    rotted: s.rotted,
+    crown: s.crown,
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t })),
-    gnomes: s.gnomes.map(g => ({ id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry] })),
+    gnomes: s.gnomes.map(g => ({ id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry], stats: { ...g.stats } })),
     log: s.log.slice(0, 15),
   };
 }
@@ -93,6 +104,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   s.basket = Array.isArray(d.basket) ? d.basket.filter(isCrop) : [];
   s.nextId = Math.max(1, Math.floor(num(d.nextId, 1)));
   s.manualHarvests = Math.max(0, num(d.manualHarvests, 0));
+  s.rotted = Math.max(0, num(d.rotted, 0));
   for (const j of JOB_IDS) s.hired[j] = int(d.hired?.[j], 0, 0, 999);
 
   if (Array.isArray(d.groups)) {
@@ -104,6 +116,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
         name: g.name.slice(0, GROUP_NAME_MAX) || GRUPOS.primero,
         color: int(g.color, 0, 0, GROUP_PALETTE.length - 1),
         priority: PRIORITIES.includes(g.priority) ? g.priority : ('cercano' as Priority),
+        seed: isCrop(g.seed) ? g.seed : null,
       }));
     if (groups.length) s.groups = groups;
   }
@@ -114,7 +127,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
       const plot = s.plots[i];
       plot.crop = isCrop(p?.crop) ? p.crop : 'zanahoria';
       const stage = Math.floor(num(p?.stage, -1));
-      plot.stage = stage >= -1 && stage <= RIPE ? stage : -1;
+      plot.stage = stage >= -1 && stage <= ROTTEN ? stage : -1;
       plot.t = Math.max(0, num(p?.t, 0));
     });
   }
@@ -127,10 +140,12 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
         const group = groupIds.has(g.group) ? g.group : s.groups[0].id;
         const gn = makeGnome(id, g.name, g.job, group, num(g.x, 70), num(g.y, 120));
         gn.carry = Array.isArray(g.carry) ? g.carry.filter(isCrop) : [];
+        for (const k of STAT_KEYS) gn.stats[k] = Math.max(0, num(g.stats?.[k], 0));
         return gn;
       });
     s.nextId = Math.max(s.nextId, ...s.gnomes.map(g => g.id + 1));
   }
+  s.crown = s.gnomes.some(g => g.id === d.crown) ? (d.crown as number) : null;
   if (Array.isArray(d.log)) s.log = d.log.filter((l): l is string => typeof l === 'string').slice(0, 15);
   return s;
 }

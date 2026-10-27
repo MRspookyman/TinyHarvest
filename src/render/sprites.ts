@@ -121,6 +121,10 @@ const ZZ: PixelMap = [
 ];
 const ALERT: PixelMap = ['.OOOOOOO.', 'OWWWWWWWO', 'OWWRWRWWO', 'OWWRWRWWO', 'OWWWWWWWO', 'OWWRWRWWO', '.OOOOOOO.', '..OO.....'];
 const SPARKLE: PixelMap = ['.W.', 'WYW', '.W.'];
+/** corona del gnomo más trabajador */
+const CROWN: PixelMap = ['.Y.Y.Y.', 'OYOYOYO', 'OYYRYYO', 'OYYYYYO', '.OOOOO.'];
+const CROWN_PAL: Palette = { O: '#1a1c2c', Y: '#ffcd75', R: '#b13e53' };
+const FLY: PixelMap = ['w.w', '.K.'];
 
 // ---------- Plantas (16 × 14, base en la última fila, sobre el caballón) ----------
 export const PLANT_PAL: Palette = {
@@ -276,11 +280,16 @@ const TOMATO_RIPE = [
 const TOMATO_GREEN = TOMATO_RIPE.map(r => r.replace(/R/g, 'l').replace(/r/g, 'G'));
 const SPROUT_STAKE = SPROUT.map((r, i) => (i >= 4 && i <= 12 ? r.slice(0, 10) + 'w' + r.slice(11) : r));
 
+/** Planta echada a perder: la madura con los verdes y los frutos apagados a marrones. */
+const WILT: Record<string, string> = { G: 'U', l: 'T', g: 'm', C: 'c', R: 'r', Y: 'U', W: 'T' };
+const wilt = (m: PixelMap): PixelMap => m.map(r => r.replace(/[GlgCRYW]/g, ch => WILT[ch]));
+
+/** Fases por cultivo: semilla, brote, joven, creciendo, madura y echada a perder (índice ROTTEN). */
 export const PLANT_MAPS: Record<CropId, PixelMap[]> = {
-  zanahoria: [SEED, SPROUT, CARROT_YOUNG, CARROT_GROWING, CARROT_RIPE],
-  trigo: [SEED, SPROUT, wheat(2), wheat(3), wheat(4)],
-  tomate: [SEED, SPROUT_STAKE, TOMATO_YOUNG, TOMATO_GREEN, TOMATO_RIPE],
-  calabaza: [SEED, SPROUT, pumpkin(2), pumpkin(3), pumpkin(4)],
+  zanahoria: [SEED, SPROUT, CARROT_YOUNG, CARROT_GROWING, CARROT_RIPE, wilt(CARROT_RIPE)],
+  trigo: [SEED, SPROUT, wheat(2), wheat(3), wheat(4), wilt(wheat(4))],
+  tomate: [SEED, SPROUT_STAKE, TOMATO_YOUNG, TOMATO_GREEN, TOMATO_RIPE, wilt(TOMATO_RIPE)],
+  calabaza: [SEED, SPROUT, pumpkin(2), pumpkin(3), pumpkin(4), wilt(pumpkin(4))],
 };
 
 // ---------- Atlas ----------
@@ -297,6 +306,8 @@ export interface Atlas {
   zz: Texture;
   alert: Texture;
   sparkle: Texture;
+  crown: Texture;
+  fly: Texture;
 }
 
 const byCrop = <T>(f: (c: CropId) => T): Record<CropId, T> =>
@@ -326,5 +337,9 @@ export function buildAtlas(): Atlas {
     zz: tex(ZZ, BASE),
     alert: tex(ALERT, BASE),
     sparkle: tex(SPARKLE, { W: '#f4f4f4', Y: '#ffcd75' }),
+    crown: tex(CROWN, CROWN_PAL),
+    fly: tex(FLY, { w: '#94b0c2', K: '#1a1c2c' }),
   };
 }
+
+export const crownCanvas = () => mapCanvas(CROWN, CROWN_PAL);

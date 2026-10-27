@@ -24,7 +24,7 @@ export const UI = {
   ahora: 'Ahora',
   borrar: 'Borrar partida',
   borrarSeguro: '¿Seguro? Pulsa otra vez',
-  pista: 'Haz clic en la tierra para plantar y en lo maduro para recogerlo. El granero, el tablón y el árbol viejo abren los menús.',
+  pista: 'Haz clic en la tierra para plantar y en lo maduro para recogerlo. Lo maduro no espera para siempre: si nadie lo recoge, se echa a perder. El granero, el tablón y el árbol viejo abren los menús.',
 };
 
 /** Menús y los elementos del huerto que los abren. */
@@ -33,12 +33,13 @@ export const MENUS = {
   grupos: { titulo: 'Tablón de anuncios', sub: 'Grupos de gnomos', lugar: 'Tablón de anuncios', boton: 'Tablón' },
   arbol: { titulo: 'Árbol viejo', sub: 'Árbol de mejoras', lugar: 'Árbol viejo', boton: 'Árbol' },
   diario: { titulo: 'Diario del huerto', sub: 'Lo que ha pasado', lugar: 'Diario', boton: 'Diario' },
+  ranking: { titulo: 'Gnomos del mes', sub: 'Quién destaca en el huerto', lugar: 'Ranking', boton: 'Ranking' },
 } as const;
 export type MenuId = keyof typeof MENUS;
 
 export const OFICIOS: Record<JobId, { nombre: string; desc: string }> = {
   recolector: { nombre: 'Recolector', desc: 'Recoge lo que madura y lo lleva al granero. A veces, también lo que no.' },
-  sembrador: { nombre: 'Sembrador', desc: 'Vuelve a plantar las parcelas vacías con una fe inquebrantable.' },
+  sembrador: { nombre: 'Sembrador', desc: 'Planta en las parcelas vacías, y arranca y vuelve a plantar las echadas a perder. Con una fe inquebrantable.' },
   porteador: { nombre: 'Porteador', desc: 'Lleva la cosecha de la cesta al granero, de cinco en cinco. Con porteadores, los recolectores dejan lo recogido en la cesta del bancal.' },
 };
 
@@ -51,7 +52,8 @@ export const CULTIVOS: Record<CropId, { nombre: string; uno: string; plural: str
 
 export function prioridad(p: Priority): string {
   if (p === 'cercano') return 'Lo más cercano primero';
-  if (p === 'valioso') return 'Lo más valioso primero';
+  if (p === 'valioso') return 'Lo más valioso (según el paseo)';
+  if (p === 'urgente') return 'Lo que se va a estropear antes';
   const crop = p.slice('solo_'.length) as CropId;
   return crop === 'trigo' ? 'Solo trigo' : `Solo ${CULTIVOS[crop].plural}`;
 }
@@ -65,20 +67,22 @@ export const ARBOL: Record<NodeId, { nombre: string; desc: string }> = {
   porteadores: { nombre: 'Gremio de porteadores', desc: 'Permite contratar porteadores en el granero. Llegan con carretilla propia y muchas opiniones.' },
   cesta: { nombre: 'Cesta de mimbre reforzado', desc: 'La cesta del bancal guarda 15 cultivos más por nivel.' },
   bancal: { nombre: 'Ampliar el bancal', desc: 'Una columna o una fila más de tierra labrada.' },
-  trigo: { nombre: 'Semillas de trigo', desc: 'Permite plantar trigo: vale 5 y tarda 16 s.' },
+  trigo: { nombre: 'Semillas de trigo', desc: 'Permite plantar trigo: vale 5, tarda 16 s y aguanta 45 s maduro.' },
   abono: { nombre: 'Abono de dudosa procedencia', desc: 'Los cultivos crecen un 15 % más rápido por nivel. Mejor no preguntar.' },
-  tomate: { nombre: 'Semillas de tomate', desc: 'Permite plantar tomates: valen 12 y tardan 28 s.' },
-  calabaza: { nombre: 'Semillas de calabaza', desc: 'Permite plantar calabazas: valen 40 y tardan 60 s.' },
+  tomate: { nombre: 'Semillas de tomate', desc: 'Permite plantar tomates: valen 12, tardan 28 s y solo aguantan 20 s maduros.' },
+  calabaza: { nombre: 'Semillas de calabaza', desc: 'Permite plantar calabazas: valen 40, tardan 60 s y aguantan 90 s maduras.' },
 };
 
 export const GRUPOS = {
   primero: 'Los de siempre',
   sugerencias: ['Los Madrugadores', 'La Brigada del Surco', 'Los Sin Prisa', 'Comando Zanahoria', 'Los del Fondo', 'La Peña del Rastrillo', 'Los Barbas', 'Los Siesteros', 'Escuadrón Tomate', 'Los Que Llegan Tarde'],
-  ayuda: 'Cada grupo sigue su prioridad. En el huerto, el aro bajo cada gnomo y la marca en la parcela a la que va tienen el color de su grupo. Arrastra un gnomo a otro grupo, o pulsa en él y luego en «Mover aquí».',
+  ayuda: 'Cada grupo sigue su prioridad y siembra lo que le digas. En el huerto, el aro bajo cada gnomo y la marca en la parcela a la que va tienen el color de su grupo. Arrastra un gnomo a otro grupo, o pulsa en él y luego en «Mover aquí».',
   nuevo: 'Nuevo grupo',
   nombre: 'Nombre del grupo',
   color: 'Color',
   prioridad: 'Prioridad',
+  siembra: 'Siembran',
+  siembraIgual: 'Lo mismo que había',
   vacio: 'Nadie todavía. Arrastra aquí algún gnomo.',
   moverAqui: 'Mover aquí',
   borrar: 'Borrar grupo',
@@ -87,6 +91,24 @@ export const GRUPOS = {
   maximo: 'No caben más grupos',
   miembros: (n: number) => (n === 1 ? '1 gnomo' : `${n} gnomos`),
   bloqueado: 'sin desbloquear',
+};
+
+/** Ventana del ranking. Cada categoría muestra el podio de los gnomos actuales. */
+export const RANKING = {
+  ayuda: 'El más trabajador lleva la corona en el huerto. Para quitársela hay que sacarle ventaja.',
+  corona: 'Lleva la corona',
+  nadie: 'Nadie todavía.',
+  perdidos: (n: number) => (n === 1 ? '1 cultivo echado a perder' : `${n} cultivos echados a perder`),
+  aMano: (n: number) => (n === 1 ? 'Tú: 1 recogido a mano' : `Tú: ${n} recogidos a mano`),
+  categorias: {
+    tasks: { titulo: 'El más trabajador', unidad: 'tareas' },
+    value: { titulo: 'El que más monedas genera', unidad: 'monedas cosechadas' },
+    plants: { titulo: 'Mejor sembrador', unidad: 'siembras' },
+    delivered: { titulo: 'El que más lleva al granero', unidad: 'cultivos' },
+    walked: { titulo: 'El más andarín', unidad: 'pasos' },
+    naps: { titulo: 'El más dormilón', unidad: 'siestas' },
+    complaints: { titulo: 'El más quejica', unidad: 'quejas' },
+  },
 };
 
 export const NOMBRES = ['Pepín', 'Tomasito', 'Gilberto', 'Remolacho', 'Anselmo', 'Fermín', 'Rufino', 'Baldomero', 'Eustaquio', 'Nicanor', 'Cosme', 'Telesforo', 'Casimiro', 'Leoncio', 'Hermenegildo', 'Pancracio'];
@@ -110,4 +132,8 @@ export const LOG = {
   grupoNuevo: (g: string) => `Se funda «${g}». Nadie sabe muy bien para qué.`,
   grupoRenombrado: (a: string, b: string) => `«${a}» ahora se llama «${b}». Lo han votado a mano alzada.`,
   grupoBorrado: (a: string, b: string) => `«${a}» se disuelve. Sus miembros vuelven a «${b}» con la cabeza gacha.`,
+  podrido: (uno: string) => `Se ha echado a perder ${uno}. Huele a reproche.`,
+  arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
+  primeraCorona: (n: string) => `${n} es el primer gnomo del mes. Nadie sabe quién decide esto, pero ya lleva corona.`,
+  corona: (nuevo: string, viejo: string) => `${nuevo} le quita la corona a ${viejo}. Dice que no le importa, pero no se la quita ni para dormir.`,
 };

@@ -16,20 +16,26 @@ export const IDLE_AREA = { x0: 48, x1: 100, y0: 104, y1: 142 } as const;
 
 export const STAGES = 5;
 export const RIPE = STAGES - 1;
+/** fase extra: la planta madura que nadie ha recogido a tiempo */
+export const ROTTEN = STAGES;
 
 export interface CropDef {
   value: number;
   /** segundos de semilla a madura */
   grow: number;
+  /** segundos que aguanta madura antes de echarse a perder */
+  keep: number;
 }
 export const CROPS: Record<CropId, CropDef> = {
-  zanahoria: { value: 2, grow: 10 },
-  trigo: { value: 5, grow: 16 },
-  tomate: { value: 12, grow: 28 },
-  calabaza: { value: 40, grow: 60 },
+  zanahoria: { value: 2, grow: 10, keep: 20 },
+  trigo: { value: 5, grow: 16, keep: 45 },
+  tomate: { value: 12, grow: 28, keep: 20 },
+  calabaza: { value: 40, grow: 60, keep: 90 },
 };
+/** a partir de esta fracción del aguante, la planta empieza a verse pasada */
+export const WILT_WARNING = 0.6;
 export const CROP_IDS: CropId[] = ['zanahoria', 'trigo', 'tomate', 'calabaza'];
-export const PRIORITIES: Priority[] = ['cercano', 'valioso', ...CROP_IDS.map(c => `solo_${c}` as const)];
+export const PRIORITIES: Priority[] = ['cercano', 'valioso', 'urgente', ...CROP_IDS.map(c => `solo_${c}` as const)];
 
 export const JOBS: Record<JobId, { base: number }> = {
   recolector: { base: 12 },
@@ -42,6 +48,13 @@ export const MAX_GNOMES = 40;
 export const PORTER_CAPACITY = 5;
 export const MAX_GROUPS = 20;
 export const GROUP_NAME_MAX = 24;
+/**
+ * «Valioso» elige el mayor valor por paseo: valor / (distancia + VALUE_DISTANCE_BIAS).
+ * El sesgo evita que una parcela pegada al gnomo gane siempre por estar a distancia casi cero.
+ */
+export const VALUE_DISTANCE_BIAS = 30;
+/** Para quitarle la corona al líder hay que sacarle al menos esta ventaja en tareas (evita cambios cada segundo). */
+export const CROWN_MARGIN = 3;
 
 /** Colores para los grupos, sacados de la paleta del juego y elegidos para que se vean sobre la hierba. */
 export const GROUP_PALETTE = [
@@ -80,5 +93,7 @@ export const TREE_ROOT = { x: 50, y: 90 } as const;
 export const BASE_SPEED = 22;
 export const HARVEST_TIME = 0.8;
 export const PLANT_TIME = 0.6;
+/** tiempo extra para arrancar una planta echada a perder antes de sembrar */
+export const CLEAR_TIME = 0.8;
 export const PICKUP_TIME = 0.5;
 export const LOG_MAX = 40;

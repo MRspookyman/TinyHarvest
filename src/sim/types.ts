@@ -1,6 +1,6 @@
 export type CropId = 'zanahoria' | 'trigo' | 'tomate' | 'calabaza';
 export type JobId = 'recolector' | 'sembrador' | 'porteador';
-export type Priority = 'cercano' | 'valioso' | `solo_${CropId}`;
+export type Priority = 'cercano' | 'valioso' | 'urgente' | `solo_${CropId}`;
 /** Nodos del árbol de mejoras. Los cultivos nuevos y la ampliación del bancal también son nodos. */
 export type NodeId =
   | 'botas' | 'cafe' | 'saco' | 'porteadores' | 'cesta'
@@ -23,9 +23,9 @@ export interface Plot {
   col: number;
   row: number;
   crop: CropId;
-  /** -1 = vacía; 0..RIPE = fase de crecimiento */
+  /** -1 = vacía; 0..RIPE = fase de crecimiento; ROTTEN = se ha echado a perder */
   stage: number;
-  /** segundos acumulados en la fase actual */
+  /** segundos acumulados en la fase actual (madura: tiempo que lleva esperando) */
   t: number;
   /** id del gnomo que va a por ella, o null */
   res: number | null;
@@ -37,6 +37,24 @@ export interface GnomeGroup {
   /** índice en GROUP_PALETTE */
   color: number;
   priority: Priority;
+  /** qué siembran sus sembradores; null = lo mismo que había en la parcela */
+  seed: CropId | null;
+}
+
+/** Lo que ha hecho cada gnomo, para el ranking. */
+export interface GnomeStats {
+  /** recoger, plantar, dejar en la cesta, sacar de la cesta y entregar en el granero */
+  tasks: number;
+  harvests: number;
+  /** valor de lo que ha cosechado */
+  value: number;
+  plants: number;
+  /** cultivos que ha entregado en el granero */
+  delivered: number;
+  /** distancia andada, en píxeles del mundo */
+  walked: number;
+  naps: number;
+  complaints: number;
 }
 
 export interface Gnome {
@@ -58,6 +76,7 @@ export interface Gnome {
   flip: boolean;
   carry: CropId[];
   bubble: 'zz' | 'alert' | null;
+  stats: GnomeStats;
 }
 
 export type SimEvent = { type: 'coins'; x: number; y: number; amount: number };
@@ -78,6 +97,10 @@ export interface GameState {
   nextGroupId: number;
   nextId: number;
   manualHarvests: number;
+  /** cultivos que se han echado a perder en esta partida */
+  rotted: number;
+  /** id del gnomo con la corona (el más trabajador), o null */
+  crown: number | null;
   /** más reciente primero */
   log: string[];
   /** salida para el render; no se guarda */

@@ -1,9 +1,9 @@
-// Tablón de anuncios: crear, renombrar, colorear y borrar grupos, elegir su prioridad y repartir gnomos.
-import { GROUP_NAME_MAX, GROUP_PALETTE, MAX_GROUPS, PRIORITIES } from '../../sim/config';
+// Tablón de anuncios: crear, renombrar, colorear y borrar grupos, elegir su prioridad y lo que siembran, y repartir gnomos.
+import { CROP_IDS, GROUP_NAME_MAX, GROUP_PALETTE, MAX_GROUPS, PRIORITIES } from '../../sim/config';
 import { cropUnlocked } from '../../sim/sim';
 import type { CropId, GameState, Priority } from '../../sim/types';
 import { jobIcons } from '../../render/icons';
-import { GRUPOS, OFICIOS, prioridad } from '../../textos';
+import { CULTIVOS, GRUPOS, OFICIOS, prioridad } from '../../textos';
 import { esc, html, pixelImg, type GameActions } from '../dom';
 import type { Menu } from '../windows';
 
@@ -44,6 +44,13 @@ export function createGroupsMenu(actions: GameActions): Menu {
             <span>${GRUPOS.prioridad}</span>
             <select data-prio="${g.id}">
               ${PRIORITIES.map(p => `<option value="${p}" ${p === g.priority ? 'selected' : ''} ${unlocked(p) ? '' : 'disabled'}>${prioridad(p)}${unlocked(p) ? '' : ` (${GRUPOS.bloqueado})`}</option>`).join('')}
+            </select>
+          </label>
+          <label class="prio">
+            <span>${GRUPOS.siembra}</span>
+            <select data-group-seed="${g.id}">
+              <option value="" ${g.seed === null ? 'selected' : ''}>${GRUPOS.siembraIgual}</option>
+              ${CROP_IDS.map(c => `<option value="${c}" ${c === g.seed ? 'selected' : ''} ${cropUnlocked(s, c) ? '' : 'disabled'}>${CULTIVOS[c].nombre}${cropUnlocked(s, c) ? '' : ` (${GRUPOS.bloqueado})`}</option>`).join('')}
             </select>
           </label>
           <div class="chips" data-drop="${g.id}">
@@ -107,6 +114,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
   el.addEventListener('change', e => {
     const t = e.target as HTMLInputElement | HTMLSelectElement;
     if (t.dataset.prio) actions.setPriority(Number(t.dataset.prio), t.value as Priority);
+    if (t.dataset.groupSeed) actions.setGroupSeed(Number(t.dataset.groupSeed), (t.value || null) as CropId | null);
     if (t.dataset.rename) actions.renameGroup(Number(t.dataset.rename), t.value);
     sig = '';
   });

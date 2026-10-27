@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.8 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.9 · **Última actualización:** 2026-10-27
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -178,8 +178,8 @@ Prestigio, edificios, porteador, regador, capataz, guardián, eventos, rasgos co
 
 ### Criterios para darla por buena
 
-- [ ] En 5–10 minutos se pasa de clicar a mano a tener un huerto automático.
-- [ ] Cambiar la prioridad de un grupo tiene un efecto **visible** en cómo se mueven los gnomos.
+- [x] En 5–10 minutos se pasa de clicar a mano a tener un huerto automático. *(El bot lo consigue en 1–5 min.)*
+- [x] Cambiar la prioridad de un grupo tiene un efecto **visible** en cómo se mueven los gnomos. *(Desde la iteración 4; falta que lo confirme el autor jugando.)*
 - [ ] Es entretenido dejarlo un minuto y solo mirar.
 
 ---
@@ -278,25 +278,147 @@ Un bot jugó 3 horas de partida simulada. Compraba siempre lo más barato y repl
 5. **El sembrador vuelve a plantar lo mismo que había.** Para pasar el huerto a calabaza hay que hacer clic en cada parcela justo cuando está vacía, compitiendo con tus propios sembradores.
 6. **Los porteadores no reservan la cesta.** Si hay un solo cultivo, van todos a por él y los que llegan tarde vuelven sin nada.
 
-### Iteración 4 (propuesta, por orden)
+Las soluciones están en el backlog (sección 9): A1, A2, A3, A4, B2 y B3–B6.
 
-| # | Cambio | Qué resuelve |
+### Iteración 4: que organizar importe (hecha y probada)
+
+| Cambio | Detalle |
+|---|---|
+| **Semilla por grupo** (A1) | En el tablón, cada grupo tiene «Siembran»: *Lo mismo que había* (por defecto) o un cultivo desbloqueado. Los sembradores plantan esa semilla en lo vacío y en lo echado a perder. Ya no hace falta cazar parcelas vacías a clics. |
+| **Podredumbre** (A2) | Lo maduro aguanta un tiempo y después se echa a perder: zanahoria 20 s, trigo 45 s, tomate 20 s, calabaza 90 s. Al 60 % del aguante la planta pierde color y deja de saltar; echada a perder se vuelve marrón y le da vueltas una mosca. No da monedas. El sembrador la arranca y replanta (tarda 0,8 s más), y un clic tuyo también. |
+| **«Valioso» con paseo** (A3) | Elige el mayor valor por paseo: `valor / (distancia + 30)`. Un tomate al lado gana a una calabaza al fondo del bancal. |
+| **Prioridad nueva: «Lo que se va a estropear antes»** | Va a lo maduro con menos margen antes de echarse a perder, contando el paseo. Lo que ya no da tiempo a salvar queda para el final. |
+| **Reserva de la cesta** (A4) | Cada porteador que va a la cesta se reserva 5 cultivos; si no queda nada para otro, ese no va. |
+| **Ranking «Gnomos del mes»** (D5) | Botón *Ranking* en la barra. Es un podio de 3 en siete categorías: más trabajador (tareas), el que más monedas genera (valor cosechado), mejor sembrador, el que más lleva al granero, el más andarín (pasos), el más dormilón y el más quejica. Arriba: quién lleva la corona, lo que has recogido tú a mano y los cultivos echados a perder. |
+| **Corona** | El más trabajador lleva una corona dorada sobre el gorro. Para quitársela hay que sacarle 3 tareas de ventaja, y el diario lo cuenta («X le quita la corona a Y…»). |
+| **Bot de equilibrio** (B1) | `npm run balance` (fichero `balance/ritmo.balance.ts`). Imprime el ritmo con dos perfiles de jugador, la comparación de prioridades con distintas plantillas, el tiempo que tarda en cambiar la semilla y la tabla de cultivos. No entra en `npm test`. |
+| **Git** (F1) | Repositorio local con un commit por iteración. |
+
+Las partidas de la iteración 3 siguen valiendo: los campos nuevos tienen valores por defecto al cargar.
+
+**Prueba (2026-10-27):** `tsc`, los 31 tests (10 nuevos) y `npm run build` pasan. En Chrome se ha comprobado lo siguiente:
+- Con la semilla del grupo en *Tomate*, a los 80 s todo el bancal era de tomates sin ningún clic.
+- Las plantas echadas a perder se ven marrones y con mosca; el diario avisa.
+- La corona flota sobre el líder, y al pasar el ratón sale «Lleva la corona».
+- El ranking se rellena y se actualiza solo.
+- No hay errores en la consola.
+
+**Resultados del bot (`npm run balance`)**
+
+Prioridades: bancal de 9×6 con los cuatro cultivos por columnas, 10 min, sin clics.
+
+| Plantilla | Cercano | Valioso | Se va a estropear |
+|---|---|---|---|
+| 2 rec + 2 sem | 0,83 /s · 356 perdidos | **4,31 /s** · 278 | 0,95 /s · 378 |
+| 6 rec + 4 sem | 3,50 /s · 360 | **7,83 /s** · 366 | 2,78 /s · 331 |
+| 12 rec + 8 sem | 6,93 /s · 238 | **10,33 /s** · 267 | 4,10 /s · **168** |
+| 24 rec + 12 sem | 12,36 /s · 37 | **12,54 /s** · 36 | 11,58 /s · **0** |
+
+- **Las prioridades ya dan resultados distintos con cualquier plantilla.** «Valioso» es la que más gana, y con gnomos de sobra «Se va a estropear» es la única que no pierde nada. Cada una sirve para algo distinto: ganar más o perder menos.
+- **«Se va a estropear» gana menos en un bancal mezclado**, porque salva por igual zanahorias que calabazas. Rinde mejor en un grupo de un solo cultivo de poco aguante (tomate). Es una decisión de diseño a revisar en la iteración 5, junto con las ventajas y costes por cultivo (B2).
+- **Cambiar de semilla:** con 6 recolectores y 4 sembradores, el 96 % del bancal pasa de zanahoria a calabaza en 1 minuto, sin clics.
+- **El ritmo no cambia**, como era de esperar: árbol completo a los 22,7 min (activo) y 28,7 min (tranquilo), y después ~68–69 monedas/s. El bot contrata de más y no se le estropea nada. Esto es trabajo de la iteración 5.
+
+---
+
+## 9. 🗺️ Backlog y hoja de ruta
+
+> Guía de trabajo. Cada iteración tiene un objetivo y unos criterios para darla por buena. Al terminar una iteración se marcan sus tareas y se anotan los resultados en la sección 8.
+> **Tamaño:** S = poco trabajo, M = medio, L = grande.
+
+### 9.1 Backlog
+
+**A. Que organizar los gnomos importe (el núcleo del juego)**
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| A1 | **Semilla por grupo:** cada grupo elige qué siembran sus sembradores | S–M | Alto | — | ✅ It4 |
+| A2 | **Podredumbre:** lo maduro se estropea si nadie lo recoge a tiempo, y se ve (planta mustia) | M | Alto | — | ✅ It4 |
+| A3 | **«Valioso» que tenga en cuenta la distancia**, no solo el valor | S | Medio | — | ✅ It4 |
+| A4 | **Reserva de la cesta** para que no vayan todos los porteadores a por un solo cultivo | S | Bajo | — | ✅ It4 |
+| A5 | **Zonas:** asignar a un grupo unas columnas o filas del bancal | M–L | Alto | A1 | Más adelante |
+
+**B. Economía y ritmo**
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| B1 | **Bot de equilibrio** (`npm run balance`): mide el ritmo en cada iteración | S | Alto (herramienta) | — | ✅ It4 |
+| B2 | **Ventajas y costes por cultivo:** rápido y laborioso frente a lento y cómodo | S | Alto | A2 | It5 |
+| B3 | **Contratar más caro** (×1,25–1,3 por gnomo) | S | Medio | B1 | It5 |
+| B4 | **Casa de gnomos:** el tope de gnomos depende de este edificio (el primer edificio del juego) | M | Alto | — | It5 |
+| B5 | **Más nodos en el árbol** (más niveles, ramas nuevas) | M | Medio | B1 | It5 |
+| B6 | **Multiplicador de organización:** premiar una cadena de trabajo eficiente | M | Medio | A1, A2 | It7 |
+
+**C. Contenido**
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| C1 | **Regador** (gorro azul): acelera el crecimiento; el tomate podría necesitarlo | M | Medio | — | It7 |
+| C2 | **Fresa y melón** (cultivos con sus sprites) | S–M | Medio | B2 | It7 |
+| C3 | **Guardián y cuervos** | M | Medio | — | It7 |
+| C4 | **Calabaza que ocupa 2×2 parcelas** | L | Bajo | — | Más adelante |
+| C5 | **Molino y mercado** | M–L | Medio | B4 | Más adelante |
+
+**D. Personalidad**
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| D1 | **Ficha de gnomo al hacer clic** (ahora al pasar el ratón solo sale el nombre) | S–M | Medio | — | It6 |
+| D2 | **Rasgos con efectos** («Perezoso: −10 % velocidad») | M | Alto | D1 | It6 |
+| D3 | **Gnomos legendarios** | S | Medio | D2 | It6 |
+| D4 | **Eventos humorísticos** (sindicato gnomo, lluvia de ranas) | M | Medio | — | It6 |
+| D5 | **Ranking de gnomos:** el más trabajador, el que más monedas aporta, el más andarín, el más dormilón… con corona para el líder en el huerto | S–M | Medio | — | ✅ It4 (pedido del autor) |
+
+**E. Largo plazo**
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| E1 | **Prestigio con semillas doradas** | L | Muy alto | B (economía estable) | It8 |
+| E2 | **Biomas** (pantano, montaña, huerto nocturno) | L | Alto | E1 | Más adelante |
+
+**F. Técnica y pulido**
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| F1 | **Repositorio git** | S | Alto (seguridad) | — | ✅ It4 |
+| F2 | **Migrar partidas guardadas** en vez de empezar de cero en cada versión | S | Medio | — | It6 |
+| F3 | **Plantas más detalladas** (pendiente desde la sección 3) | M | Medio | — | Más adelante |
+| F4 | **Sonido** | M | Medio | — | Más adelante |
+| F5 | **Pequeño tutorial** al empezar | S–M | Medio | — | It8 |
+| F6 | **Táctil y móvil** | M | Bajo por ahora | — | Más adelante |
+
+### 9.2 Hoja de ruta (opción A: mecánica antes que números)
+
+```mermaid
+flowchart LR
+  I4["It4 · Que organizar importe<br/>F1 B1 A1 A2 A3 A4 D5"] --> I5["It5 · Economía y ritmo<br/>B2 B3 B4 B5"]
+  I5 --> I6["It6 · Personalidad<br/>D1 D2 D3 D4 F2"]
+  I6 --> I7["It7 · Contenido<br/>C1 C2 C3 B6"]
+  I7 --> I8["It8 · Prestigio<br/>E1 F5"]
+  I8 --> L["Después<br/>A5 C4 C5 E2 F3 F4 F6"]
+```
+
+| Iteración | Objetivo | Se da por buena cuando… |
 |---|---|---|
-| 1 | **Semilla por grupo:** cada grupo elige qué siembran sus sembradores («Los de la zanahoria» siembran zanahoria). | Conclusión 5. Da a los grupos un papel sobre el terreno sin microgestión. |
-| 2 | **Podredumbre:** lo maduro aguanta un tiempo (corto en fresa y tomate) y después se estropea, y se ve (planta mustia). | Conclusión 3. Las prioridades cuentan siempre y el problema se ve, como pide la sección 5. |
-| 3 | **Ventajas y costes por cultivo:** rápido y laborioso (más por parcela) frente a lento y cómodo (más por viaje). | Conclusión 2. |
-| 4 | **Más ritmo y en qué gastar:** `COST_GROWTH` a ~1,25–1,3; tope de gnomos según la **casa de gnomos** (edificio con niveles); más nodos en el árbol; multiplicador de organización. | Conclusión 1. |
-| 5 | **«Valioso» que cuente la distancia** (valor dividido entre distancia, o algo parecido). | Conclusión 4. |
-| 6 | **Reserva de la cesta** para los porteadores. | Conclusión 6. |
+| **4 · Que organizar importe** | Cumplir el criterio de la demo que falta: cambiar la prioridad de un grupo se nota | Con gnomos de sobra, «cercano» y «valioso» dan resultados claramente distintos; se puede pasar el huerto entero a calabaza sin cazar parcelas vacías a clics; el ranking muestra quién destaca |
+| **5 · Economía y ritmo** | Que la temporada dure lo previsto | Árbol completo en unos 45–60 min (medido con `npm run balance`); siempre hay algo útil que comprar; la zanahoria sigue sirviendo |
+| **6 · Personalidad** | Que sea entretenido dejarlo un minuto y solo mirar | Al hacer clic en un gnomo sale su ficha; los rasgos cambian cómo trabaja; aparecen eventos de vez en cuando |
+| **7 · Contenido** | Un oficio nuevo, una amenaza y más cultivos | Regador y guardián con un papel claro; fresa y melón tienen sus propias ventajas y costes |
+| **8 · Prestigio** | Que la partida tenga un final y vuelva a empezar | Reiniciar tras 1–2 h da semillas doradas que se notan en la siguiente temporada |
 
-**Más adelante:** zonas del bancal por grupo; regador (si el tomate lo necesita); calabaza de 2×2; prestigio con semillas doradas como gran gasto final; rasgos con efectos y gnomos legendarios; eventos (cuervos y guardián, «sindicato gnomo»).
+**Por qué este orden:**
+- **Mecánica antes que números.** Ajustar el ritmo antes de tener podredumbre y ventajas por cultivo obliga a ajustarlo dos veces.
+- **El bot va en la iteración 4** para que cada cambio de equilibrio se mida, no se adivine.
+- **La personalidad apenas toca la economía**, así que se puede adelantar si apetece algo más vistoso.
+- **El prestigio va al final** porque multiplica una economía que antes tiene que estar equilibrada.
 
 ---
 
 ## ❓ Preguntas abiertas
 
-- [ ] ¿Empezamos la iteración 4 por la semilla por grupo y la podredumbre, o primero el ritmo?
+- [ ] ¿El ranking debería dar algo más que fama (por ejemplo, un pequeño bonus al «gnomo del mes»)? Por ahora solo da fama y corona.
 - [ ] Ritmo objetivo: ¿la temporada debe durar 1–2 h ya en la demo, o vale con ~45 min hasta que exista el prestigio?
+- [ ] Tras jugar la iteración 4: ¿se entiende y se nota la podredumbre? ¿Los aguantes (20–90 s) son justos?
 
 ---
 
@@ -318,11 +440,15 @@ Un bot jugó 3 horas de partida simulada. Compraba siempre lo más barato y repl
 | 12 | Resolución | Gnomos 16×16 con contorno oscuro |
 | 13 | Huerto | Bancal rectangular continuo con surcos |
 | 14 | Plantas | Estilo con contorno; hacerlas más detalladas en la demo |
+| 15 | Hoja de ruta | Opción A: mecánica antes que números (sección 9.2) |
+| 16 | Ranking | Ranking de gnomos en la iteración 4, a petición del autor |
+| 17 | Control de versiones | Repositorio git local desde la iteración 4 |
 
 ---
 
 ## 📝 Historial de cambios
 
+- **v0.9 (2026-10-27):** iteración 4, «que organizar importe». Semilla por grupo, podredumbre visible, «valioso» con paseo, prioridad «Lo que se va a estropear antes», reserva de la cesta, ranking «Gnomos del mes» con corona para el más trabajador, bot de equilibrio (`npm run balance`) y repositorio git. Backlog y hoja de ruta en la sección 9. Las partidas de la iteración 3 siguen valiendo.
 - **v0.8 (2026-10-27):** iteración 3 probada en el navegador. Arreglado el diario, que se salía de la pantalla. Añadidos el estudio de equilibrio (bot de 3 h: el contenido se acaba en 23–31 min, cada cultivo supera al anterior en todo y las prioridades solo cuentan cuando faltan gnomos) y la propuesta de la iteración 4.
 - **v0.7 (2026-10-27):** iteración 3. Los menús se abren desde el huerto (granero, tablón y árbol viejo) y desde una barra pixel art. Ventanas de madera y pergamino. Árbol de mejoras con ramas en lugar de mejoras sueltas. Grupos ilimitados (hasta 20) con nombre, color de la paleta y prioridad propios, y gnomos que se arrastran entre grupos. La partida de la v0.6 no es compatible.
 - **v0.6 (2026-10-27):** iteración 2 a partir de la opinión tras jugar: grupos visibles (aros y marcas de color), bancal ampliable de 3×3 a 9×6 con cámara que se adapta, porteador con cesta, trigo y calabaza, y ritmo más lento.

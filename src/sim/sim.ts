@@ -1,7 +1,8 @@
 // Simulación pura: sin DOM ni render. Todo lo que pasa en el huerto ocurre aquí.
 import {
-  BASE_SPEED, BASKET, COST_GROWTH, CROPS, DOOR, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HARVEST_TIME, IDLE_AREA, JOBS,
-  LOG_MAX, MAX_GNOMES, MAX_GROUPS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, TREE,
+  BASE_SPEED, BASKET, CLEAR_TIME, COST_GROWTH, CROPS, CROWN_MARGIN, DOOR, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HARVEST_TIME,
+  IDLE_AREA, JOBS, LOG_MAX, MAX_GNOMES, MAX_GROUPS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TREE,
+  VALUE_DISTANCE_BIAS,
 } from './config';
 import { makeGnome } from './state';
 import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LOG, NOMBRES, OFICIOS } from '../textos';
@@ -130,7 +131,9 @@ export function createGroup(s: GameState): GnomeGroup | null {
   const name = GRUPOS.sugerencias.find(n => !used.has(n)) ?? `Grupo ${s.nextGroupId}`;
   const usedColors = new Set(s.groups.map(g => g.color));
   const color = GROUP_PALETTE.findIndex((_, i) => !usedColors.has(i));
-  const group: GnomeGroup = { id: s.nextGroupId++, name, color: color === -1 ? s.groups.length % GROUP_PALETTE.length : color, priority: 'cercano' };
+  const group: GnomeGroup = {
+    id: s.nextGroupId++, name, color: color === -1 ? s.groups.length % GROUP_PALETTE.length : color, priority: 'cercano', seed: null,
+  };
   s.groups.push(group);
   log(s, LOG.grupoNuevo(name));
   return group;
@@ -157,6 +160,16 @@ export function setPriority(s: GameState, id: number, p: Priority) {
   // los que iban de camino a una parcela vuelven a decidir con la prioridad nueva
   for (const g of s.gnomes) if (g.group === id && g.state === 'walk' && g.task?.plot !== undefined) releaseTask(s, g);
 }
+
+/** Qué siembran los sembradores del grupo; null = lo mismo que había en cada parcela. */
+export function setGroupSeed(s: GameState, id: number, seed: CropId | null) {
+  const group = s.groups.find(g => g.id === id);
+  if (!group || (seed !== null && !cropUnlocked(s, seed))) return;
+  group.seed = seed;
+}
+
+/** El cultivo que plantará un sembrador en esa parcela. */
+const seedFor = (s: GameState, g: Gnome, p: Plot): CropId => groupOf(s, g).seed ?? p.crop;
 
 /** Borra un grupo; sus gnomos pasan al primer grupo que quede. Siempre queda al menos uno. */
 export function deleteGroup(s: GameState, id: number): boolean {
@@ -186,7 +199,7 @@ export function moveGnome(s: GameState, gnomeId: number, groupId: number): boole
 
 // ---------- Clic en el bancal ----------
 
-/** Recoge si está madura, planta si está vacía. */
+/** Recoge si está madura; planta si está vacía o echada a perder (se arranca y se siembra). */
 export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | 'plant' | null {
   const p = s.plots[id];
   if (!p || !isOpen(s, p)) return null;
@@ -202,7 +215,7 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
     p.res = null;
     return 'harvest';
   }
-  if (p.stage === -1 && cropUnlocked(s, crop)) {
+  if ((p.stage === -1 || p.stage === ROTTEN) && cropUnlocked(s, crop)) {
     p.crop = crop;
     p.stage = 0;
     p.t = 0;
@@ -216,8 +229,12 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
 
 export function tick(s: GameState, dt: number, rng: Rng) {
   for (const p of s.plots) {
-    if (p.stage < 0 || p.stage >= RIPE) continue;
+    if (p.stage < 0 || p.stage === ROTTEN) continue;
     p.t += dt;
+    if (p.stage === RIPE) {
+      if (p.t >= CROPS[p.crop].keep) rot(s, p, rng);
+      continue;
+    }
     const st = stageTime(s, p.crop);
     while (p.t >= st && p.stage < RIPE) {
       p.t -= st;
@@ -226,6 +243,25 @@ export function tick(s: GameState, dt: number, rng: Rng) {
     if (p.stage === RIPE) p.t = 0;
   }
   for (const g of s.gnomes) updateGnome(s, g, dt, rng);
+  updateCrown(s);
+}
+
+function rot(s: GameState, p: Plot, rng: Rng) {
+  p.stage = ROTTEN;
+  p.t = 0;
+  s.rotted++;
+  if (rng() < 0.25) log(s, LOG.podrido(CULTIVOS[p.crop].uno));
+}
+
+/** La corona pasa al gnomo más trabajador, si le saca al líder actual una ventaja clara. */
+function updateCrown(s: GameState) {
+  let leader: Gnome | null = null;
+  for (const g of s.gnomes) if (!leader || g.stats.tasks > leader.stats.tasks) leader = g;
+  if (!leader || leader.stats.tasks === 0 || leader.id === s.crown) return;
+  const holder = s.gnomes.find(g => g.id === s.crown);
+  if (holder && leader.stats.tasks < holder.stats.tasks + CROWN_MARGIN) return;
+  log(s, holder ? LOG.corona(leader.name, holder.name) : LOG.primeraCorona(leader.name));
+  s.crown = leader.id;
 }
 
 function updateGnome(s: GameState, g: Gnome, dt: number, rng: Rng) {
@@ -239,10 +275,12 @@ function updateGnome(s: GameState, g: Gnome, dt: number, rng: Rng) {
     if (d <= step) {
       g.x = g.tx;
       g.y = g.ty;
+      g.stats.walked += d;
       arrive(s, g, rng);
     } else {
       g.x += (dx / d) * step;
       g.y += (dy / d) * step;
+      g.stats.walked += step;
     }
   } else {
     g.timer -= dt;
@@ -280,17 +318,33 @@ function releaseTask(s: GameState, g: Gnome) {
   think(g);
 }
 
+/**
+ * Elige parcela según la prioridad del grupo (menor puntuación gana):
+ * - cercano: la más cerca.
+ * - valioso: más valor por paseo, valor / (distancia + sesgo).
+ * - urgente: de lo maduro que aún da tiempo a salvar, lo que menos margen tiene. Lo que se va a echar
+ *   a perder antes de llegar queda al final (por distancia). Para los sembradores, la más cerca.
+ * - solo_X: la más cerca de ese cultivo.
+ */
 function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | null {
   const prio = groupOf(s, g).priority;
   const only = prio.startsWith('solo_') ? prio.slice('solo_'.length) : null;
+  const speed = walkSpeed(s);
   let best: Plot | null = null;
   let bestScore = Infinity;
   for (const p of s.plots) {
     if (p.res !== null || !isOpen(s, p) || !filter(p)) continue;
     if (only && p.crop !== only) continue;
     const st = plotStand(p);
-    let score = Math.hypot(st.x - g.x, st.y - g.y);
-    if (prio === 'valioso') score -= CROPS[p.crop].value * 1000;
+    const dist = Math.hypot(st.x - g.x, st.y - g.y);
+    let score = dist;
+    if (prio === 'valioso') {
+      const crop = g.job === 'sembrador' ? seedFor(s, g, p) : p.crop;
+      score = -CROPS[crop].value / (dist + VALUE_DISTANCE_BIAS);
+    } else if (prio === 'urgente' && p.stage === RIPE) {
+      const margin = CROPS[p.crop].keep - p.t - dist / speed - HARVEST_TIME;
+      score = margin >= 0 ? margin - UNSAVABLE : dist;
+    }
     if (score < bestScore) {
       bestScore = score;
       best = p;
@@ -298,6 +352,9 @@ function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | 
   }
   return best;
 }
+
+/** desplaza las parcelas salvables por delante de cualquier distancia en «urgente» */
+const UNSAVABLE = 1e6;
 
 function goDeliver(s: GameState, g: Gnome, rng: Rng) {
   if (g.job === 'recolector' && hasPorters(s)) goTo(g, BASKET.x + rng() * 6 - 3, BASKET.y, { kind: 'drop' });
@@ -317,7 +374,7 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
     }
     if (g.carry.length) return goDeliver(s, g, rng);
   } else if (g.job === 'sembrador') {
-    const p = pickPlot(s, g, p => p.stage === -1 && cropUnlocked(s, p.crop));
+    const p = pickPlot(s, g, p => (p.stage === -1 || p.stage === ROTTEN) && cropUnlocked(s, seedFor(s, g, p)));
     if (p) {
       p.res = g.id;
       const st = plotStand(p);
@@ -326,7 +383,9 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
     }
   } else {
     if (g.carry.length) return goDeliver(s, g, rng);
-    if (s.basket.length) {
+    // cada porteador que ya va a la cesta se lleva hasta PORTER_CAPACITY; si no queda nada para este, no va
+    const claimed = s.gnomes.filter(o => o !== g && o.job === 'porteador' && o.task?.kind === 'pickup').length * PORTER_CAPACITY;
+    if (s.basket.length > claimed) {
       goTo(g, BASKET.x + rng() * 6 - 3, BASKET.y + 2, { kind: 'pickup' });
       return;
     }
@@ -338,6 +397,7 @@ function idle(s: GameState, g: Gnome, rng: Rng) {
   if (rng() < 0.12) {
     if (rng() < 0.5) log(s, `${g.name} ${pick(rng, LOG.siesta)}`);
     g.bubble = 'zz';
+    g.stats.naps++;
     work(g, 3 + rng() * 2, 'sleep', { kind: 'nap' });
     return;
   }
@@ -355,8 +415,8 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
     if (p.stage !== RIPE) return releaseTask(s, g);
     work(g, HARVEST_TIME * workMult(s), 'harvest', task);
   } else if (task.kind === 'plant' && p) {
-    if (p.stage !== -1) return releaseTask(s, g);
-    work(g, PLANT_TIME * workMult(s), 'harvest', task);
+    if (p.stage !== -1 && p.stage !== ROTTEN) return releaseTask(s, g);
+    work(g, (PLANT_TIME + (p.stage === ROTTEN ? CLEAR_TIME : 0)) * workMult(s), 'harvest', task);
   } else if (task.kind === 'deliver') {
     const amount = g.carry.reduce((a, c) => a + CROPS[c].value, 0);
     s.coins += amount;
@@ -366,6 +426,8 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
       const que = g.carry.length === 1 ? CULTIVOS[g.carry[0]].uno : LOG.variosCultivos(g.carry.length);
       log(s, LOG.entrega(g.name, que, amount));
     }
+    g.stats.delivered += g.carry.length;
+    g.stats.tasks++;
     g.carry = [];
     work(g, 0.3, 'idle', { kind: 'rest' });
   } else if (task.kind === 'drop') {
@@ -375,8 +437,10 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
       // cesta llena: el cuello de botella se ve con el gnomo esperando con el saco
       if (rng() < 0.15) log(s, LOG.cestaLlena(g.name));
       g.bubble = 'alert';
+      g.stats.complaints++;
       work(g, 1.2, 'complain', { kind: 'wait' });
     } else {
+      g.stats.tasks++;
       work(g, 0.3, 'idle', { kind: 'rest' });
     }
   } else if (task.kind === 'pickup') {
@@ -400,21 +464,31 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
     p.stage = -1;
     p.t = 0;
     g.carry.push(p.crop);
+    g.stats.harvests++;
+    g.stats.value += CROPS[p.crop].value;
+    g.stats.tasks++;
     if (CROPS[p.crop].value >= 12 && rng() < 0.15) {
       log(s, LOG.protesta(g.name));
       g.bubble = 'alert';
+      g.stats.complaints++;
       work(g, 1.2, 'complain', { kind: 'complain' });
       return;
     }
   } else if (task?.kind === 'plant' && p) {
     p.res = null;
-    if (p.stage === -1) {
+    if (p.stage === -1 || p.stage === ROTTEN) {
+      if (p.stage === ROTTEN && rng() < 0.2) log(s, LOG.arrancar(g.name));
+      else if (rng() < 0.08) log(s, `${g.name} ${pick(rng, LOG.plantar)}`);
+      p.crop = seedFor(s, g, p);
       p.stage = 0;
       p.t = 0;
-      if (rng() < 0.08) log(s, `${g.name} ${pick(rng, LOG.plantar)}`);
+      g.stats.plants++;
+      g.stats.tasks++;
     }
   } else if (task?.kind === 'pickup') {
+    const before = g.carry.length;
     g.carry.push(...s.basket.splice(0, PORTER_CAPACITY));
+    if (g.carry.length > before) g.stats.tasks++;
   } else if (task?.kind === 'wait') {
     // vuelve a intentar dejar lo que lleva
     g.bubble = null;

@@ -1,9 +1,9 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, FIELD, GROUP_PALETTE, IDLE_AREA, OLD_TREE, RIPE } from '../sim/config';
+import { BARN, BASKET, BOARD, CROPS, FIELD, GROUP_PALETTE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WILT_WARNING } from '../sim/config';
 import { basketMax, fieldSize, groupOf, hasPorters, isOpen, plotAt, plotOrigin } from '../sim/sim';
 import type { GameState, Gnome } from '../sim/types';
-import { MENUS, OFICIOS, type MenuId } from '../textos';
+import { MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
 import { drawBarn, drawBoard, drawOldTree, outlined } from './landmarks';
 import { frameIndex, type Atlas } from './sprites';
@@ -11,6 +11,8 @@ import { frameIndex, type Atlas } from './sprites';
 const FONT = ['Pixelify Sans', 'monospace'];
 const BASKET_SPRITE_W = 12;
 const BASKET_SPRITE_H = 9;
+/** tinte de la planta madura que lleva demasiado esperando */
+const WILT_TINT = 0xd8c890;
 
 /** Elemento del huerto que abre un menú al pulsarlo. */
 interface Landmark {
@@ -30,6 +32,7 @@ interface GnomeView {
   body: Sprite;
   item: Sprite;
   bubble: Sprite;
+  crown: Sprite;
 }
 
 interface Float {
@@ -200,25 +203,39 @@ export class SceneView {
       const sparkle = this.sparkles[p.id];
       const open = isOpen(s, p);
       sp.visible = open;
-      sparkle.visible = open && p.stage === RIPE && Math.sin(this.time * 2.3 + p.id * 2.1) > 0.93;
+      sparkle.visible = false;
       if (!open) continue;
       const o = plotOrigin(p);
       sp.zIndex = o.y + 15;
+      sp.tint = 0xffffff;
       if (p.stage < 0) {
         sp.texture = this.atlas.hole;
         sp.anchor.set(0, 0);
         sp.scale.x = 1;
         sp.position.set(o.x + 6, o.y + 12);
-      } else {
-        sp.texture = this.atlas.plants[p.crop][p.stage];
-        sp.anchor.set(0.5, 0);
-        // parte de las plantas en espejo, para que el bancal no parezca copiado y pegado
-        sp.scale.x = (p.id * 7) % 3 === 0 ? -1 : 1;
-        const bounce = p.stage === RIPE && Math.sin(this.time * 5 + p.id * 1.7) > 0.6 ? -1 : 0;
-        sp.position.set(o.x + 9, o.y + 2 + bounce);
+        continue;
       }
-      sparkle.position.set(o.x + 12, o.y + 1);
+      sp.texture = this.atlas.plants[p.crop][p.stage];
+      sp.anchor.set(0.5, 0);
+      // parte de las plantas en espejo, para que el bancal no parezca copiado y pegado
+      sp.scale.x = (p.id * 7) % 3 === 0 ? -1 : 1;
+      const ripe = p.stage === RIPE;
+      const wilting = ripe && p.t >= CROPS[p.crop].keep * WILT_WARNING;
+      if (wilting) sp.tint = WILT_TINT;
+      const bounce = ripe && !wilting && Math.sin(this.time * 5 + p.id * 1.7) > 0.6 ? -1 : 0;
+      sp.position.set(o.x + 9, o.y + 2 + bounce);
       sparkle.zIndex = o.y + 16;
+      if (p.stage === ROTTEN) {
+        // una mosca da vueltas sobre lo echado a perder
+        const a = this.time * 3 + p.id;
+        sparkle.texture = this.atlas.fly;
+        sparkle.position.set(Math.round(o.x + 8 + Math.cos(a) * 5), Math.round(o.y + 3 + Math.sin(a * 1.7) * 2));
+        sparkle.visible = true;
+      } else if (ripe && !wilting) {
+        sparkle.texture = this.atlas.sparkle;
+        sparkle.position.set(o.x + 12, o.y + 1);
+        sparkle.visible = Math.sin(this.time * 2.3 + p.id * 2.1) > 0.93;
+      }
     }
   }
 
@@ -247,9 +264,10 @@ export class SceneView {
     body.anchor.set(0.5, 1);
     const item = new Sprite();
     const bubble = new Sprite();
-    root.addChild(shadow, ring, body, item, bubble);
+    const crown = new Sprite(this.atlas.crown);
+    root.addChild(shadow, ring, body, item, bubble, crown);
     this.entities.addChild(root);
-    return { root, ring, body, item, bubble };
+    return { root, ring, body, item, bubble, crown };
   }
 
   private syncGnomes(s: GameState) {
@@ -288,6 +306,9 @@ export class SceneView {
     }
 
     v.bubble.visible = g.bubble !== null;
+    // la corona flota sobre el gorro; se aparta mientras hay bocadillo
+    v.crown.visible = s.crown === g.id && g.bubble === null;
+    if (v.crown.visible) v.crown.position.set(-3, -23 - (Math.floor(g.t * 2) % 2));
     if (g.bubble === 'zz') {
       v.bubble.texture = this.atlas.zz;
       v.bubble.position.set(5, -20 - (Math.floor(g.t * 2) % 2));
@@ -364,7 +385,7 @@ export class SceneView {
       const g = s.gnomes.find(g => Math.abs(pt.x - g.x) <= 6 && pt.y <= g.y && pt.y >= g.y - 16);
       lm = g ? null : this.landmarkAt(pt.x, pt.y);
       if (g) {
-        this.nameTag.text = `${g.name}\n${OFICIOS[g.job].nombre} · ${groupOf(s, g).name}`;
+        this.nameTag.text = `${g.name}\n${OFICIOS[g.job].nombre} · ${groupOf(s, g).name}${s.crown === g.id ? `\n${RANKING.corona}` : ''}`;
         const p = this.toScreen(g.x, g.y - 18);
         this.nameTag.position.set(p.x, p.y);
         this.nameTag.visible = true;
@@ -377,7 +398,7 @@ export class SceneView {
       } else {
         const id = plotAt(s, pt.x, pt.y);
         const p = id !== null ? s.plots[id] : null;
-        if (p && (p.stage === RIPE || p.stage === -1)) {
+        if (p && (p.stage === RIPE || p.stage === -1 || p.stage === ROTTEN)) {
           const o = plotOrigin(p);
           this.hover.rect(o.x + 0.5, o.y + 0.5, FIELD.cell - 1, FIELD.cell - 1).stroke({ width: 1, color: 0xf4f4f4, alpha: 0.5 });
           cursor = 'pointer';

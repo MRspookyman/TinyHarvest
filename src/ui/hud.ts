@@ -10,7 +10,7 @@ export interface Hud {
   update(s: GameState, selected: CropId, openMenu: MenuId | null): void;
 }
 
-const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'diario'];
+const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'diario'];
 
 export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: GameActions, open: (m: MenuId) => void): Hud {
   topbar.innerHTML = `

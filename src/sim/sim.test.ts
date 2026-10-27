@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BASKET, CROPS, FIELD, MAX_GROUPS, RIPE, TREE } from './config';
+import { BASKET, CROPS, CROWN_MARGIN, FIELD, MAX_GROUPS, RIPE, ROTTEN, TREE } from './config';
 import {
   basketMax, buyNode, clickPlot, createGroup, deleteGroup, fieldSize, hire, hireCost, isOpen, moveGnome, nodeCost,
-  nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setPriority, tick,
+  nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
 } from './sim';
 import { createState, deserialize, serialize } from './state';
 import type { GameState, JobId, Rng } from './types';
@@ -138,6 +138,23 @@ describe('cultivos', () => {
     expect(s.coins).toBe(CROPS.zanahoria.value);
     expect(s.plots[0].stage).toBe(-1);
   });
+
+  it('lo maduro que nadie recoge se echa a perder pasado su aguante', () => {
+    const rng = seeded(3);
+    const s = createState(rng);
+    const p = s.plots[0];
+    p.stage = RIPE;
+    p.t = 0;
+    run(s, CROPS.zanahoria.keep - 0.5, rng);
+    expect(p.stage).toBe(RIPE);
+    run(s, 1, rng);
+    expect(p.stage).toBe(ROTTEN);
+    expect(s.rotted).toBe(1);
+    // echado a perder no da monedas: un clic lo arranca y siembra la semilla elegida
+    expect(clickPlot(s, p.id, 'zanahoria')).toBe('plant');
+    expect(s.coins).toBe(0);
+    expect(p.stage).toBe(0);
+  });
 });
 
 describe('gnomos', () => {
@@ -189,6 +206,68 @@ describe('gnomos', () => {
     run(s, 40, rng);
     expect(s.plots.filter(p => isOpen(s, p)).every(p => p.stage >= 0)).toBe(true);
     expect(s.plots.filter(p => !isOpen(s, p)).every(p => p.stage === -1)).toBe(true);
+  });
+
+  it('los recolectores no recogen lo echado a perder; los sembradores lo arrancan y replantan', () => {
+    const rng = seeded(5);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = 0;
+    const rotten = s.plots[plotId(1, 1)];
+    rotten.stage = ROTTEN;
+    const picker = hireFree(s, 'recolector', rng);
+    tick(s, 1 / 30, rng);
+    expect(picker.task?.kind).not.toBe('harvest');
+    hireFree(s, 'sembrador', rng);
+    run(s, 6, rng);
+    expect(rotten.stage).toBeGreaterThanOrEqual(0);
+    expect(rotten.stage).toBeLessThan(RIPE);
+  });
+
+  it('dos porteadores no van a por una cesta que solo da para uno', () => {
+    const rng = seeded(8);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = -1;
+    const a = hireFree(s, 'porteador', rng);
+    const b = hireFree(s, 'porteador', rng);
+    s.basket = ['zanahoria', 'zanahoria', 'zanahoria'];
+    tick(s, 1 / 30, rng);
+    const kinds = [a, b].map(g => g.task?.kind);
+    expect(kinds.filter(k => k === 'pickup')).toHaveLength(1);
+    // con 6 en la cesta (más de PORTER_CAPACITY) ya hay trabajo para el segundo
+    s.basket.push('zanahoria', 'zanahoria', 'zanahoria');
+    const idle = a.task?.kind === 'pickup' ? b : a;
+    idle.state = 'think';
+    tick(s, 1 / 30, rng);
+    expect(idle.task?.kind).toBe('pickup');
+  });
+});
+
+describe('semilla por grupo', () => {
+  it('los sembradores siembran la semilla del grupo; sin semilla, lo que había', () => {
+    const rng = seeded(5);
+    const s = createState(rng);
+    s.tree.trigo = 1;
+    s.tree.tomate = 1;
+    s.tree.calabaza = 1;
+    for (const p of s.plots) p.stage = 0;
+    const a = s.plots[plotId(0, 0)];
+    a.stage = -1;
+    a.crop = 'zanahoria';
+    hireFree(s, 'sembrador', rng);
+    run(s, 5, rng);
+    expect(a).toMatchObject({ stage: 0, crop: 'zanahoria' });
+
+    setGroupSeed(s, s.groups[0].id, 'calabaza');
+    a.stage = ROTTEN;
+    // aunque esté de siesta o paseando, en 12 s vuelve; la calabaza tarda 15 s en pasar de fase
+    run(s, 12, rng);
+    expect(a).toMatchObject({ stage: 0, crop: 'calabaza' });
+  });
+
+  it('no deja elegir una semilla sin desbloquear', () => {
+    const s = createState(seeded(1));
+    setGroupSeed(s, s.groups[0].id, 'calabaza');
+    expect(s.groups[0].seed).toBe(null);
   });
 });
 
@@ -246,6 +325,87 @@ describe('grupos', () => {
     tick(s, 1 / 30, rng);
     expect(g.task?.kind).not.toBe('harvest');
   });
+
+  it('«valioso» cuenta el paseo: un tomate al lado gana a una calabaza al fondo del bancal', () => {
+    const rng = seeded(6);
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    for (const p of s.plots) p.stage = -1;
+    setPriority(s, s.groups[0].id, 'valioso');
+    const g = hireFree(s, 'recolector', rng);
+    const tomato = s.plots[plotId(0, 0)];
+    const pumpkin = s.plots[plotId(8, 5)];
+    Object.assign(tomato, { stage: RIPE, crop: 'tomate' });
+    Object.assign(pumpkin, { stage: RIPE, crop: 'calabaza' });
+    Object.assign(g, plotStand(tomato));
+    tick(s, 1 / 30, rng);
+    expect(g.task?.plot).toBe(tomato.id);
+    // a la misma distancia, gana la calabaza
+    releaseAndThink(s, g);
+    Object.assign(tomato, { stage: -1 });
+    const nearPumpkin = s.plots[plotId(1, 0)];
+    Object.assign(nearPumpkin, { stage: RIPE, crop: 'calabaza' });
+    Object.assign(tomato, { stage: RIPE, crop: 'tomate' });
+    const mid = { x: (plotStand(tomato).x + plotStand(nearPumpkin).x) / 2, y: plotStand(tomato).y };
+    Object.assign(g, mid);
+    tick(s, 1 / 30, rng);
+    expect(g.task?.plot).toBe(nearPumpkin.id);
+  });
+
+  it('«urgente» va a lo que antes se va a echar a perder, aunque esté más lejos', () => {
+    const rng = seeded(6);
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    for (const p of s.plots) p.stage = -1;
+    setPriority(s, s.groups[0].id, 'urgente');
+    const g = hireFree(s, 'recolector', rng);
+    const fresh = s.plots[plotId(0, 0)];
+    const old = s.plots[plotId(6, 4)];
+    Object.assign(fresh, { stage: RIPE, t: 0 });
+    Object.assign(old, { stage: RIPE, t: CROPS.zanahoria.keep - 8 });
+    Object.assign(g, plotStand(fresh));
+    tick(s, 1 / 30, rng);
+    expect(g.task?.plot).toBe(old.id);
+  });
+});
+
+function releaseAndThink(s: GameState, g: GameState['gnomes'][number]) {
+  if (g.task?.plot !== undefined) s.plots[g.task.plot].res = null;
+  g.state = 'think';
+  g.task = null;
+}
+
+describe('ranking', () => {
+  it('los gnomos apuntan lo que hacen', () => {
+    const rng = seeded(4);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = -1;
+    s.plots[plotId(1, 1)].stage = RIPE;
+    const g = hireFree(s, 'recolector', rng);
+    run(s, 30, rng);
+    expect(g.stats).toMatchObject({ harvests: 1, value: CROPS.zanahoria.value, delivered: 1, tasks: 2 });
+    expect(g.stats.walked).toBeGreaterThan(0);
+  });
+
+  it('la corona es del más trabajador y solo cambia de cabeza con ventaja clara', () => {
+    const rng = seeded(4);
+    const s = createState(rng);
+    const a = hireFree(s, 'recolector', rng);
+    const b = hireFree(s, 'recolector', rng);
+    for (const g of [a, b]) park(g);
+    tick(s, 1 / 30, rng);
+    expect(s.crown).toBe(null);
+    a.stats.tasks = 5;
+    tick(s, 1 / 30, rng);
+    expect(s.crown).toBe(a.id);
+    b.stats.tasks = 5 + CROWN_MARGIN - 1;
+    tick(s, 1 / 30, rng);
+    expect(s.crown).toBe(a.id);
+    b.stats.tasks = 5 + CROWN_MARGIN;
+    tick(s, 1 / 30, rng);
+    expect(s.crown).toBe(b.id);
+    expect(s.log[0]).toContain(b.name);
+  });
 });
 
 describe('guardado', () => {
@@ -263,18 +423,43 @@ describe('guardado', () => {
     renameGroup(s, b.id, 'Los Valientes');
     setGroupColor(s, b.id, 7);
     setPriority(s, b.id, 'solo_tomate');
+    setGroupSeed(s, b.id, 'tomate');
+    s.plots[4].stage = ROTTEN;
+    s.rotted = 3;
     const g = hireFree(s, 'porteador', rng);
     moveGnome(s, g.id, b.id);
+    g.stats.tasks = 9;
+    g.stats.walked = 120;
+    s.crown = g.id;
     const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
     expect(loaded.coins).toBe(s.coins);
     expect(loaded.tree).toEqual(s.tree);
     expect(fieldSize(loaded)).toEqual(fieldSize(s));
     expect(loaded.basket).toEqual(['trigo', 'zanahoria']);
     expect(loaded.plots[3]).toMatchObject({ crop: 'tomate', stage: 2 });
-    expect(loaded.groups[1]).toEqual({ id: b.id, name: 'Los Valientes', color: 7, priority: 'solo_tomate' });
+    expect(loaded.plots[4].stage).toBe(ROTTEN);
+    expect(loaded.groups[1]).toEqual({ id: b.id, name: 'Los Valientes', color: 7, priority: 'solo_tomate', seed: 'tomate' });
     expect(loaded.gnomes[0]).toMatchObject({ name: g.name, job: 'porteador', group: b.id, state: 'think' });
+    expect(loaded.gnomes[0].stats).toMatchObject({ tasks: 9, walked: 120 });
+    expect(loaded).toMatchObject({ rotted: 3, crown: g.id });
     expect(loaded.nextId).toBe(s.nextId);
     expect(loaded.nextGroupId).toBe(s.nextGroupId);
+  });
+
+  it('carga las partidas de la iteración 3, que no tenían semilla, estadísticas ni podredumbre', () => {
+    const rng = seeded(7);
+    const s = createState(rng);
+    const g = hireFree(s, 'recolector', rng);
+    const old = JSON.parse(JSON.stringify(serialize(s)));
+    delete old.rotted;
+    delete old.crown;
+    for (const gr of old.groups) delete gr.seed;
+    for (const gn of old.gnomes) delete gn.stats;
+    const loaded = deserialize(old, rng)!;
+    expect(loaded.groups[0].seed).toBe(null);
+    expect(loaded.gnomes[0]).toMatchObject({ name: g.name });
+    expect(loaded.gnomes[0].stats.tasks).toBe(0);
+    expect(loaded).toMatchObject({ rotted: 0, crown: null });
   });
 
   it('rechaza partidas de otra versión', () => {

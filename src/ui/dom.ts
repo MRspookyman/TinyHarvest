@@ -9,6 +9,7 @@ export interface GameActions {
   renameGroup(id: number, name: string): void;
   setGroupColor(id: number, color: number): void;
   setPriority(id: number, p: Priority): void;
+  setGroupSeed(id: number, seed: CropId | null): void;
   deleteGroup(id: number): void;
   moveGnome(gnomeId: number, groupId: number): void;
   selectSeed(crop: CropId): void;
