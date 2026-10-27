@@ -1,24 +1,41 @@
-export type CropId = 'zanahoria' | 'trigo' | 'tomate' | 'calabaza';
-export type JobId = 'recolector' | 'sembrador' | 'porteador';
+/**
+ * Cultivos. Iteración 7: fresa (rápida, valiosa para su tamaño, pero se estropea enseguida) y melón (el más
+ * valioso, lento, y con sed: sin regar crece mucho más despacio). Los cultivos con sed se marcan en CropDef.
+ */
+export type CropId = 'zanahoria' | 'trigo' | 'tomate' | 'calabaza' | 'fresa' | 'melon';
+/**
+ * Oficios. Iteración 7: regador (gorro azul: riega parcelas para que crezcan más rápido; imprescindible para
+ * los cultivos con sed) y guardián (gorro gris: patrulla el bancal y espanta cuervos y topos antes de que hagan daño).
+ */
+export type JobId = 'recolector' | 'sembrador' | 'porteador' | 'regador' | 'guardian';
 export type Priority = 'cercano' | 'valioso' | 'urgente' | `solo_${CropId}`;
-/** Nodos del árbol de mejoras. Los cultivos nuevos y la ampliación del bancal también son nodos. */
+/**
+ * Nodos del árbol de mejoras. Los cultivos nuevos y la ampliación del bancal también son nodos.
+ * Iteración 7: regadores (desbloquea el oficio), regadera (el riego dura más y el regador riega más rápido),
+ * guardianes (desbloquea el oficio), silbato (el guardián ve más lejos y anda más rápido), fresa y melon.
+ */
 export type NodeId =
-  | 'botas' | 'cafe' | 'saco' | 'porteadores' | 'cesta' | 'carretilla'
+  | 'botas' | 'cafe' | 'saco' | 'porteadores' | 'cesta' | 'carretilla' | 'guardianes' | 'silbato'
   | 'bancal'
-  | 'trigo' | 'abono' | 'tomate' | 'calabaza' | 'conservas' | 'mercado';
+  | 'trigo' | 'abono' | 'tomate' | 'calabaza' | 'conservas' | 'mercado' | 'regadores' | 'regadera' | 'fresa' | 'melon';
 export type Branch = 'gnomos' | 'bancal' | 'cultivos';
 /**
  * Poses del gnomo. Nuevas en la iteración 6: sit (sentado en el suelo o en una calabaza), wave (saluda o
  * aplaude), fall (se cae de culo tras un tropiezo), scare (brazos arriba: espanta un cuervo o hace de espantapájaros).
  */
-export type Pose = 'idle' | 'walk' | 'carry' | 'harvest' | 'complain' | 'sleep' | 'sit' | 'wave' | 'fall' | 'scare';
+export type Pose =
+  | 'idle' | 'walk' | 'carry' | 'harvest' | 'complain' | 'sleep' | 'sit' | 'wave' | 'fall' | 'scare'
+  // iteración 7: water = inclina la regadera y caen gotas · watch = guardián quieto, mirando con la mano en la frente
+  | 'water' | 'watch';
 export type Rng = () => number;
 
 export type TaskKind =
   | 'harvest' | 'plant' | 'deliver' | 'drop' | 'pickup' | 'wait'
   | 'wander' | 'rest' | 'nap' | 'complain'
   // vida en el huerto (iteración 6)
-  | 'sit' | 'cards' | 'chase' | 'chat' | 'greet' | 'fall' | 'shoo' | 'scarecrow' | 'strike' | 'cheer' | 'think';
+  | 'sit' | 'cards' | 'chase' | 'chat' | 'greet' | 'fall' | 'shoo' | 'scarecrow' | 'strike' | 'cheer' | 'think'
+  // iteración 7: el regador va a regar `plot` (y vuelve al pozo a llenar la regadera); el guardián patrulla y vigila
+  | 'water' | 'refill' | 'patrol' | 'watch';
 export interface Task {
   kind: TaskKind;
   plot?: number;
@@ -39,6 +56,10 @@ export interface Plot {
   t: number;
   /** id del gnomo que va a por ella, o null */
   res: number | null;
+  /** segundos de riego que le quedan (0 = seca). Regada crece más rápido; los cultivos con sed casi no crecen secos. */
+  wet: number;
+  /** id del regador que va a regarla, o null (aparte de `res`, que es para recoger y sembrar) */
+  wres: number | null;
 }
 
 export interface GnomeGroup {
@@ -68,10 +89,11 @@ export type TraitId = 'perezoso' | 'nervioso' | 'gloton' | 'cotilla' | 'dormilon
  * - zz: siesta · alert: protesta o espera · think: «pensando» (perezoso) · heart: planta con cariño, o le cae bien alguien
  * - angry: le han quitado la parcela, o refunfuña · wave: saluda · chat: charla · cards: juega a las cartas
  * - cheer: aplaude o celebra · yum: se come algo · note: silba (pasea contento)
+ * - water: va a regar (gota) · well: va al pozo a llenar la regadera · eye: el guardián ha visto un bicho
  */
 export type BubbleKind =
   | 'crop' | 'sack' | 'basket' | 'zz' | 'alert' | 'think' | 'heart' | 'angry' | 'wave' | 'chat' | 'cards' | 'cheer'
-  | 'yum' | 'note';
+  | 'yum' | 'note' | 'water' | 'well' | 'eye';
 export interface Bubble {
   kind: BubbleKind;
   /** solo con kind 'crop' */
@@ -126,7 +148,9 @@ export interface Gnome {
  */
 export type MomentKind =
   | 'saludo' | 'tropiezo' | 'disputa' | 'siesta' | 'queja' | 'sentarse' | 'cartas' | 'mariposa' | 'charla' | 'pensar'
-  | 'comer' | 'corona' | 'cuervo' | 'caracol' | 'topo' | 'ranas' | 'sindicato' | 'espantapajaros' | 'legendario';
+  | 'comer' | 'corona' | 'cuervo' | 'caracol' | 'topo' | 'ranas' | 'sindicato' | 'espantapajaros' | 'legendario'
+  // iteración 7: el guardián espanta a un bicho a tiempo
+  | 'vigilancia';
 
 /** Salida de la simulación para el render; se vacía en cada fotograma. */
 export type SimEvent =
@@ -136,7 +160,25 @@ export type SimEvent =
   /** un gnomo entrega en el granero: se abre la puerta y crece el montón */
   | { type: 'deliver'; gnome: number; count: number }
   | { type: 'crown'; job: JobId; gnome: number }
-  | { type: 'moment'; kind: MomentKind; x: number; y: number };
+  | { type: 'moment'; kind: MomentKind; x: number; y: number }
+  /** un regador acaba de regar una parcela: salpicadura de agua */
+  | { type: 'water'; plot: number };
+
+/**
+ * Multiplicador de organización (B6): premia una cadena de trabajo que funciona. Se calcula sobre una ventana
+ * móvil de los últimos minutos y multiplica lo que se cobra al vender (junto con el mercado).
+ * Cada parte va de 0 (mal) a 1 (perfecto):
+ * - cosecha: poco de lo maduro se echa a perder o se lo comen los cuervos.
+ * - cesta: los recolectores apenas esperan con la cesta llena (sin porteadores cuenta como 1).
+ * - siembra: las parcelas apenas se quedan vacías esperando sembrador.
+ * - riego: las parcelas con cultivos con sed están regadas mientras crecen (sin cultivos con sed cuenta como 1).
+ */
+export type OrgPart = 'cosecha' | 'cesta' | 'siembra' | 'riego';
+export interface Organization {
+  /** multiplicador actual de las ventas: 1 + ORG.max × media de las partes, redondeado a 0,01 */
+  mult: number;
+  parts: Record<OrgPart, number>;
+}
 
 /**
  * Bichos y visitas del huerto.
@@ -191,6 +233,8 @@ export interface GameState {
   rotted: number;
   /** nivel de la casa de gnomos (0 = la casa inicial) */
   house: number;
+  /** se recalcula en cada tick; no se guarda */
+  org: Organization;
   /** id del gnomo con la corona de cada oficio (el que más tareas lleva), o null */
   crowns: Record<JobId, number | null>;
   critters: Critter[];

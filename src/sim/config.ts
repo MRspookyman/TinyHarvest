@@ -18,6 +18,11 @@ export const BASKET = { x: 100, y: DOOR.y + 8, base: 30, perLevel: 15 } as const
 export const HOUSE = { x: 56, y: 96, w: 30, h: 28, base: 8, perLevel: 4, max: 8, cost: 60, mult: 1.9 } as const;
 /** donde pasean los gnomos sin trabajo: la hierba delante de su casa, junto al árbol viejo */
 export const IDLE_AREA = { x0: 50, x1: 104, y0: 128, y1: 146 } as const;
+/**
+ * Pozo del regador (iteración 7): entre el tablón y el bancal, en la hierba de arriba. (x, y, w, h) es su caja;
+ * el regador se pone en (x + w/2, y + h + 2) para llenar la regadera. Solo se dibuja con «regadores» comprado.
+ */
+export const WELL = { x: 99, y: 40, w: 12, h: 16 } as const;
 
 export const STAGES = 5;
 export const RIPE = STAGES - 1;
