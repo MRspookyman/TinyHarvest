@@ -31,6 +31,8 @@ async function start() {
   let state = (devParams ? null : loadGame(rng)) ?? createState(rng);
   if (devParams) applyDevParams(state);
   let seed: CropId = 'zanahoria';
+  // solo en desarrollo: acceso al estado desde la consola para revisar (window.__th.state)
+  if (import.meta.env.DEV) Object.assign(window, { __th: { get state() { return state; } } });
 
   const stageEl = document.getElementById('stage')!;
   const app = new Application();

@@ -468,6 +468,7 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 | D9 | **Ociosos con gracia:** se sientan en una calabaza, juegan a las cartas, persiguen mariposas | S | Medio | — | It6 |
 | D10 | **Medir la vida:** «momentos llamativos por minuto» en `npm run balance` (objetivo: algo distinto cada 10–20 s sin repetirse demasiado) | S | Medio (herramienta) | D6–D9 | It6 |
 | D11 | **Día y noche, y tiempo** (atardecer, luciérnagas, farolillos; la lluvia acelera el crecimiento) | M–L | Medio | — | Más adelante |
+| D12 | **Los edificios cambian con cada mejora:** cada nodo del árbol deja huella en el huerto (zapatero junto a la casa con las botas, cafetera con el café, sacos junto al granero, toldo y género del mercado, carretilla aparcada, montón de abono, balas de paja con las conservas, cartel de cultivos junto al bancal, cesta más grande); el árbol viejo crece con el número de mejoras y el tablón se llena con los grupos | M | Alto | — | It6 (pedido del autor) |
 
 **E. Largo plazo**
 
