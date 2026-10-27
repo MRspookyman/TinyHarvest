@@ -1,0 +1,820 @@
+<title>Gnomo de Tiny Harvest</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Pixelify+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: una columna de 980px, como una hoja de personaje: comparativa, animaciones, oficios, escena, paleta */
+:root {
+  --bg: #edf1e7;
+  --surface: #f8faf4;
+  --fg: #1f2a24;
+  --muted: #56665b;
+  --line: #d2dacb;
+  --accent: #b13e53;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131915; --surface: #1b231e; --fg: #e6ede4; --muted: #9aab9f; --line: #2c3830; --accent: #e8687d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131915; --surface: #1b231e; --fg: #e6ede4; --muted: #9aab9f; --line: #2c3830; --accent: #e8687d;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.wrap {
+  max-width: 980px; margin: 0 auto;
+  padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 56px;
+}
+section, header { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; line-height: 1.1; }
+h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.15rem; }
+p { margin: 0; max-width: 65ch; }
+.eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .1em; font-size: .8rem; color: var(--accent); }
+.muted { color: var(--muted); }
+canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; max-width: 100%; height: auto; }
+
+.specs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; padding: 0; list-style: none; }
+.specs li { border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; font-size: .85rem; background: var(--surface); }
+.specs b { font-family: var(--font-display); font-weight: 600; margin-right: 4px; }
+
+.compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.compare figure { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.compare canvas { width: 100%; max-width: 360px; border-radius: 6px; }
+.compare figcaption { display: flex; flex-direction: column; gap: 4px; }
+.compare h3 span { font-family: var(--font-body); font-weight: 400; font-size: .9rem; color: var(--muted); margin-left: 6px; }
+.compare ul { margin: 0; padding-left: 18px; font-size: .92rem; display: grid; gap: 2px; }
+.pose { font-family: var(--font-display); font-size: 1rem; color: var(--muted); }
+.pose b { color: var(--fg); font-weight: 600; }
+
+.anatomy { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 24px; }
+.anatomy li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 12px; align-items: start; }
+.dot { width: 16px; height: 16px; border-radius: 3px; margin-top: 4px; box-shadow: inset 0 0 0 2px #1a1c2c; }
+.anatomy b { font-family: var(--font-display); font-weight: 600; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.toolbar label { font-family: var(--font-display); font-size: .95rem; }
+.seg { display: inline-flex; border: 2px solid var(--fg); border-radius: 4px; overflow: hidden; }
+.seg button { font-family: var(--font-display); font-size: .95rem; font-weight: 600; padding: 5px 14px; border: 0; background: var(--surface); color: var(--fg); cursor: pointer; }
+.seg button + button { border-left: 2px solid var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.seg button:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.frame { display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center; min-width: 0; }
+.frame canvas { width: 100%; border-radius: 4px; }
+.frame span { font-family: var(--font-display); font-size: .85rem; }
+
+.jobs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.job { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.job canvas { width: 78px; border-radius: 4px; }
+.job div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.job h3 { font-size: 1.05rem; }
+.job .name { font-size: .8rem; color: var(--muted); }
+.job p { font-size: .9rem; }
+.job.demo h3::after { content: "En la demo"; font-family: var(--font-body); font-weight: 700; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); margin-left: 8px; vertical-align: middle; }
+
+.scene canvas { width: 100%; border-radius: 6px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn {
+  font-family: var(--font-display); font-size: .95rem; font-weight: 600;
+  padding: 6px 14px; border: 2px solid var(--fg); border-radius: 4px;
+  background: var(--surface); color: var(--fg); cursor: pointer; box-shadow: 0 3px 0 var(--fg);
+}
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--fg); }
+.diary { list-style: none; padding: 12px 14px; margin: 0; display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: .92rem; min-height: 8.4em; align-content: start; }
+.diary li { color: var(--muted); }
+.diary li:first-child { color: var(--fg); font-weight: 700; }
+.diary-title { font-family: var(--font-display); font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+.palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 10px; }
+.sw { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sw i { display: block; height: 40px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.sw b { color: var(--fg); font-weight: 700; font-size: .78rem; }
+
+@media (max-width: 900px) { .jobs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .jobs { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) { .compare { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Tiny Harvest · propuesta de estilo</span>
+    <h1>El gnomo</h1>
+    <p>Primera propuesta visual para la demo. Pixel art con contorno oscuro y una paleta basada en Sweetie 16. Todo se dibuja por código, sin imágenes, así que cambiar colores o formas es inmediato.</p>
+    <ul class="specs">
+      <li><b>Sprite</b>16 × 16 o 32 × 32 px</li>
+      <li><b>Tamaño en pantalla</b>48 px en ambos</li>
+      <li><b>Fotogramas</b>2 a 4 por animación</li>
+      <li><b>Paleta</b>16 colores + gorros</li>
+    </ul>
+  </header>
+
+  <section aria-label="Comparativa de tamaños">
+    <h2>16 × 16 frente a 32 × 32</h2>
+    <p class="muted">El mismo gnomo, la misma animación y el mismo tamaño en pantalla. Solo cambia cuántos píxeles tiene para expresarse.</p>
+    <div class="compare">
+      <figure>
+        <canvas id="hero16" role="img" aria-label="Gnomo de 16 por 16 píxeles, animado"></canvas>
+        <figcaption>
+          <h3>16 × 16 <span>256 píxeles</span></h3>
+          <ul>
+            <li>Rápido de dibujar y animar.</li>
+            <li>Se lee bien con muchos gnomos en pantalla.</li>
+            <li>Menos expresivo: la nariz y el gorro hacen todo el trabajo.</li>
+          </ul>
+        </figcaption>
+      </figure>
+      <figure>
+        <canvas id="hero32" role="img" aria-label="Gnomo de 32 por 32 píxeles, animado"></canvas>
+        <figcaption>
+          <h3>32 × 32 <span>1.024 píxeles</span></h3>
+          <ul>
+            <li>Mofletes, brillo en la nariz, cinturón y sombras.</li>
+            <li>Unas cuatro veces más trabajo por fotograma.</li>
+            <li>Luce más si la cámara se acerca al huerto.</li>
+          </ul>
+        </figcaption>
+      </figure>
+    </div>
+    <p class="pose" aria-live="polite">Pepín Barbatiesa, recolector. Ahora: <b id="pose-label">Quieto</b></p>
+    <ul class="anatomy">
+      <li><span class="dot" style="background:#b13e53"></span><span><b>Gorro.</b> Cónico y un poco grande. Su color indica el oficio.</span></li>
+      <li><span class="dot" style="background:#f2b98c"></span><span><b>Ojos.</b> No se ven. El gorro les tapa la vista a todos, y no piensan admitirlo.</span></li>
+      <li><span class="dot" style="background:#e07a5f"></span><span><b>Nariz.</b> Enorme. Es lo que más se reconoce a tamaño pequeño.</span></li>
+      <li><span class="dot" style="background:#f4f4f4"></span><span><b>Barba.</b> Blanca, casi tapa la túnica.</span></li>
+      <li><span class="dot" style="background:#333c57"></span><span><b>Botas.</b> Andan a saltitos porque las piernas no les dan para más.</span></li>
+    </ul>
+  </section>
+
+  <div class="toolbar">
+    <label id="res-label">Ver el resto de la página en</label>
+    <div class="seg" role="group" aria-labelledby="res-label">
+      <button type="button" data-res="16" aria-pressed="true">16 × 16</button>
+      <button type="button" data-res="32" aria-pressed="false">32 × 32</button>
+    </div>
+  </div>
+
+  <section>
+    <h2>Animaciones</h2>
+    <p class="muted">Pocos fotogramas, mucho rebote. Así cientos de gnomos siguen siendo legibles y baratos de dibujar.</p>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <section>
+    <h2>Oficios</h2>
+    <p class="muted">El gorro cambia de color según el oficio. Los nombres salen al azar cada vez que cargas la página.</p>
+    <div class="jobs" id="jobs"></div>
+  </section>
+
+  <section class="scene">
+    <h2>En el huerto</h2>
+    <p class="muted">Tamaño real del juego. Los dos recolectores del grupo A van a lo más cercano; el del grupo B, a lo más valioso (los tomates). Haz clic en un cultivo maduro para recogerlo tú, o en una parcela vacía para plantar.</p>
+    <canvas id="scene" role="img" aria-label="Escena del huerto con gnomos recogiendo, plantando y llevando la cosecha al granero"></canvas>
+    <div class="controls">
+      <button class="btn" id="toggle" type="button">Pausar</button>
+      <span class="muted">Si la pestaña pasa a segundo plano, el huerto se pausa solo, igual que en el juego.</span>
+    </div>
+    <span class="diary-title">Diario del huerto</span>
+    <ul class="diary" id="diary"></ul>
+  </section>
+
+  <section>
+    <h2>Paleta</h2>
+    <div class="palette" id="palette"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ---------- Colores ----------
+  const BASE = {
+    O: '#1a1c2c', S: '#f2b98c', s: '#d99872', N: '#e07a5f', n: '#b85a4a', m: '#f7b39a', r: '#e8857a',
+    W: '#f4f4f4', w: '#94b0c2', B: '#257179', b: '#1b4e5a', E: '#5a3a2a', K: '#333c57',
+    G: '#38b764', C: '#ef7d57', P: '#d9a066', p: '#a8723f', R: '#b13e53', Z: '#f4f4f4', Y: '#ffcd75', y: '#ef7d57'
+  };
+  const JOBS = [
+    { id: 'recolector', label: 'Recolector', hat: ['#b13e53', '#5d275d', '#d9576b'], line: 'Recoge todo lo que madura. A veces, también lo que no.', demo: true },
+    { id: 'sembrador', label: 'Sembrador', hat: ['#a7f070', '#38b764', '#d7ffa8'], line: 'Planta cada semilla con una fe inquebrantable.', demo: true },
+    { id: 'porteador', label: 'Porteador', hat: ['#8b5a3c', '#5a3a2a', '#b07a52'], line: 'Lleva los sacos al granero y se queja del peso de cada uno.' },
+    { id: 'regador', label: 'Regador', hat: ['#3b5dc9', '#29366f', '#5f86e8'], line: 'Riega los cultivos. Y a los compañeros, si se descuidan.' },
+    { id: 'capataz', label: 'Capataz', hat: ['#ffcd75', '#e08a3c', '#fff0b0'], line: 'Da órdenes, cobra el doble y nadie sabe muy bien por qué.' },
+    { id: 'guardian', label: 'Guardián', hat: ['#94b0c2', '#566c86', '#c8dbe6'], line: 'Vigila a los cuervos. Los cuervos lo vigilan a él.' }
+  ];
+  const PALS = Object.fromEntries(JOBS.map(j => [j.id, Object.assign({}, BASE, { H: j.hat[0], h: j.hat[1], L: j.hat[2] })]));
+
+  // ---------- Sprite 16 × 16 ----------
+  const BODY16 = [
+    '.......OO.......',
+    '......OHHO......',
+    '......OHhO......',
+    '.....OHHHhO.....',
+    '.....OHHHhO.....',
+    '....OHHHHHhO....',
+    '....OHHHHHhO....',
+    '...OHHHHHHHhO...',
+    '..OHHHHHHHHHhO..',
+    '..OOOSSNNSSOOO..',
+    '...OWSNNNNSWO...',
+    '...OWWWNNWWWO...',
+    '..OSOWWWWWWOSO..',
+    '...OBOWWWWOBO...',
+    '...OBBOwwOBBO...'
+  ];
+  const FEET16 = {
+    n: ['...OKKO..OKKO...'],
+    t: ['....OKKOOKKO....'],
+    s: ['..OKKO....OKKO..']
+  };
+
+  // ---------- Sprite 32 × 32 (mitad izquierda, se refleja y se sombrea) ----------
+  const LEFT32 = [
+    '...............O',
+    '..............OH',
+    '..............OH',
+    '.............OHH',
+    '.............OHH',
+    '............OHHH',
+    '...........OHHHH',
+    '..........OHHHHH',
+    '.........OHHHHHH',
+    '........OHHHHHHH',
+    '.......OHHHHHHHH',
+    '......OHHHHHHHHH',
+    '.....OHHHHHHHHHH',
+    '....OHHHHHHHHHHH',
+    '.....OSSSSSSNNNN',
+    '.....OSSSSSNNNNN',
+    '....OWSSSSSNNNNN',
+    '....OWWSSSSNNNNN',
+    '...OWWWWSSSSNNNN',
+    '...OWWWWWWWWWNNN',
+    '..OSOWWWWWWWWWWW',
+    '..OSSOWWWWWWWWWW',
+    '...OBBOWWWWWWWWW',
+    '...OBBBOWWWWWWWW',
+    '...OEEEEOWWWWWWW',
+    '...OBBBBBOWWWWWW',
+    '...OBBBBBBBOWWWW',
+    '...OBBBBBBBBBOWW',
+    '....OOOOOOOOOOOO'
+  ];
+  function build32() {
+    const o = LEFT32.map(h => (h + h.split('').reverse().join('')).split(''));
+    o[13] = o[13].map(ch => ch === 'H' ? 'h' : ch);
+    const g = o.map(r => r.slice());
+    const SHADE = { H: 'h', W: 'w', B: 'b', N: 'n', S: 's' };
+    for (let r = 0; r < o.length; r++) for (let c = 0; c < 32; c++) {
+      const ch = o[r][c];
+      if (!SHADE[ch]) continue;
+      if (c >= 16 && (o[r][c + 1] !== ch || (ch !== 'N' && o[r][c + 2] !== ch))) g[r][c] = SHADE[ch];
+      if (ch === 'N' && (!o[r + 1] || o[r + 1][c] !== 'N')) g[r][c] = 'n';
+      if (ch === 'H' && c < 16 && o[r][c - 1] === 'O') g[r][c] = 'L';
+    }
+    g[14][13] = 'm'; g[15][12] = 'm'; g[15][13] = 'm';
+    g[15][7] = 'r'; g[15][24] = 'r';
+    return g.map(r => r.join(''));
+  }
+  const BODY32 = build32();
+  const FEET32 = {
+    n: ['........OKKKKO....OKKKKO........', '.......OKKKKKO....OKKKKKO.......', '.......OOOOOOO....OOOOOOO.......'],
+    t: ['..........OKKKKOOKKKKO..........', '.........OKKKKKOOKKKKKO.........', '.........OOOOOOOOOOOOOO.........'],
+    s: ['......OKKKKO........OKKKKO......', '.....OKKKKKO........OKKKKKO.....', '.....OOOOOOO........OOOOOOO.....']
+  };
+
+  const SETS = {
+    16: { body: BODY16, sq1: BODY16.filter((_, i) => i !== 4), sq2: BODY16.filter((_, i) => i !== 4 && i !== 2), feet: FEET16, len: 15, div: 1 },
+    32: { body: BODY32, sq1: BODY32.filter((_, i) => i !== 4 && i !== 8), sq2: BODY32.filter((_, i) => ![2, 4, 6, 8].includes(i)), feet: FEET32, len: 29, div: 2 }
+  };
+  const WALK = [{ dy: 0, f: 'n' }, { dy: -1, f: 't' }, { dy: 0, f: 's' }, { dy: -1, f: 't' }];
+
+  // Objetos y bocadillos (resolución de 16)
+  const SACK = ['..G.G..', '.OOOOO.', 'OPPPPPO', 'OPPpPPO', 'OPPPPpO', '.OOOOO.'];
+  const CARROT = ['G.G', '.G.', 'CCC', '.C.', '.C.'];
+  const ZBIG = ['ZZZZ', '..Z.', '.Z..', 'ZZZZ'];
+  const ZSMALL = ['ZZZ', '.Z.', 'ZZZ'];
+  const BUBBLE = ['.OOOOOOO.', 'OWWWWWWWO', 'OWWRWRWWO', 'OWWRWRWWO', 'OWWWWWWWO', 'OWWRWRWWO', '.OOOOOOO.', '..OO.....'];
+  const COIN = ['.YYYY.', 'YYyyYY', 'YyYYyY', 'YyYYyY', 'YYyyYY', '.YYYY.'];
+
+  // Dibuja un mapa con la esquina en (X, Y) en píxeles de canvas, con píxeles de tamaño ps
+  function blit(ctx, map, X, Y, ps, pal, flip) {
+    const w = map[0].length;
+    for (let r = 0; r < map.length; r++) {
+      const row = map[r];
+      for (let c = 0; c < w; c++) {
+        const ch = row[c];
+        if (ch === '.') continue;
+        ctx.fillStyle = pal[ch];
+        ctx.fillRect(X + (flip ? w - 1 - c : c) * ps, Y + r * ps, ps, ps);
+      }
+    }
+  }
+
+  // u = píxeles de canvas por píxel de la rejilla de 16. El gnomo ocupa siempre 16u × 16u.
+  function drawGnome(ctx, u, X, Y, job, pose, t, flip, res) {
+    const set = SETS[res], sp = u / set.div, pal = PALS[job];
+    let body = set.body, dy = 0, feet = set.feet.n;
+    if (pose === 'idle') { if (Math.floor(t * 1.5) % 2) body = set.sq1; }
+    else if (pose === 'walk' || pose === 'carry') { const f = WALK[Math.floor(t * 8) % 4]; dy = f.dy; feet = set.feet[f.f]; }
+    else if (pose === 'harvest') { body = Math.floor(t * 4) % 2 ? set.sq2 : set.sq1; }
+    else if (pose === 'sleep') { if (Math.floor(t * 0.8) % 2) body = set.sq1; }
+    else if (pose === 'complain') { dy = Math.floor(t * 6) % 2 ? -1 : 0; }
+
+    ctx.fillStyle = 'rgba(26,28,44,.28)';
+    ctx.fillRect(X + 3 * u, Y + 16 * u, 10 * u, u);
+    blit(ctx, body, X, Y + dy * u + (set.len - body.length) * sp, sp, pal, flip);
+    blit(ctx, feet, X, Y + set.len * sp + dy * u, sp, pal, flip);
+
+    if (pose === 'carry') blit(ctx, SACK, X + (flip ? 0 : 9) * u, Y + (dy + 5) * u, u, pal, flip);
+    if (pose === 'harvest' && Math.floor(t * 4) % 2) blit(ctx, CARROT, X + (flip ? 1 : 12) * u, Y + 7 * u, u, pal, false);
+    if (pose === 'sleep') {
+      const ph = Math.floor(t * 2) % 2;
+      blit(ctx, ZSMALL, X + 13 * u, Y + (2 - ph) * u, u, pal, false);
+      blit(ctx, ZBIG, X + 16 * u, Y + (-4 - ph) * u, u, pal, false);
+    }
+    if (pose === 'complain') blit(ctx, BUBBLE, X + 12 * u, Y - 8 * u, u, pal, false);
+  }
+
+  // ---------- Utilidades ----------
+  function rng(seed) {
+    return function () {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function cachedGrass(w, h, s, seed) {
+    const c = document.createElement('canvas');
+    c.width = w * s; c.height = h * s;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#38b764';
+    ctx.fillRect(0, 0, w * s, h * s);
+    const r = rng(seed);
+    const n = Math.floor(w * h / 14);
+    for (let i = 0; i < n; i++) {
+      const x = Math.floor(r() * w), y = Math.floor(r() * h), k = r();
+      if (k < .5) { ctx.fillStyle = '#2e9a58'; ctx.fillRect(x * s, y * s, s, s); ctx.fillRect((x + 1) * s, (y - 1) * s, s, s); }
+      else if (k < .85) { ctx.fillStyle = '#5fcf72'; ctx.fillRect(x * s, y * s, s, s); }
+      else { ctx.fillStyle = '#a7f070'; ctx.fillRect(x * s, y * s, s, s); }
+    }
+    return c;
+  }
+  const FIRST = ['Tomasito', 'Gilberto', 'Remolacho', 'Anselmo', 'Fermín', 'Rufino', 'Baldomero', 'Eustaquio', 'Nicanor', 'Cosme', 'Telesforo'];
+  const LAST = ['Barbatiesa', 'el Breve', 'Pocasprisas', 'Raíztorcida', 'Narizota', 'de la Acelga', 'Tresbotas', 'Sinsiesta', 'Gorrotuerto', 'Mediapapa'];
+  function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  const firsts = shuffle(FIRST), lasts = shuffle(LAST);
+  let nameIdx = 0;
+  function newName() { const n = firsts[nameIdx % firsts.length] + ' ' + lasts[nameIdx % lasts.length]; nameIdx++; return n; }
+
+  let RES = 16;
+
+  // ---------- Celdas pequeñas ----------
+  const CELL_W = 26, CELL_H = 27, CELL_OX = 5, CELL_OY = 9;
+  function setupCell(canvas, u, seed) {
+    canvas.width = CELL_W * u; canvas.height = CELL_H * u;
+    canvas._u = u;
+    canvas._bg = cachedGrass(CELL_W, CELL_H, u, seed);
+    canvas._ctx = canvas.getContext('2d');
+  }
+  function drawCell(canvas, job, pose, t, res) {
+    const ctx = canvas._ctx, u = canvas._u;
+    ctx.drawImage(canvas._bg, 0, 0);
+    drawGnome(ctx, u, CELL_OX * u, CELL_OY * u, job, pose, t, false, res);
+  }
+
+  const hero16 = document.getElementById('hero16');
+  const hero32 = document.getElementById('hero32');
+  setupCell(hero16, 12, 7);
+  setupCell(hero32, 12, 7);
+  const HERO_CYCLE = [['idle', 2.4, 'Quieto'], ['walk', 2.4, 'Andando'], ['harvest', 1.6, 'Recogiendo'], ['carry', 2.4, 'Cargando el saco'], ['complain', 1.6, 'Protestando'], ['sleep', 2.8, 'Echándose la siesta']];
+  const HERO_TOTAL = HERO_CYCLE.reduce((a, c) => a + c[1], 0);
+  const poseLabel = document.getElementById('pose-label');
+
+  const STRIP = [['idle', 'Quieto'], ['walk', 'Andar'], ['harvest', 'Recoger'], ['carry', 'Cargar'], ['complain', 'Protestar'], ['sleep', 'Siesta']];
+  const strip = document.getElementById('strip');
+  const stripCanvases = STRIP.map(([pose, label], i) => {
+    const fig = document.createElement('div');
+    fig.className = 'frame';
+    const c = document.createElement('canvas');
+    c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Animación: ' + label);
+    setupCell(c, 4, 20 + i);
+    const sp = document.createElement('span'); sp.textContent = label;
+    fig.append(c, sp); strip.append(fig);
+    return { c, pose };
+  });
+
+  const jobsEl = document.getElementById('jobs');
+  const jobCanvases = JOBS.map((j, i) => {
+    const card = document.createElement('article');
+    card.className = 'job' + (j.demo ? ' demo' : '');
+    const c = document.createElement('canvas');
+    c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Gnomo ' + j.label.toLowerCase());
+    setupCell(c, 4, 40 + i);
+    const d = document.createElement('div');
+    const h = document.createElement('h3'); h.textContent = j.label;
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = newName();
+    const p = document.createElement('p'); p.textContent = j.line;
+    d.append(h, n, p); card.append(c, d); jobsEl.append(card);
+    return { c, job: j.id, off: i * 0.37 };
+  });
+
+  // ---------- Escena del huerto ----------
+  const SW = 320, SH = 180, S = 4;
+  const scene = document.getElementById('scene');
+  scene.width = SW * S; scene.height = SH * S;
+  const sctx = scene.getContext('2d');
+  const BARN = { x: 16, y: 34 };
+  const DOOR = { x: BARN.x + 26, y: BARN.y + 52 };
+  const VAL = { zanahoria: 2, tomate: 6 };
+  const GROW = { zanahoria: 2.2, tomate: 4.5 };
+  const CROP_NAME = { zanahoria: 'una zanahoria', tomate: 'un tomate' };
+  const FIELD = { x: 118, y: 20, cols: 5, rows: 5, cell: 18 };
+
+  function rect(ctx, x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x * S, y * S, w * S, h * S); }
+
+  const sceneBg = (() => {
+    const c = cachedGrass(SW, SH, S, 99);
+    const ctx = c.getContext('2d');
+    rect(ctx, 34, DOOR.y - 6, 84, 10, '#c8925f');
+    rect(ctx, 34, DOOR.y - 6, 84, 1, '#a8723f');
+    rect(ctx, 34, DOOR.y + 3, 84, 1, '#a8723f');
+    const r = rng(5);
+    for (let i = 0; i < 26; i++) rect(ctx, 36 + Math.floor(r() * 80), DOOR.y - 4 + Math.floor(r() * 6), 1, 1, '#e0b07a');
+    const bx = BARN.x, by = BARN.y;
+    for (let k = 0; k < 13; k++) { rect(ctx, bx + 24 - 2 * k, by + k, 4 + 4 * k, 1, k === 0 ? '#1a1c2c' : '#333c57'); rect(ctx, bx + 24 - 2 * k - 1, by + k, 1, 1, '#1a1c2c'); rect(ctx, bx + 28 + 2 * k, by + k, 1, 1, '#1a1c2c'); }
+    rect(ctx, bx + 2, by + 13, 48, 32, '#b13e53');
+    for (let x = bx + 5; x < bx + 50; x += 4) rect(ctx, x, by + 13, 1, 32, '#93324a');
+    rect(ctx, bx + 1, by + 13, 1, 32, '#1a1c2c'); rect(ctx, bx + 50, by + 13, 1, 32, '#1a1c2c');
+    rect(ctx, bx + 1, by + 45, 50, 1, '#1a1c2c');
+    rect(ctx, bx + 22, by + 15, 8, 6, '#1a1c2c'); rect(ctx, bx + 23, by + 19, 6, 2, '#ffcd75'); rect(ctx, bx + 25, by + 18, 2, 1, '#ffcd75');
+    rect(ctx, bx + 17, by + 27, 18, 18, '#1a1c2c'); rect(ctx, bx + 18, by + 28, 16, 17, '#5d275d');
+    for (let i = 0; i < 16; i++) { rect(ctx, bx + 18 + i, by + 28 + Math.floor(i * 17 / 16), 1, 1, '#f4f4f4'); rect(ctx, bx + 33 - i, by + 28 + Math.floor(i * 17 / 16), 1, 1, '#f4f4f4'); }
+    // bancal continuo: un solo campo labrado con surcos de lado a lado
+    const fx = FIELD.x, fy = FIELD.y, fw = FIELD.cols * FIELD.cell, fh = FIELD.rows * FIELD.cell;
+    rect(ctx, fx - 2, fy - 2, fw + 4, fh + 4, '#3e2519');
+    rect(ctx, fx - 1, fy - 1, fw + 2, fh + 2, '#5c3a29');
+    rect(ctx, fx, fy, fw, fh, '#7a4b33');
+    for (let row = 0; row < FIELD.rows; row++) {
+      const cy = fy + row * FIELD.cell;
+      rect(ctx, fx, cy + 9, fw, 1, '#a06a48');
+      rect(ctx, fx, cy + 10, fw, 6, '#8b5a3c');
+      rect(ctx, fx, cy + 16, fw, 1, '#5c3a29');
+      rect(ctx, fx, cy + 17, fw, 1, '#4f3022');
+    }
+    const sr = rng(11);
+    for (let i = 0; i < 260; i++) {
+      const x = fx + Math.floor(sr() * fw), y = fy + Math.floor(sr() * fh);
+      rect(ctx, x, y, 1, 1, sr() < .6 ? '#6b4430' : '#a06a48');
+    }
+    // la hierba se come el borde del bancal
+    const er = rng(23);
+    const tuft = (x, y) => { rect(ctx, x, y, 1, 1, '#38b764'); if (er() < .5) rect(ctx, x, y - 1, 1, 1, '#5fcf72'); };
+    for (let x = fx - 2; x < fx + fw + 2; x++) {
+      if (er() < .35) tuft(x, fy - 2); if (er() < .2) tuft(x, fy - 1);
+      if (er() < .35) tuft(x, fy + fh + 1); if (er() < .15) tuft(x, fy + fh);
+    }
+    for (let y = fy - 2; y < fy + fh + 2; y++) {
+      if (er() < .35) tuft(fx - 2, y); if (er() < .2) tuft(fx - 1, y);
+      if (er() < .35) tuft(fx + fw + 1, y); if (er() < .15) tuft(fx + fw, y);
+    }
+    const f = rng(17);
+    for (let i = 0; i < 14; i++) {
+      const x = 226 + Math.floor(f() * 88), y = 10 + Math.floor(f() * 160);
+      const petal = f() < .5 ? '#f4f4f4' : '#ef7d57';
+      rect(ctx, x - 1, y, 1, 1, petal); rect(ctx, x + 1, y, 1, 1, petal); rect(ctx, x, y - 1, 1, 1, petal); rect(ctx, x, y + 1, 1, 1, petal); rect(ctx, x, y, 1, 1, '#ffcd75');
+    }
+    return c;
+  })();
+
+  const plots = [];
+  const ir = rng(3);
+  for (let row = 0; row < FIELD.rows; row++) for (let col = 0; col < FIELD.cols; col++) {
+    const stage = Math.floor(ir() * 5) - 1;
+    plots.push({ x: FIELD.x + col * FIELD.cell, y: FIELD.y + row * FIELD.cell, type: col < 3 ? 'zanahoria' : 'tomate', stage, t: ir() * 2, res: null, ph: ir() * 6 });
+  }
+
+  // ---------- Plantas (16 de ancho, base en la fila 13, sobre el caballón) ----------
+  const PLANT_PAL = {
+    D: '#1c3b33', G: '#38b764', g: '#257179', l: '#a7f070', m: '#8f5c3e', h: '#4a2c20',
+    C: '#ef7d57', c: '#b8503a', Y: '#ffcd75', K: '#1a1c2c', w: '#a8723f', R: '#e04a5f', r: '#8e2f44', W: '#f4f4f4'
+  };
+  const pad = (start, rows) => Array(start).fill('................').concat(rows);
+  const PL_SEED = pad(11, [
+    '......mmmm......',
+    '.....mmhhmm.....',
+    '......mmmm......'
+  ]);
+  const PL_SPROUT = pad(7, [
+    '....DD....DD....',
+    '...DlGD..DGlD...',
+    '....DGGDDGGD....',
+    '.....DDGGDD.....',
+    '.......GD.......',
+    '......mGgm......',
+    '.....mmmmmm.....'
+  ]);
+  const PL_CARROT_YOUNG = pad(5, [
+    '....D...D..D....',
+    '...DlD.DlDDlD...',
+    '...DGD.DGDDGD...',
+    '....DGDGGDGD....',
+    '.....DGGGGD.....',
+    '......DGgD......',
+    '.......gg.......',
+    '......mCCm......',
+    '.....mmmmmm.....'
+  ]);
+  const PL_CARROT_RIPE = pad(1, [
+    '...D....D....D..',
+    '..DlD..DlD..DlD.',
+    '..DGD..DGD..DGD.',
+    '..DGlD.DGD.DlGD.',
+    '...DGGDDGDDGGD..',
+    '....DGGGGGGGD...',
+    '.....DGGgGGD....',
+    '......DgggD.....',
+    '.....KCYCCcK....',
+    '.....KCCCCcK....',
+    '....mKCCCccKm...',
+    '....mmKKKKKmm...',
+    '.....mmmmmmm....'
+  ]);
+  const PL_TOMATO_YOUNG = pad(3, [
+    '..........w.....',
+    '..........w.....',
+    '......DD..w.....',
+    '.....DlGD.w.....',
+    '....DGGGGDwD....',
+    '....DGlGGGwGD...',
+    '.....DGGGgwGD...',
+    '......DGgDwD....',
+    '.......gg.w.....',
+    '......mmggwm....',
+    '.....mmmmmmmm...'
+  ]);
+  const PL_TOMATO_RIPE = [
+    '..........w.....',
+    '.........DwD....',
+    '....DDD.DGwGD...',
+    '...DGlGDGGwlGD..',
+    '..DGGRRGGGwGGGD.',
+    '..DGRWRRGGwRRGD.',
+    '..DGRRRRGgwRWRD.',
+    '...DGRRrGGwRRrD.',
+    '...DGGrGRRwGrD..',
+    '....DGgRWRwRGD..',
+    '.....DgRRrwrD...',
+    '......DgrrwD....',
+    '......mmggwmm...',
+    '.....mmmmmmmmm..'
+  ];
+  const PLANTS = {
+    zanahoria: [PL_SEED, PL_SPROUT, PL_CARROT_YOUNG, PL_CARROT_RIPE],
+    tomate: [PL_SEED, PL_SPROUT, PL_TOMATO_YOUNG, PL_TOMATO_RIPE]
+  };
+  function drawPlant(ctx, p, T) {
+    if (p.stage < 0) {
+      rect(ctx, p.x + 7, p.y + 12, 4, 2, '#5c3a29');
+      rect(ctx, p.x + 8, p.y + 13, 2, 1, '#4a2c20');
+      return;
+    }
+    const b = p.stage === 3 && Math.sin(T * 5 + p.ph) > .6 ? -1 : 0;
+    blit(ctx, PLANTS[p.type][p.stage], (p.x + 1) * S, (p.y + 2 + b) * S, S, PLANT_PAL, false);
+  }
+
+  // ---------- Gnomos ----------
+  const IDLE_AREA = { x0: 120, x1: 222, y0: 140, y1: 172 };
+  const gnomes = [];
+  function addGnome(job, x, y, prio, name) {
+    gnomes.push({ id: gnomes.length, job, x, y, prio, name: name || newName(), state: 'think', pose: 'idle', t: Math.random() * 3, timer: 0, flip: false, carry: null, tx: x, ty: y, onArrive: null, onDone: null });
+  }
+  addGnome('recolector', 150, 150, 'cercano', 'Pepín Barbatiesa');
+  addGnome('recolector', 180, 160, 'cercano');
+  addGnome('recolector', 200, 150, 'valioso');
+  addGnome('sembrador', 140, 165);
+  addGnome('capataz', 235, 120);
+  gnomes[4].speed = 14;
+
+  const diaryEl = document.getElementById('diary');
+  const diaryItems = [];
+  function log(msg) {
+    diaryItems.unshift(msg);
+    if (diaryItems.length > 5) diaryItems.pop();
+    diaryEl.replaceChildren(...diaryItems.map(m => { const li = document.createElement('li'); li.textContent = m; return li; }));
+  }
+  log('El huerto abre. Los gnomos fichan con desgana.');
+  log(gnomes[2].name + ' está en el grupo B: solo le interesan los tomates.');
+
+  let coins = 0;
+  const floats = [];
+  function addFloat(x, y, v) { floats.push({ x, y, text: '+' + v, t: 0 }); }
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+
+  function goTo(g, x, y, cb) { g.tx = x; g.ty = y; g.onArrive = cb; g.state = 'walk'; }
+  function work(g, dur, pose, cb) { g.state = 'work'; g.timer = dur; g.pose = pose; g.onDone = cb; }
+  function think(g) { g.state = 'think'; }
+  function wander(g) {
+    goTo(g, rand(IDLE_AREA.x0, IDLE_AREA.x1), rand(IDLE_AREA.y0, IDLE_AREA.y1), () => work(g, rand(.6, 1.6), 'idle', () => think(g)));
+  }
+  function pickPlot(g, filter) {
+    const c = plots.filter(filter);
+    if (!c.length) return null;
+    const d = p => Math.hypot(p.x + 9 - g.x, p.y + 20 - g.y);
+    c.sort((a, b) => g.prio === 'valioso' ? (VAL[b.type] - VAL[a.type]) || d(a) - d(b) : d(a) - d(b));
+    return c[0];
+  }
+
+  const CAPATAZ_LINES = ['«¡Más brío, que esto no se recoge solo!»', '«¿Quién ha plantado una piedra?»', '«Cinco minutos de descanso. Ya han pasado.»', '«¡Esa zanahoria no se va a arrancar sola!»', '«Yo a vuestra edad recogía con los dientes.»'];
+  const NAP_LINES = ['se ha echado una siesta. Dice que es «estratégica».', 'se ha dormido de pie. Otra vez.', 'está «descansando la vista».'];
+  const PLANT_LINES = ['ha plantado una semilla y le ha deseado suerte.', 'ha plantado una semilla al revés. Crecerá igual.', 'le ha puesto nombre a una semilla.'];
+
+  function plan(g) {
+    if (g.job === 'recolector') {
+      if (g.carry) { goTo(g, DOOR.x + rand(-4, 4), DOOR.y, () => deliver(g)); return; }
+      const p = pickPlot(g, p => p.stage === 3 && p.res === null && (g.prio !== 'valioso' || p.type === 'tomate'));
+      if (p) {
+        p.res = g.id;
+        goTo(g, p.x + 9, p.y + 20, () => {
+          if (p.stage !== 3) { p.res = null; think(g); return; }
+          work(g, .8, 'harvest', () => {
+            p.stage = -1; p.t = 0; p.res = null; g.carry = p.type;
+            if (p.type === 'tomate' && Math.random() < .3) {
+              log(g.name + ' protesta: «¡Los tomates pesan más que las zanahorias!»');
+              work(g, 1.4, 'complain', () => think(g));
+            } else think(g);
+          });
+        });
+        return;
+      }
+      idleOrNap(g);
+    } else if (g.job === 'sembrador') {
+      const p = pickPlot(g, p => p.stage === -1 && p.res === null);
+      if (p) {
+        p.res = g.id;
+        goTo(g, p.x + 9, p.y + 20, () => {
+          if (p.stage !== -1) { p.res = null; think(g); return; }
+          work(g, .5, 'harvest', () => {
+            p.stage = 0; p.t = 0; p.res = null;
+            if (Math.random() < .12) log(g.name + ' ' + pick(PLANT_LINES));
+            think(g);
+          });
+        });
+        return;
+      }
+      idleOrNap(g);
+    } else if (g.job === 'capataz') {
+      goTo(g, rand(112, 232), rand(20, 150), () => {
+        if (Math.random() < .45) { log(g.name + ', capataz: ' + pick(CAPATAZ_LINES)); work(g, 1.6, 'complain', () => think(g)); }
+        else work(g, rand(.8, 1.8), 'idle', () => think(g));
+      });
+    }
+  }
+  function idleOrNap(g) {
+    if (Math.random() < .2) { log(g.name + ' ' + pick(NAP_LINES)); work(g, rand(3, 5), 'sleep', () => think(g)); }
+    else wander(g);
+  }
+  function deliver(g) {
+    const v = VAL[g.carry];
+    coins += v; addFloat(DOOR.x, DOOR.y - 20, v);
+    if (Math.random() < .25) log(g.name + ' ha dejado ' + CROP_NAME[g.carry] + ' en el granero. +' + v + ' monedas.');
+    g.carry = null;
+    work(g, .3, 'idle', () => think(g));
+  }
+
+  function updateScene(dt) {
+    for (const p of plots) {
+      if (p.stage >= 0 && p.stage < 3) { p.t += dt; if (p.t >= GROW[p.type]) { p.stage++; p.t = 0; } }
+    }
+    for (const g of gnomes) {
+      g.t += dt;
+      if (g.state === 'think') plan(g);
+      else if (g.state === 'walk') {
+        const dx = g.tx - g.x, dy = g.ty - g.y, d = Math.hypot(dx, dy), sp = (g.speed || 24) * dt;
+        if (Math.abs(dx) > .5) g.flip = dx < 0;
+        if (d <= sp) { g.x = g.tx; g.y = g.ty; const cb = g.onArrive; g.onArrive = null; cb ? cb() : think(g); }
+        else { g.x += dx / d * sp; g.y += dy / d * sp; }
+      } else if (g.state === 'work') {
+        g.timer -= dt;
+        if (g.timer <= 0) { const cb = g.onDone; g.onDone = null; cb ? cb() : think(g); }
+      }
+    }
+    for (const f of floats) f.t += dt;
+    while (floats.length && floats[0].t > 1.2) floats.shift();
+  }
+
+  function drawScene(T) {
+    const ctx = sctx;
+    ctx.drawImage(sceneBg, 0, 0);
+    // plantas y gnomos ordenados por profundidad, para que un gnomo pueda quedar delante o detrás de una planta
+    const items = plots.map(p => ({ y: p.y + 15, p })).concat(gnomes.map(g => ({ y: g.y, g })));
+    items.sort((a, b) => a.y - b.y);
+    for (const it of items) {
+      if (it.p) { drawPlant(ctx, it.p, T); continue; }
+      const g = it.g;
+      const pose = g.state === 'walk' ? (g.carry ? 'carry' : 'walk') : (g.state === 'work' ? g.pose : 'idle');
+      drawGnome(ctx, S, Math.round(g.x - 8) * S, Math.round(g.y - 16) * S, g.job, pose, g.t, g.flip, RES);
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 ' + (8 * S) + 'px "Pixelify Sans", monospace';
+    ctx.lineJoin = 'round';
+    for (const f of floats) {
+      ctx.globalAlpha = Math.max(0, 1 - f.t / 1.2);
+      const y = (f.y - f.t * 12) * S;
+      ctx.lineWidth = S * 1.2; ctx.strokeStyle = '#1a1c2c'; ctx.strokeText(f.text, f.x * S, y);
+      ctx.fillStyle = '#ffcd75'; ctx.fillText(f.text, f.x * S, y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(26,28,44,.75)';
+    ctx.fillRect(4 * S, 4 * S, 52 * S, 14 * S);
+    blit(ctx, COIN, 8 * S, 8 * S, S, BASE, false);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f4f4f4';
+    ctx.font = '600 ' + (9 * S) + 'px "Pixelify Sans", monospace';
+    ctx.fillText(String(coins), 18 * S, 11.5 * S);
+  }
+
+  function plotAt(e) {
+    const r = scene.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * SW, y = (e.clientY - r.top) / r.height * SH;
+    return plots.find(p => x >= p.x && x < p.x + FIELD.cell && y >= p.y && y < p.y + FIELD.cell);
+  }
+  let manualCount = 0;
+  scene.addEventListener('click', e => {
+    const p = plotAt(e);
+    if (!p) return;
+    if (p.stage === 3) {
+      const v = VAL[p.type];
+      coins += v; addFloat(p.x + 8, p.y, v);
+      p.stage = -1; p.t = 0; p.res = null;
+      if (manualCount++ % 4 === 0) log('Has recogido ' + CROP_NAME[p.type] + ' tú solo. Los gnomos aplauden sin muchas ganas.');
+    } else if (p.stage === -1) {
+      p.stage = 0; p.t = 0; p.res = null;
+    }
+  });
+  scene.addEventListener('mousemove', e => {
+    const p = plotAt(e);
+    scene.style.cursor = p && (p.stage === 3 || p.stage === -1) ? 'pointer' : 'default';
+  });
+
+  // ---------- Paleta ----------
+  const PALETTE = [
+    ['Contorno', '#1a1c2c'], ['Piel', '#f2b98c'], ['Nariz', '#e07a5f'], ['Barba', '#f4f4f4'], ['Sombra barba', '#94b0c2'],
+    ['Túnica', '#257179'], ['Botas', '#333c57'], ['Hierba', '#38b764'], ['Brote', '#a7f070'], ['Tierra', '#8b5a3c'],
+    ['Zanahoria', '#ef7d57'], ['Tomate', '#e04a5f'], ['Tutor', '#a8723f'], ['Moneda', '#ffcd75'], ['Saco', '#d9a066']
+  ];
+  document.getElementById('palette').replaceChildren(...PALETTE.map(([n, c]) => {
+    const d = document.createElement('div'); d.className = 'sw';
+    const i = document.createElement('i'); i.style.background = c;
+    const b = document.createElement('b'); b.textContent = n;
+    const s = document.createElement('span'); s.textContent = c;
+    d.append(i, b, s); return d;
+  }));
+
+  // ---------- Controles ----------
+  const segButtons = document.querySelectorAll('.seg button');
+  segButtons.forEach(btn => btn.addEventListener('click', () => {
+    RES = Number(btn.dataset.res);
+    segButtons.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  }));
+
+  let paused = false, hidden = false;
+  const toggle = document.getElementById('toggle');
+  toggle.addEventListener('click', () => { paused = !paused; toggle.textContent = paused ? 'Reanudar' : 'Pausar'; });
+  document.addEventListener('visibilitychange', () => { hidden = document.visibilityState === 'hidden'; });
+
+  // ---------- Bucle ----------
+  let T = 0, last = performance.now();
+  function frame(now) {
+    const dt = Math.min(.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    if (!hidden) {
+      T += dt;
+      if (!paused) updateScene(dt);
+    }
+    let ht = T % HERO_TOTAL, idx = 0;
+    while (idx < HERO_CYCLE.length - 1 && ht > HERO_CYCLE[idx][1]) { ht -= HERO_CYCLE[idx][1]; idx++; }
+    drawCell(hero16, 'recolector', HERO_CYCLE[idx][0], T, 16);
+    drawCell(hero32, 'recolector', HERO_CYCLE[idx][0], T, 32);
+    if (poseLabel.textContent !== HERO_CYCLE[idx][2]) poseLabel.textContent = HERO_CYCLE[idx][2];
+    for (const s of stripCanvases) drawCell(s.c, 'recolector', s.pose, T, RES);
+    for (const j of jobCanvases) drawCell(j.c, j.job, 'idle', T + j.off, RES);
+    drawScene(T);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
