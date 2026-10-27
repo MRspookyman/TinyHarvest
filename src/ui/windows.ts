@@ -50,8 +50,11 @@ export function createWindows(host: HTMLElement, menus: Record<MenuId, Menu>): W
   layer.addEventListener('pointerdown', e => {
     if (e.target === layer) close();
   });
+  // Esc cierra la ventana; se marca como usada para que no cierre también la ficha del gnomo
   window.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && current) close();
+    if (e.key !== 'Escape' || !current) return;
+    e.preventDefault();
+    close();
   });
 
   function open(id: MenuId) {

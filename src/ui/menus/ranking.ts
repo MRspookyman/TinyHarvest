@@ -1,9 +1,9 @@
 // Gnomos del mes: las coronas de cada oficio y el podio de cada categoría en esta partida.
 import { JOB_IDS } from '../../sim/config';
 import type { GameState, Gnome } from '../../sim/types';
-import { crownIcon, jobIcons } from '../../render/icons';
-import { RANKING } from '../../textos';
-import { esc, html, pixelImg } from '../dom';
+import { crownIcon, jobIcons, traitIcons } from '../../render/icons';
+import { FICHA, RANKING, RASGOS } from '../../textos';
+import { esc, html, pixelImg, type GameActions } from '../dom';
 import type { Menu } from '../windows';
 
 type Category = Exclude<keyof typeof RANKING.categorias, 'tasks'>;
@@ -11,14 +11,14 @@ const PODIUM_CATEGORIES = (Object.keys(RANKING.categorias) as (keyof typeof RANK
   .filter((k): k is Category => k !== 'tasks');
 const PODIUM = 3;
 /** píxeles del mundo por paso: un gnomo da unos cinco pasitos por segundo */
-const PX_PER_STEP = 4;
+export const PX_PER_STEP = 4;
 
 const metric = (k: Category, g: Gnome) => Math.floor(k === 'walked' ? g.stats.walked / PX_PER_STEP : g.stats[k]);
 
 const row = (s: GameState, g: Gnome, value: number) => `
   <li title="${esc(g.name)}">
     ${pixelImg(jobIcons[g.job], 'px chip-icon')}
-    <span class="rank-name">${esc(g.name)}${s.crowns[g.job] === g.id ? pixelImg(crownIcon, 'px crown-icon') : ''}</span>
+    <button type="button" class="rank-name" data-show="${g.id}" title="${esc(FICHA.verDe(g.name))}">${esc(g.name)}${s.crowns[g.job] === g.id ? pixelImg(crownIcon, 'px crown-icon') : ''}<img class="px trait-icon" src="${traitIcons[g.trait]}" alt="${RASGOS[g.trait].nombre}" title="${RASGOS[g.trait].nombre}" draggable="false"></button>
     <span class="rank-value">${value}</span>
   </li>`;
 
@@ -28,7 +28,7 @@ const card = (title: string, unit: string, body: string) => `
     ${body || `<p class="muted">${RANKING.nadie}</p>`}
   </article>`;
 
-export function createRankingMenu(): Menu {
+export function createRankingMenu(actions: GameActions): Menu {
   const el = html(`
     <div class="ranking">
       <p class="muted">${RANKING.ayuda}</p>
@@ -38,6 +38,14 @@ export function createRankingMenu(): Menu {
   const summary = el.querySelector<HTMLElement>('[data-summary]')!;
   const grid = el.querySelector<HTMLElement>('[data-grid]')!;
   let sig = '';
+  // la lista se redibuja varias veces por segundo (los pasos no paran): con el ratón se abre al pulsar,
+  // porque el botón puede no existir ya al soltar; el clic sin detalle es el del teclado
+  const show = (e: Event) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-show]');
+    if (btn) actions.showGnome(Number(btn.dataset.show));
+  };
+  el.addEventListener('pointerdown', e => e.button === 0 && show(e));
+  el.addEventListener('click', e => e.detail === 0 && show(e));
 
   return {
     el,

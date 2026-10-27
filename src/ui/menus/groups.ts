@@ -2,8 +2,8 @@
 import { CROP_IDS, GROUP_NAME_MAX, GROUP_PALETTE, MAX_GROUPS, PRIORITIES } from '../../sim/config';
 import { cropUnlocked } from '../../sim/sim';
 import type { CropId, GameState, Priority } from '../../sim/types';
-import { jobIcons } from '../../render/icons';
-import { CULTIVOS, GRUPOS, OFICIOS, prioridad } from '../../textos';
+import { jobIcons, traitIcons } from '../../render/icons';
+import { CULTIVOS, FICHA, GRUPOS, OFICIOS, prioridad, RASGOS } from '../../textos';
 import { esc, html, pixelImg, type GameActions } from '../dom';
 import type { Menu } from '../windows';
 
@@ -16,7 +16,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
 
   const el = html(`
     <div class="groups">
-      <p class="muted">${GRUPOS.ayuda}</p>
+      <p class="muted">${GRUPOS.ayuda} ${FICHA.ayudaTablon}</p>
       <div class="group-list"></div>
     </div>`);
   const list = el.querySelector<HTMLElement>('.group-list')!;
@@ -56,13 +56,14 @@ export function createGroupsMenu(actions: GameActions): Menu {
           <div class="chips" data-drop="${g.id}">
             ${members.length
               ? members.map(gn => `
-                <button type="button" class="chip ${selectedGnome === gn.id ? 'selected' : ''}" data-gnome="${gn.id}" draggable="true" title="${esc(OFICIOS[gn.job].nombre)}">
-                  ${pixelImg(jobIcons[gn.job], 'px chip-icon')}${esc(gn.name)}
+                <button type="button" class="chip ${selectedGnome === gn.id ? 'selected' : ''}" data-gnome="${gn.id}" draggable="true" title="${esc(`${OFICIOS[gn.job].nombre} · ${RASGOS[gn.trait].nombre}`)}">
+                  ${pixelImg(jobIcons[gn.job], 'px chip-icon')}${esc(gn.name)}${pixelImg(traitIcons[gn.trait], 'px trait-icon')}
                 </button>`).join('')
               : `<span class="muted empty">${GRUPOS.vacio}</span>`}
           </div>
           <footer>
             ${i === 0 ? `<span class="badge">${GRUPOS.nuevos}</span>` : ''}
+            ${selectedGnome !== null && members.some(gn => gn.id === selectedGnome) ? `<button type="button" class="btn small" data-show="${selectedGnome}">${FICHA.ver}</button>` : ''}
             ${canMoveHere ? `<button type="button" class="btn small" data-move-here="${g.id}">${GRUPOS.moverAqui}</button>` : ''}
             ${s.groups.length > 1 ? `<button type="button" class="link" data-delete="${g.id}">${armedDelete === g.id ? GRUPOS.borrarSeguro : GRUPOS.borrar}</button>` : ''}
           </footer>
@@ -89,6 +90,9 @@ export function createGroupsMenu(actions: GameActions): Menu {
     } else if (d.gnome) {
       const id = Number(d.gnome);
       selectedGnome = selectedGnome === id ? null : id;
+    } else if (d.show) {
+      selectedGnome = null;
+      actions.showGnome(Number(d.show));
     } else if (d.moveHere && selectedGnome !== null) {
       actions.moveGnome(selectedGnome, Number(d.moveHere));
       selectedGnome = null;
@@ -121,6 +125,14 @@ export function createGroupsMenu(actions: GameActions): Menu {
   el.addEventListener('keydown', e => {
     const t = e.target as HTMLInputElement;
     if (e.key === 'Enter' && t.dataset.rename) t.blur();
+  });
+
+  // doble clic en un gnomo: su ficha
+  el.addEventListener('dblclick', e => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-gnome]');
+    if (!chip) return;
+    selectedGnome = null;
+    actions.showGnome(Number(chip.dataset.gnome));
   });
 
   // arrastrar gnomos entre grupos

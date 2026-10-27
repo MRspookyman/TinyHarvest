@@ -10,7 +10,7 @@ import {
   setPriority, stageTime, tick, walkSpeed, workMult,
 } from '../src/sim/sim';
 import { createState } from '../src/sim/state';
-import type { CropId, GameState, JobId, NodeId, Priority, Rng } from '../src/sim/types';
+import type { CropId, GameState, JobId, MomentKind, NodeId, Priority, Rng } from '../src/sim/types';
 
 const SEED = 12345;
 const DT = 0.1;
@@ -466,6 +466,70 @@ test('e) El mejor cultivo según la plantilla', () => {
     table(['Plantilla', ...CROP_IDS, 'elegiría el bot'], rateRows),
     '', '### % echado a perder (de lo que llegó a madurar)', '',
     table(['Plantilla', ...CROP_IDS], rotRows),
+  ];
+  console.log(`\n${out.join('\n')}\n`);
+});
+
+// ---------- f) Vida en el huerto ----------
+
+const LIFE_STAFFING = [
+  { name: '2 rec + 2 sem (principio, bancal 3×3)', rec: 2, sem: 2, por: 0, bancal: 0 },
+  { name: '6 rec + 4 sem (bancal 5×5)', rec: 6, sem: 4, por: 0, bancal: 4 },
+  { name: '20 rec + 14 sem + 6 port (bancal al máximo)', rec: 20, sem: 14, por: 6, bancal: TREE.bancal.max },
+];
+const LIFE_MIN = 10;
+
+/**
+ * Cuenta los «momentos» (algo llamativo que empieza en pantalla) en LIFE_MIN minutos sin tocar nada.
+ * Los huecos se miden entre instantes distintos con algún momento, contando desde el principio y hasta el final.
+ * Objetivo: hueco medio ≤ 15 s, máximo ≤ 30 s, y ningún tipo de momento por encima del 40 %.
+ */
+test('f) Vida en el huerto', () => {
+  const kinds = new Map<MomentKind, number[]>();
+  const rows: (string | number)[][] = [];
+  LIFE_STAFFING.forEach((st, col) => {
+    const rng = mulberry32(SEED);
+    const s = fullField(rng, st.rec, st.sem, c => CROP_IDS[c % CROP_IDS.length]);
+    s.tree.bancal = st.bancal;
+    for (const p of s.plots) if (!isOpen(s, p)) p.stage = -1;
+    s.tree.porteadores = st.por ? 1 : 0;
+    s.coins = 1e12;
+    for (let i = 0; i < st.por; i++) hire(s, 'porteador', rng);
+    s.coins = 0;
+    const times: number[] = [];
+    let total = 0;
+    const count = new Map<MomentKind, number>();
+    for (let n = 0; n < LIFE_MIN * STEPS_PER_MIN; n++) {
+      tick(s, DT, rng);
+      for (const e of s.events) {
+        if (e.type !== 'moment') continue;
+        total++;
+        count.set(e.kind, (count.get(e.kind) ?? 0) + 1);
+        if (times[times.length - 1] !== n) times.push(n);
+      }
+      s.events.length = 0;
+    }
+    const marks = [0, ...times.map(n => n * DT), LIFE_MIN * 60];
+    const gaps = marks.slice(1).map((t, i) => t - marks[i]);
+    const top = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
+    rows.push([
+      st.name, f1(total / LIFE_MIN), f1(gaps.reduce((a, g) => a + g, 0) / gaps.length), f1(Math.max(...gaps)),
+      top ? `${top[0]} ${Math.round((100 * top[1]) / total)} %` : '—', count.size,
+    ]);
+    for (const [k, v] of count) {
+      if (!kinds.has(k)) kinds.set(k, LIFE_STAFFING.map(() => 0));
+      kinds.get(k)![col] = v;
+    }
+  });
+  const kindRows = [...kinds.entries()]
+    .sort((a, b) => b[1].reduce((x, y) => x + y, 0) - a[1].reduce((x, y) => x + y, 0))
+    .map(([k, v]) => [k, ...v]);
+  const out = [
+    `## f) Vida en el huerto (bancal de cultivos mezclados por columna, ${LIFE_MIN} min, sin clics)`, '',
+    'Objetivo: hueco medio ≤ 15 s, hueco máximo ≤ 30 s, el tipo más común ≤ 40 %.', '',
+    table(['Plantilla', 'momentos/min', 'hueco medio (s)', 'hueco máximo (s)', 'el más común', 'tipos distintos'], rows),
+    '', '### Momentos por tipo', '',
+    table(['Momento', ...LIFE_STAFFING.map(st => st.name)], kindRows),
   ];
   console.log(`\n${out.join('\n')}\n`);
 });

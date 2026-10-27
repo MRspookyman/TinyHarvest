@@ -1,6 +1,6 @@
 // Iconos pixel art para la interfaz HTML (barra, ventanas y árbol de mejoras).
 // Se dibujan en canvas y se pasan a la interfaz como data URL.
-import type { CropId, JobId, NodeId } from '../sim/types';
+import type { CropId, JobId, NodeId, TraitId } from '../sim/types';
 import { makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
 import { BASE, basketCanvas, crownCanvas, gnomeIcon, PLANT_MAPS, PLANT_PAL, SACK } from './sprites';
 import type { MenuId } from '../textos';
@@ -255,6 +255,105 @@ export const nodeIcons: Record<NodeId, string> = {
 };
 
 export const rootIcon = url(mapCanvas(PLANT_MAPS.zanahoria[1], PLANT_PAL));
+
+/** Rasgos de carácter: un dibujito por rasgo para la ficha y las listas de gnomos. */
+const TRAIT_MAPS: Record<TraitId, PixelMap> = {
+  // caracol: no tiene prisa
+  perezoso: [
+    '....OOOO..',
+    '...OCCCCO.',
+    '..OCwwwCCO',
+    'O.OCwCwCCO',
+    'OO.OCwwCCO',
+    'OlOOOCCCO.',
+    'OllllllllO',
+    '.OOOOOOOOO',
+  ],
+  // rayo
+  nervioso: [
+    '....OOOO',
+    '...OYYYO',
+    '..OYYYO.',
+    '.OYYYOOO',
+    'OYYYYYYO',
+    'OOOOYYO.',
+    '...OYYO.',
+    '..OYYO..',
+    '..OYO...',
+    '..OO....',
+  ],
+  // manzana con un mordisco
+  gloton: [
+    '....Og...',
+    '..OOOOO..',
+    '.ORRRRRO.',
+    'ORWRRRO..',
+    'ORRRRO...',
+    'ORRRRRO..',
+    'ORRRRRRO.',
+    '.ORRRRRO.',
+    '..OOOOO..',
+  ],
+  // bocadillo de charla
+  cotilla: [
+    '.OOOOOOOOO.',
+    'OWWWWWWWWWO',
+    'OWKWWKWWKWO',
+    'OWWWWWWWWWO',
+    '.OOWOOOOOO.',
+    '..OO.......',
+  ],
+  // luna con una zeta
+  dormilon: [
+    '..OOO.....',
+    '.OYYO..OOO',
+    'OYYO....O.',
+    'OYYO...OOO',
+    'OYYO......',
+    'OYYYO.....',
+    '.OYYYOOYO.',
+    '..OOYYYO..',
+    '....OOO...',
+  ],
+  // martillo
+  currante: [
+    '.OOOOOO.',
+    'OssssssO',
+    'OKKKKKKO',
+    '.OOTTOO.',
+    '..OTTO..',
+    '..OTTO..',
+    '..OTTO..',
+    '..OTTO..',
+    '..OOOO..',
+  ],
+};
+
+const TRAIT_W = 12;
+const TRAIT_H = 10;
+/** Todos en un lienzo de 12 × 10, centrados, para que se escalen igual. */
+function traitCanvas(map: PixelMap): HTMLCanvasElement {
+  const c = makeCanvas(TRAIT_W, TRAIT_H);
+  c.getContext('2d')!.drawImage(mapCanvas(map, P), (TRAIT_W - map[0].length) >> 1, (TRAIT_H - map.length) >> 1);
+  return c;
+}
+
+export const traitIcons = Object.fromEntries(
+  (Object.keys(TRAIT_MAPS) as TraitId[]).map(t => [t, url(traitCanvas(TRAIT_MAPS[t]))]),
+) as Record<TraitId, string>;
+
+/** Estrella de los gnomos legendarios. */
+export const legendIcon = url(mapCanvas([
+  '....O....',
+  '...OYO...',
+  'OOOOYOOOO',
+  'OYYYYYYYO',
+  '.OYYWYYO.',
+  '..OYYYO..',
+  '.OYYOYYO.',
+  '.OYO.OYO.',
+  '.OO...OO.',
+], P));
 
 /**
  * Marco de 24 × 24 para border-image (corte de 8 px): borde de madera con clavos dorados en las esquinas

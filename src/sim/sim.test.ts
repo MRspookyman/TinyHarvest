@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { BASKET, COST_GROWTH, CROPS, CROWN_MARGIN, FIELD, HOUSE, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL, RIPE, ROTTEN, TREE } from './config';
+import {
+  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL, MOLE_TIME, RIPE,
+  ROTTEN, TREE,
+} from './config';
 import {
   basketMax, buyHouse, buyNode, clickPlot, createGroup, deleteGroup, fieldSize, hire, hireCost, houseCapacity, isOpen,
-  moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
+  moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, startEvent, tick,
 } from './sim';
-import { createState, deserialize, serialize } from './state';
-import type { GameState, JobId, Rng } from './types';
+import { createState, deserialize, SAVE_VERSION, serialize } from './state';
+import type { GameState, JobId, Rng, TraitId } from './types';
 
 function seeded(seed: number): Rng {
   return () => {
@@ -21,11 +24,15 @@ function run(s: GameState, seconds: number, rng: Rng) {
   for (let i = 0; i < seconds * 30; i++) tick(s, 1 / 30, rng);
 }
 
-function hireFree(s: GameState, job: JobId, rng: Rng) {
+/** Contrata gratis. Por defecto un currante normal (sin título), que no se para a pensar ni se come la cosecha. */
+function hireFree(s: GameState, job: JobId, rng: Rng, trait: TraitId = 'currante') {
   s.coins += hireCost(s, job);
   if (job === 'porteador') s.tree.porteadores = 1;
   hire(s, job, rng);
-  return s.gnomes[s.gnomes.length - 1];
+  const g = s.gnomes[s.gnomes.length - 1];
+  g.trait = trait;
+  g.legendary = false;
+  return g;
 }
 
 function park(g: { state: string; timer: number; task: unknown }) {
@@ -493,24 +500,136 @@ describe('guardado', () => {
     expect(loaded.nextGroupId).toBe(s.nextGroupId);
   });
 
-  it('carga las partidas de la iteración 3, que no tenían semilla, estadísticas ni podredumbre', () => {
+  it('carga las partidas v3 (sin semilla, estadísticas, podredumbre ni rasgos) y les reparte rasgos', () => {
     const rng = seeded(7);
     const s = createState(rng);
     const g = hireFree(s, 'recolector', rng);
     const old = JSON.parse(JSON.stringify(serialize(s)));
+    old.v = 3;
     delete old.rotted;
     delete old.crowns;
     for (const gr of old.groups) delete gr.seed;
-    for (const gn of old.gnomes) delete gn.stats;
+    for (const gn of old.gnomes) {
+      delete gn.stats;
+      delete gn.trait;
+      delete gn.legendary;
+    }
+    const copy = JSON.stringify(old);
     const loaded = deserialize(old, rng)!;
+    expect(JSON.stringify(old)).toBe(copy);
     expect(loaded.groups[0].seed).toBe(null);
-    expect(loaded.gnomes[0]).toMatchObject({ name: g.name });
+    expect(loaded.gnomes[0]).toMatchObject({ name: g.name, legendary: false });
+    expect(['perezoso', 'nervioso', 'gloton', 'cotilla', 'dormilon', 'currante']).toContain(loaded.gnomes[0].trait);
     expect(loaded.gnomes[0].stats.tasks).toBe(0);
-    expect(loaded).toMatchObject({ rotted: 0, crowns: { recolector: null, sembrador: null, porteador: null } });
+    expect(loaded).toMatchObject({ rotted: 0, crowns: { recolector: null, sembrador: null, porteador: null }, critters: [], happening: null });
+    expect(serialize(loaded).v).toBe(SAVE_VERSION);
+  });
+
+  it('guarda el rasgo y si es legendario', () => {
+    const rng = seeded(7);
+    const s = createState(rng);
+    const g = hireFree(s, 'sembrador', rng, 'dormilon');
+    g.legendary = true;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    expect(loaded.gnomes[0]).toMatchObject({ trait: 'dormilon', legendary: true });
   });
 
   it('rechaza partidas de otra versión', () => {
     expect(deserialize(null, seeded(1))).toBe(null);
     expect(deserialize({ v: 2 }, seeded(1))).toBe(null);
+    expect(deserialize({ v: SAVE_VERSION + 1 }, seeded(1))).toBe(null);
+  });
+});
+
+describe('vida en el huerto', () => {
+  /** bancal con todo creciendo y una sola parcela madura */
+  function oneRipe(rng: Rng) {
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = isOpen(s, p) ? 0 : -1;
+    const p = s.plots[plotId(2, 2)];
+    p.stage = RIPE;
+    return { s, p };
+  }
+
+  it('el rasgo cambia el paso: un perezoso tarda más que un currante en el mismo camino', () => {
+    const seconds = (trait: TraitId) => {
+      const rng = seeded(11);
+      const { s } = oneRipe(rng);
+      const g = hireFree(s, 'recolector', rng, trait);
+      for (let n = 1; n < 30 * 30; n++) {
+        tick(s, 1 / 30, rng);
+        if (g.stats.harvests) return n / 30;
+      }
+      return Infinity;
+    };
+    const lazy = seconds('perezoso'), hard = seconds('currante');
+    expect(hard).toBeLessThan(Infinity);
+    expect(lazy).toBeGreaterThan(hard * 1.1);
+  });
+
+  it('al ir a por algo maduro, el recolector lo dice con un bocadillo', () => {
+    const rng = seeded(3);
+    const { s, p } = oneRipe(rng);
+    const g = hireFree(s, 'recolector', rng);
+    tick(s, 1 / 30, rng);
+    expect(g.task).toMatchObject({ kind: 'harvest', plot: p.id });
+    expect(g.bubble).toMatchObject({ kind: 'crop', crop: 'zanahoria' });
+    run(s, 2, rng);
+    expect(g.bubble?.kind).not.toBe('crop');
+  });
+
+  it('un cuervo se come lo maduro si nadie lo espanta', () => {
+    const rng = seeded(12);
+    const { s, p } = oneRipe(rng);
+    expect(startEvent(s, 'cuervo', rng)).toBe(true);
+    run(s, CROW_EAT + 5, rng);
+    expect(p.stage).toBe(-1);
+    expect(s.rotted).toBe(0);
+    run(s, 5, rng);
+    expect(s.critters).toHaveLength(0);
+  });
+
+  it('si hay un gnomo libre, va a espantar al cuervo y la cosecha se salva', () => {
+    const rng = seeded(12);
+    const { s, p } = oneRipe(rng);
+    // un sembrador sin nada que sembrar: está libre
+    const g = hireFree(s, 'sembrador', rng);
+    Object.assign(g, plotStand(s.plots[plotId(0, 2)]));
+    expect(startEvent(s, 'cuervo', rng)).toBe(true);
+    run(s, CROW_EAT + 5, rng);
+    expect(p.stage).toBe(RIPE);
+    expect(g.stats.tasks).toBe(0);
+    run(s, 5, rng);
+    expect(s.critters.filter(c => c.kind === 'cuervo')).toHaveLength(0);
+  });
+
+  it('donde asoma un topo no se siembra hasta que se va', () => {
+    const rng = seeded(13);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = isOpen(s, p) ? 0 : -1;
+    const hole = s.plots[plotId(1, 1)];
+    hole.stage = -1;
+    expect(startEvent(s, 'topo', rng)).toBe(true);
+    expect(s.critters[0]).toMatchObject({ kind: 'topo', plot: hole.id });
+    hireFree(s, 'sembrador', rng);
+    run(s, MOLE_TIME - 2, rng);
+    expect(hole.stage).toBe(-1);
+    run(s, 8, rng);
+    expect(hole.stage).toBeGreaterThanOrEqual(0);
+  });
+
+  it('un glotón se come alguna zanahoria de las que recoge', () => {
+    const rng = seeded(14);
+    const s = createState(rng);
+    s.tree.bancal = 4;
+    // saco grande: muchas zanahorias por viaje
+    s.tree.saco = 3;
+    const g = hireFree(s, 'recolector', rng, 'gloton');
+    for (let i = 0; i < 8; i++) {
+      for (const p of s.plots) if (isOpen(s, p) && p.stage === -1) p.stage = RIPE;
+      run(s, 20, rng);
+    }
+    expect(s.events.some(e => e.type === 'moment' && e.kind === 'comer')).toBe(true);
+    expect(g.stats.harvests).toBeGreaterThan(g.stats.delivered + g.carry.length);
   });
 });

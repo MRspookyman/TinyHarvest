@@ -1,4 +1,4 @@
-import type { Branch, CropId, JobId, NodeId, Priority } from './types';
+import type { Branch, CritterKind, CropId, JobId, NodeId, Priority, TraitId } from './types';
 
 // Coordenadas en píxeles lógicos del mundo (rejilla de 16 px por sprite).
 export const WORLD = { w: 300, h: 200 } as const;
@@ -112,3 +112,56 @@ export const PLANT_TIME = 0.6;
 export const CLEAR_TIME = 0.8;
 export const PICKUP_TIME = 0.5;
 export const LOG_MAX = 40;
+
+// ---------- Vida en el huerto (iteración 6) ----------
+
+export const TRAIT_IDS: TraitId[] = ['perezoso', 'nervioso', 'gloton', 'cotilla', 'dormilon', 'currante'];
+/** multiplicador de velocidad al andar por rasgo */
+export const TRAIT_WALK: Partial<Record<TraitId, number>> = { perezoso: 0.85, nervioso: 1.2 };
+/** multiplicador del tiempo de trabajo por rasgo (menos = más rápido) */
+export const TRAIT_WORK: Partial<Record<TraitId, number>> = { currante: 0.85 };
+/** probabilidad de que un gnomo contratado sea legendario, y cuánto mejor anda y trabaja */
+export const LEGENDARY = { chance: 0.03, mult: 1.25 } as const;
+/** lo que dura un bocadillo de intención o de reacción; corto para que con muchos gnomos no se llene el bancal */
+export const BUBBLE_TIME = 0.9;
+/** dos gnomos andando a menos de esto se ven; luego cada uno tarda MEET_COOLDOWN en volver a reaccionar */
+export const MEET_DIST = 6;
+export const MEET_COOLDOWN = 20;
+/** segundos entre sucesos pequeños (cuervo, caracol, topo) */
+export const EVENT_GAP = { min: 30, max: 90, first: 30 } as const;
+/** uno de cada tantos sucesos es un suceso raro (ranas, sindicato, espantapájaros) */
+export const HAPPENING_EVERY = 8;
+/** el cuervo se come la planta a los CROW_EAT s; un gnomo libre se da cuenta a los CROW_NOTICE s */
+export const CROW_EAT = 8;
+export const CROW_NOTICE = 1;
+/** el topo bloquea su parcela este tiempo */
+export const MOLE_TIME = 15;
+export const CRITTER_SPEED: Record<CritterKind, number> = { cuervo: 45, caracol: 4, topo: 0, mariposa: 14, rana: 26 };
+/** sucesos raros: duración (s) */
+export const HAPPENING_TIME = { ranas: 8, sindicato: 8, sindicatoCafe: 4, espantapajaros: 15 } as const;
+/**
+ * Probabilidades de la vida del huerto (por decisión, salvo `trip`, que es por segundo andando).
+ * Ajustadas con `npm run balance` (apartado f): que siempre pase algo sin que nadie deje de trabajar.
+ */
+export const LIFE = {
+  /** el perezoso se para a pensar al elegir tarea */
+  lazyThink: 0.08,
+  /** el nervioso tropieza solo, por segundo andando */
+  trip: 0.012,
+  /** el glotón se come la zanahoria que acaba de recoger */
+  glutton: 0.2,
+  // en los ratos libres (cada vez que un ocioso decide qué hacer)
+  nap: 0.1,
+  napDormilon: 0.22,
+  napCurrante: 0.04,
+  sit: 0.1,
+  sitCurrante: 0.02,
+  /** buscar a otro ocioso para charlar o jugar a las cartas */
+  social: 0.15,
+  socialCotilla: 0.35,
+  chase: 0.06,
+  // al cruzarse dos gnomos
+  bump: 0.08,
+  bumpNervioso: 0.3,
+  greet: 1,
+} as const;

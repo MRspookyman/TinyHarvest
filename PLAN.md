@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.11 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.12 · **Última actualización:** 2026-10-27
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -180,7 +180,7 @@ Prestigio, edificios, porteador, regador, capataz, guardián, eventos, rasgos co
 
 - [x] En 5–10 minutos se pasa de clicar a mano a tener un huerto automático. *(El bot lo consigue en 1–5 min.)*
 - [x] Cambiar la prioridad de un grupo tiene un efecto **visible** en cómo se mueven los gnomos. *(Desde la iteración 4; falta que lo confirme el autor jugando.)*
-- [ ] Es entretenido dejarlo un minuto y solo mirar.
+- [ ] Es entretenido dejarlo un minuto y solo mirar. *(Desde la iteración 6 pasa algo distinto cada 2–5 s de media según el bot; falta que lo confirme el autor jugando.)*
 
 ---
 
@@ -413,6 +413,42 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 - **La podredumbre aparece con plantillas justas** (zanahoria con 8 + 5: 26 % perdido; tomate con 4 + 3: 6,5 %) y no aparece con plantillas holgadas. El bot de ritmo no pierde nada porque contrata todo lo que puede. Como siempre tiene muchos gnomos, siembra zanahoria toda la partida.
 - **Pendiente:** al acabar el árbol (min 59–65) vuelve la meseta sin nada que comprar. Es lo que resolverá el prestigio (iteración 8).
 
+### Iteración 6: vida en el huerto (hecha y probada)
+
+| Cambio | Detalle |
+|---|---|
+| **Rasgos** (D2) | Cada gnomo tiene uno, con un efecto pequeño. *Perezoso*: anda más lento y se para a «pensar». *Nervioso*: más rápido, pero tropieza. *Glotón*: a veces se come una zanahoria recién cogida. *Cotilla*: se para a charlar con quien se cruza. *Dormilón*: más siestas. *Currante*: trabaja más rápido y casi no se sienta. |
+| **Legendarios** (D3) | Un 3 % de los contratados, con título («el Magnífico»…), gorro dorado con una banda del color de su oficio, destellos, y anda y trabaja un 25 % mejor. |
+| **Bocadillos de intención** (D6) | 14 iconos: el cultivo al que va, saco, cesta, zz, «…» al pensar, corazón, enfado, saludo, charla, cartas, aplauso, ñam y nota musical. Duran 0,9 s para que con muchos gnomos no se llene el bancal. |
+| **Reacciones** (D7) | Al cruzarse se saludan (corazoncitos), el cotilla se para a charlar, a veces uno tropieza y cae de culo (polvo y estrellitas). Si te quitan la parcela, enfado. El que gana una corona lo celebra y los de su oficio aplauden o refunfuñan. |
+| **Más vida en la cosecha** (D8) | El cultivo vuela en arco de la planta a la mano. El saco de la espalda tiene 3 tamaños, el porteador empuja una carretilla si la has comprado, y la puerta del granero se abre al entregar y crece un montón de cajas al lado. |
+| **Ociosos con gracia** (D9) | Se sientan (al lado de una calabaza madura si hay), juegan a las cartas por parejas o persiguen mariposas. |
+| **Sucesos** (D4) | Cada 30–90 s pasa algo pequeño. *Cuervo*: se posa en una parcela madura y se la come si nadie va a espantarlo; si hay un gnomo libre, va con los brazos en alto. *Caracol*: cruza el bancal. *Topo*: asoma en una parcela vacía y no deja sembrar mientras está. De vez en cuando, algo raro: lluvia de ranas, huelga del sindicato gnomo (dura menos con café) o un gnomo que se cree espantapájaros. Todo sale en el diario. |
+| **Ficha y cámara** (D1) | Al hacer clic en un gnomo (también desde el tablón o el ranking), sale una ficha en la esquina con su oficio, grupo, rasgo, lo que hace ahora («Jugando a las cartas con Pepín»), sus números, una frase del día y «Mover a…». La cámara se acerca y lo sigue, con una flecha encima. Esc o × la cierra. |
+| **Cada mejora se ve** (D12) | Cada mejora del árbol deja una pieza en el huerto. *Botas*: zapatero junto a la casa. *Café*: mesita con cafetera humeante. *Saco*: sacos en el granero. *Porteadores*: estandarte del gremio. *Cesta*: aros, asas y borde dorado. *Carretilla*: aparcada (de madera, luego pintada). *Bancal*: valla al máximo. *Cultivos*: cartel que gana una tabla por cultivo. *Abono*: montón de compost y tierra más oscura. *Conservas*: estante de tarros. *Mercado*: toldo, cajas, cartel y bandera. El árbol viejo crece con el total de mejoras (flores, faroles, casita de pájaros) y el tablón se llena de notas con los grupos (tejadillo a partir de 6). |
+| **Medir la vida** (D10) | `npm run balance` tiene una sección f) con momentos por minuto, hueco medio y máximo, el tipo más repetido y cuántos tipos distintos. |
+| **Migrar partidas** (F2) | Partida versión 4, con una lista de migraciones: las de la versión 3 se cargan y reparten rasgos. |
+
+**Prueba (2026-10-27):** `tsc`, los 41 tests (7 nuevos) y `npm run build` pasan. En Chrome, a 1280×800 y 1024×600, se ha comprobado lo siguiente:
+- Bocadillos, saludos, cartas, mariposas, topo, cuervos y espantapájaros.
+- El arco de la cosecha y la puerta del granero.
+- Las piezas de cada mejora.
+- La ficha desde el huerto, el tablón y el ranking, y la cámara siguiendo al gnomo y volviendo.
+- No hay errores en la consola.
+
+**Resultados del bot (`npm run balance`, f): vida en el huerto, 10 min**
+
+| Plantilla | Momentos/min | Hueco medio | Hueco máximo | El más repetido | Tipos distintos |
+|---|---|---|---|---|---|
+| 2 rec + 2 sem (principio) | 12,2 | 5,0 s | 20,8 s | siesta 31 % | 13 |
+| 6 + 4 | 25,7 | 2,4 s | 9,3 s | saludo 23 % | 16 |
+| 20 + 14 + 6 port | 133,6 | 0,5 s | 2,6 s | siesta 22 % | 17 |
+
+- **Se cumple el objetivo** (hueco medio ≤ 15 s y máximo ≤ 30 s incluso al principio, nada pasa del 40 %).
+- **Con 40 gnomos hay unos 2 momentos por segundo** (unos 3 por gnomo y minuto). Por eso los bocadillos se han acortado. Si al jugar resulta agobiante, se baja `LIFE.greet` y la probabilidad de siesta en `config.ts`.
+- **El ritmo apenas cambia:** árbol completo en 60,5 min (activo) y 67,9 min (tranquilo), frente a 59 y 65 antes. Los rasgos y las huelgas añaden 1,5–3 min.
+- **Pendiente visto en la prueba:** la ficha tapa el borde derecho del bancal a 1280×800 (el gnomo seguido sigue centrado). La barra de abajo tapa las esquinas inferiores de la valla con el bancal al máximo.
+
 ---
 
 ## 9. 🗺️ Backlog y hoja de ruta
@@ -457,18 +493,19 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
-| D1 | **Ficha de gnomo al hacer clic, y la cámara lo sigue** (ahora al pasar el ratón solo sale el nombre) | S–M | Medio | — | It6 |
-| D2 | **Rasgos con efectos que se ven** (el perezoso anda despacio y se sienta a «pensar», el glotón se come una zanahoria, el cotilla se para a hablar, el nervioso corre) | M | Alto | D1 | It6 |
-| D3 | **Gnomos legendarios** | S | Medio | D2 | It6 |
-| D4 | **Pequeños sucesos cada 30–90 s** (un cuervo que espantar, un caracol que cruza, un topo) y alguno raro (lluvia de ranas, un gnomo que se cree espantapájaros, el sindicato gnomo) | M | Medio | — | It6 |
+| D1 | **Ficha de gnomo al hacer clic, y la cámara lo sigue** | S–M | Medio | — | ✅ It6 |
+| D2 | **Rasgos con efectos que se ven** (perezoso, nervioso, glotón, cotilla, dormilón, currante) | M | Alto | D1 | ✅ It6 |
+| D3 | **Gnomos legendarios** | S | Medio | D2 | ✅ It6 |
+| D4 | **Pequeños sucesos cada 30–90 s** (cuervo, caracol, topo) y alguno raro (lluvia de ranas, sindicato gnomo, espantapájaros) | M | Medio | — | ✅ It6 |
 | D5 | **Ranking de gnomos:** el más trabajador, el que más monedas aporta, el más andarín, el más dormilón… con corona para el líder en el huerto | S–M | Medio | — | ✅ It4 (pedido del autor) |
-| D6 | **Bocadillos de intención:** antes de salir, el gnomo enseña qué va a hacer (🍅, 🧺, 💤, ❤️ al plantar, 😤 si le quitan la parcela) | S | Alto | — | It6 |
-| D7 | **Reacciones entre gnomos:** se saludan al cruzarse, a veces chocan, discuten por una parcela; aplausos o refunfuños cuando cambia una corona | S–M | Alto | — | It6 |
-| D8 | **Más vida en la cosecha:** el cultivo vuela al saco, el saco engorda, el porteador lleva carretilla, el granero abre la puerta y crece un montoncito | S | Medio | — | It6 |
-| D9 | **Ociosos con gracia:** se sientan en una calabaza, juegan a las cartas, persiguen mariposas | S | Medio | — | It6 |
-| D10 | **Medir la vida:** «momentos llamativos por minuto» en `npm run balance` (objetivo: algo distinto cada 10–20 s sin repetirse demasiado) | S | Medio (herramienta) | D6–D9 | It6 |
+| D6 | **Bocadillos de intención** | S | Alto | — | ✅ It6 |
+| D7 | **Reacciones entre gnomos** (saludos, charlas, tropiezos, enfados, celebrar coronas) | S–M | Alto | — | ✅ It6 |
+| D8 | **Más vida en la cosecha** (arco del cultivo, saco que engorda, carretilla, puerta del granero, montón de cajas) | S | Medio | — | ✅ It6 |
+| D9 | **Ociosos con gracia** (sentarse, cartas, mariposas) | S | Medio | — | ✅ It6 |
+| D10 | **Medir la vida** (sección f de `npm run balance`) | S | Medio (herramienta) | D6–D9 | ✅ It6 |
 | D11 | **Día y noche, y tiempo** (atardecer, luciérnagas, farolillos; la lluvia acelera el crecimiento) | M–L | Medio | — | Más adelante |
-| D12 | **Los edificios cambian con cada mejora:** cada nodo del árbol deja huella en el huerto (zapatero junto a la casa con las botas, cafetera con el café, sacos junto al granero, toldo y género del mercado, carretilla aparcada, montón de abono, balas de paja con las conservas, cartel de cultivos junto al bancal, cesta más grande); el árbol viejo crece con el número de mejoras y el tablón se llena con los grupos | M | Alto | — | It6 (pedido del autor) |
+| D12 | **Los edificios cambian con cada mejora:** cada nodo del árbol deja huella en el huerto; el árbol viejo crece con el total de mejoras y el tablón se llena con los grupos | M | Alto | — | ✅ It6 (pedido del autor) |
+| D13 | **Más sitio para mirar:** que la ficha no tape el bancal a 1280×800 (plegable o más estrecha) y que la barra de abajo no tape la valla | S | Bajo | D1 | It7 |
 
 **E. Largo plazo**
 
@@ -482,7 +519,7 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
 | F1 | **Repositorio git** | S | Alto (seguridad) | — | ✅ It4 |
-| F2 | **Migrar partidas guardadas** en vez de empezar de cero en cada versión | S | Medio | — | It6 |
+| F2 | **Migrar partidas guardadas** (lista de migraciones desde la versión 3) | S | Medio | — | ✅ It6 |
 | F3 | **Plantas más detalladas** (pendiente desde la sección 3) | M | Medio | — | Más adelante |
 | F4 | **Sonido** | M | Medio | — | Más adelante |
 | F5 | **Pequeño tutorial** al empezar | S–M | Medio | — | It8 |
@@ -550,6 +587,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.12 (2026-10-27):** iteración 6, «vida en el huerto». Rasgos y legendarios, bocadillos de intención, reacciones entre gnomos, ociosos con gracia, más vida en la cosecha, bichos y sucesos (cuervo, caracol, topo, ranas, sindicato, espantapájaros), ficha del gnomo con cámara que lo sigue, cada mejora visible en el huerto (D12, pedido del autor), medida de la vida en el bot y migración de partidas. Pasa algo distinto cada 0,5–5 s de media y el árbol se completa en 60–68 min.
 - **v0.11 (2026-10-27):** iteración 5, «economía y ritmo». Cada cultivo tiene su ventaja (rápido y laborioso frente a lento y cómodo) y es el mejor para alguna plantilla. Gnomos un 30 % más caros, árbol ×3, casa de gnomos (primer edificio, de 8 a 40 camas) y tres nodos nuevos (carretilla, cestos con paja, mercado). Árbol completo en 59–65 min según el bot. Bloque «vida en el huerto» añadido al backlog para la iteración 6 (D6–D11).
 - **v0.10 (2026-10-27):** respondidas con simulaciones las tres preguntas abiertas. Podredumbre: los aguantes se quedan, pero el aviso no se veía, así que ahora hay sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder). Corona: una por oficio y solo fama. Duración sin prestigio: ~1 h, con ×1,30 por gnomo y árbol ×3 como punto de partida para la iteración 5.
 - **v0.9 (2026-10-27):** iteración 4, «que organizar importe». Semilla por grupo, podredumbre visible, «valioso» con paseo, prioridad «Lo que se va a estropear antes», reserva de la cesta, ranking «Gnomos del mes» con corona para el más trabajador, bot de equilibrio (`npm run balance`) y repositorio git. Backlog y hoja de ruta en la sección 9. Las partidas de la iteración 3 siguen valiendo.

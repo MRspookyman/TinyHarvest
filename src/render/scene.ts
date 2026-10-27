@@ -1,16 +1,23 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WILT_WARNING } from '../sim/config';
+import { BARN, BASKET, BOARD, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WILT_WARNING, WORLD } from '../sim/config';
 import { basketMax, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin } from '../sim/sim';
-import type { GameState, Gnome } from '../sim/types';
+import type { Critter, GameState, Gnome } from '../sim/types';
 import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
-import { drawBarn, drawBoard, drawHouse, drawOldTree, outlined } from './landmarks';
+import { DecorView } from './decor';
+import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, oldTreeStage, outlined } from './landmarks';
 import { frameIndex, type Atlas } from './sprites';
 
 const FONT = ['Pixelify Sans', 'monospace'];
 const BASKET_SPRITE_W = 12;
 const BASKET_SPRITE_H = 9;
+/** hueco de la puerta del granero (16 × 17), donde se dibuja abierta */
+const DOOR_RECT = { x: DOOR.x - 8, y: BARN.y + 28 } as const;
+/** segundos que se queda abierta la puerta tras una entrega */
+const DOOR_OPEN = 0.6;
+/** lo que tarda un cultivo en volar de la planta a la mano */
+const FLIGHT_TIME = 0.35;
 
 /** Elemento del huerto que abre un menú al pulsarlo. */
 interface Landmark {
@@ -29,10 +36,25 @@ interface Landmark {
 interface GnomeView {
   root: Container;
   ring: Sprite;
+  barrow: Sprite;
   body: Sprite;
+  sack: Sprite;
   item: Sprite;
+  sparkle: Sprite;
   bubble: Sprite;
   crown: Sprite;
+  /** qué bocadillo se dibujó por última vez, para el «pop» al cambiar */
+  bubbleKey: string;
+  pop: number;
+}
+
+interface CritterView {
+  root: Container;
+  shadow: Sprite;
+  body: Sprite;
+  state: Critter['state'];
+  /** segundos en el estado actual (el reloj de la simulación no dice cuándo cambió) */
+  stateAge: number;
 }
 
 interface Float {
@@ -42,9 +64,31 @@ interface Float {
   t: number;
 }
 
+/** Cultivo que vuela de la planta a la mano del gnomo. */
+interface Flight {
+  sprite: Sprite;
+  x: number;
+  y: number;
+  gnome: number;
+  t: number;
+}
+
+interface Particle {
+  sprite: Sprite;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** gravedad (px/s²); negativa para que suba */
+  g: number;
+  t: number;
+  life: number;
+}
+
 export class SceneView {
   onPlotClick: (id: number) => void = () => {};
   onOpenMenu: (menu: MenuId) => void = () => {};
+  onGnomeClick: (id: number) => void = () => {};
 
   private world = new Container();
   /** hierba que rellena la pantalla alrededor del mundo */
@@ -53,24 +97,50 @@ export class SceneView {
   private entities = new Container();
   private marks = new Graphics();
   private hover = new Graphics();
+  /** efectos sobre todo lo demás: cultivos volando, polvo, lluvia de ranas, flecha del seguido */
+  private fx = new Container();
+  private rain = new Graphics();
+  private marker: Sprite;
   private overlay = new Container();
   private plants: Sprite[] = [];
   private sparkles: Sprite[] = [];
   private basket: Sprite;
   private basketCount: Text;
+  private door: Sprite;
+  private doorT = 0;
+  private pile: Sprite;
+  /** montón junto al granero: crece con las entregas y se va vaciando solo (solo dibujo) */
+  private pileCount = 0;
   private house: Landmark;
   private houseCount: Text;
   /** texturas de la casa por nivel, normal y resaltada */
   private houseTextures = new Map<number, { normal: Texture; hover: Texture; w: number; h: number }>();
   private houseLevel = -1;
+  /** granero, tablón y árbol viejo cambian de dibujo con las mejoras (syncLandmarks) */
+  private barn: Landmark;
+  private board: Landmark;
+  private tree: Landmark;
+  /** nivel dibujado y texturas ya hechas de cada elemento que cambia */
+  private landmarkLevels = new Map<Landmark, { key: string; cache: Map<string, { normal: Texture; hover: Texture; w: number; h: number }> }>();
+  /** atrezo que cambia con las mejoras (decor.ts) */
+  private decor = new DecorView(this.entities);
   private landmarks: Landmark[] = [];
   private hovered: Landmark | null = null;
   private gnomes = new Map<number, GnomeView>();
+  private critters = new Map<number, CritterView>();
   private floats: Float[] = [];
+  private flights: Flight[] = [];
+  private particles: Particle[] = [];
   private nameTag: Text;
   private pointer: { x: number; y: number } | null = null;
   private state: GameState | null = null;
   private scale = 1;
+  /** encuadre normal: escala entera y centro en el mundo */
+  private baseScale = 1;
+  private base = { x: 0, y: 0 };
+  /** centro actual de la cámara en el mundo (se acerca poco a poco al objetivo) */
+  private cam = { x: 0, y: 0 };
+  private followId: number | null = null;
   private layoutKey = '';
   private fieldKey = '';
   private time = 0;
@@ -79,7 +149,11 @@ export class SceneView {
     this.world.addChild(new Sprite(Texture.from(drawBackground())));
     this.field.position.set(FIELD.x - 2, FIELD.y - 2);
     this.entities.sortableChildren = true;
-    this.world.addChild(this.field, this.marks, this.entities, this.hover);
+    this.marker = new Sprite(atlas.arrow);
+    this.marker.anchor.set(0.5, 1);
+    this.marker.visible = false;
+    this.fx.addChild(this.rain, this.marker);
+    this.world.addChild(this.field, this.marks, this.entities, this.fx, this.hover);
     app.stage.addChild(this.grass, this.world, this.overlay);
 
     for (let i = 0; i < FIELD.maxCols * FIELD.maxRows; i++) {
@@ -102,9 +176,9 @@ export class SceneView {
       this.landmarks.push(lm);
       return lm;
     };
-    addLandmark('contratar', drawBarn(), BARN.x - 1, BARN.y);
-    addLandmark('grupos', drawBoard(), BOARD.x, BOARD.y);
-    addLandmark('arbol', drawOldTree(), OLD_TREE.x, OLD_TREE.y);
+    this.barn = addLandmark('contratar', drawBarn(), BARN.x - 1, BARN.y);
+    this.board = addLandmark('grupos', drawBoard(), BOARD.x, BOARD.y);
+    this.tree = addLandmark('arbol', drawOldTree(), OLD_TREE.x, OLD_TREE.y);
     // la casa se apoya en la base de su caja; syncHouse cambia el dibujo cuando se amplía
     const house0 = drawHouse(0);
     this.house = addLandmark('contratar', house0, HOUSE.x, HOUSE.y + HOUSE.h - house0.height, { lugar: CASA.nombre, sub: MENUS.contratar.sub });
@@ -114,6 +188,17 @@ export class SceneView {
     this.basket.position.set(BASKET.x - BASKET_SPRITE_W / 2, BASKET.y - 4 - BASKET_SPRITE_H);
     this.basket.zIndex = BASKET.y - 4;
     this.entities.addChild(this.basket);
+
+    // la puerta abierta tapa la cerrada del dibujo del granero; el montón va a su derecha
+    this.door = new Sprite(atlas.door[1]);
+    this.door.position.set(DOOR_RECT.x, DOOR_RECT.y);
+    this.door.zIndex = BARN.y + 46.5;
+    this.door.visible = false;
+    this.pile = new Sprite(atlas.pile[0]);
+    this.pile.anchor.set(0, 1);
+    this.pile.position.set(DOOR.x + 9, BARN.y + 49);
+    this.pile.zIndex = BARN.y + 49;
+    this.entities.addChild(this.door, this.pile);
 
     const tagStyle = { fontFamily: FONT, fontSize: 14, fill: '#f4f4f4', stroke: { color: '#1a1c2c', width: 4 }, align: 'center' as const };
     this.basketCount = new Text({ text: '', style: tagStyle });
@@ -130,6 +215,9 @@ export class SceneView {
     app.stage.on('pointertap', (e: FederatedPointerEvent) => {
       if (!this.state) return;
       const l = this.world.toLocal(e.global);
+      // los gnomos van delante de las parcelas y los edificios
+      const g = this.gnomeAt(this.state, l.x, l.y);
+      if (g) return this.onGnomeClick(g.id);
       const lm = this.landmarkAt(l.x, l.y);
       if (lm) return this.onOpenMenu(lm.menu);
       const id = plotAt(this.state, l.x, l.y);
@@ -142,12 +230,31 @@ export class SceneView {
     app.stage.on('pointerleave', () => (this.pointer = null));
   }
 
+  /** Gnomo que sigue la cámara, o null con el encuadre normal. */
+  get followed(): number | null {
+    return this.followId;
+  }
+
+  /** La cámara se acerca un paso de escala entera y mantiene centrado al gnomo; null vuelve al encuadre normal. */
+  follow(id: number | null) {
+    this.followId = id;
+  }
+
   /** Borra las vistas de los gnomos (al empezar partida nueva). */
   reset() {
     for (const v of this.gnomes.values()) v.root.destroy({ children: true });
     this.gnomes.clear();
+    for (const v of this.critters.values()) v.root.destroy({ children: true });
+    this.critters.clear();
     for (const f of this.floats) f.text.destroy();
     this.floats = [];
+    for (const f of this.flights) f.sprite.destroy();
+    this.flights = [];
+    for (const p of this.particles) p.sprite.destroy();
+    this.particles = [];
+    this.pileCount = 0;
+    this.doorT = 0;
+    this.follow(null);
   }
 
   sync(s: GameState, dt: number) {
@@ -155,22 +262,29 @@ export class SceneView {
     this.time += dt;
     this.syncField(s);
     this.layout(s);
+    this.camera(s, dt);
     this.syncPlants(s);
     this.syncBasket(s);
     this.syncHouse(s);
-    this.syncGnomes(s);
+    this.syncLandmarks(s);
+    this.decor.sync(s);
+    this.syncGnomes(s, dt);
+    this.syncCritters(s, dt);
     this.syncMarks(s);
-    this.syncFloats(s, dt);
+    this.syncEvents(s, dt);
+    this.syncBarnDoor(dt);
+    this.syncRain(s);
+    this.syncMarker(s);
     this.syncHover(s);
   }
 
   private syncField(s: GameState) {
     const f = fieldSize(s);
-    const key = `${f.cols}x${f.rows}`;
+    const key = `${f.cols}x${f.rows}|${s.tree.abono}`;
     if (key === this.fieldKey) return;
     this.fieldKey = key;
     const old = this.field.texture;
-    this.field.texture = Texture.from(drawField(f.cols, f.rows));
+    this.field.texture = Texture.from(drawField(f.cols, f.rows, s.tree.abono));
     if (old !== Texture.EMPTY) old.destroy(true);
   }
 
@@ -202,16 +316,60 @@ export class SceneView {
     this.houseCount.position.set(p.x, p.y);
   }
 
+  /** Granero (mercado y gremio), tablón (grupos) y árbol viejo (mejoras compradas) según el progreso. */
+  private syncLandmarks(s: GameState) {
+    const t = s.tree;
+    this.redrawLandmark(this.barn, `${t.mercado}|${t.porteadores}`, () => drawBarn(t.mercado, t.porteadores > 0), BARN.y + 46);
+    const notes = Math.min(s.groups.length, BOARD_ROOF_GROUPS);
+    this.redrawLandmark(this.board, `${notes}`, () => drawBoard(notes), BOARD.y + BOARD.h);
+    const stage = oldTreeStage(s);
+    this.redrawLandmark(this.tree, `${stage}`, () => drawOldTree(stage), OLD_TREE.y + OLD_TREE.h);
+  }
+
+  /** Cambia el dibujo de un elemento pulsable si cambia su nivel (cada nivel se dibuja una vez); se apoya en `bottom`. */
+  private redrawLandmark(lm: Landmark, key: string, draw: () => HTMLCanvasElement, bottom: number) {
+    let entry = this.landmarkLevels.get(lm);
+    if (!entry) this.landmarkLevels.set(lm, (entry = { key: '', cache: new Map() }));
+    if (entry.key === key) return;
+    entry.key = key;
+    let tex = entry.cache.get(key);
+    if (!tex) {
+      const canvas = draw();
+      tex = { normal: Texture.from(canvas), hover: Texture.from(outlined(canvas)), w: canvas.width, h: canvas.height };
+      entry.cache.set(key, tex);
+    }
+    lm.normal = tex.normal;
+    lm.hover = tex.hover;
+    lm.w = tex.w;
+    lm.h = tex.h;
+    lm.y = bottom - tex.h;
+    lm.sprite.zIndex = bottom;
+    const hovered = this.hovered === lm;
+    lm.sprite.texture = hovered ? lm.hover : lm.normal;
+    lm.sprite.position.set(lm.x - (hovered ? 1 : 0), lm.y - (hovered ? 1 : 0));
+  }
+
   /** Elemento pulsable bajo un punto del mundo (por su caja, con un pequeño margen). */
   private landmarkAt(x: number, y: number): Landmark | null {
     return this.landmarks.find(l => x >= l.x - 1 && x <= l.x + l.w && y >= l.y - 1 && y <= l.y + l.h) ?? null;
   }
 
-  /** La cámara encuadra el granero y el bancal abierto con la mayor escala entera que quepa. */
+  /** Gnomo bajo un punto del mundo; si se solapan, el que está más delante. */
+  private gnomeAt(s: GameState, x: number, y: number): Gnome | null {
+    let best: Gnome | null = null;
+    for (const g of s.gnomes) {
+      if (Math.abs(x - g.x) > 6 || y > g.y + 1 || y < g.y - 16) continue;
+      if (!best || g.y > best.y) best = g;
+    }
+    return best;
+  }
+
+  /** El encuadre normal enseña el granero y el bancal abierto con la mayor escala entera que quepa. */
   private layout(s: GameState) {
     const { width: w, height: h } = this.app.screen;
     const key = `${w}x${h}|${this.fieldKey}`;
     if (key === this.layoutKey) return;
+    const first = this.layoutKey === '';
     this.layoutKey = key;
 
     const f = fieldSize(s);
@@ -219,20 +377,45 @@ export class SceneView {
     const x1 = FIELD.x + f.cols * FIELD.cell + 12;
     const y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 14, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4);
     const bw = x1 - x0, bh = y1 - y0;
-    this.scale = Math.max(1, Math.floor(Math.min(w / bw, h / bh)));
-    const S = this.scale;
-    this.world.scale.set(S);
-    this.world.position.set(Math.floor((w - bw * S) / 2 - x0 * S), Math.floor((h - bh * S) / 2 - y0 * S));
-
+    this.baseScale = Math.max(1, Math.floor(Math.min(w / bw, h / bh)));
+    this.base = { x: x0 + bw / 2, y: y0 + bh / 2 };
+    // al cambiar el tamaño de la ventana no hace falta un paseo de cámara
+    if (first || this.followId === null) this.cam = { ...this.base };
     this.grass.width = w;
     this.grass.height = h;
-    this.grass.tileScale.set(S);
-    this.grass.tilePosition.set(this.world.x, this.world.y);
+  }
 
-    for (const t of [this.nameTag, this.basketCount, this.houseCount]) {
-      t.style.fontSize = Math.max(12, 4 * S);
-      t.style.stroke = { color: '#1a1c2c', width: Math.max(3, S) };
+  /**
+   * Escala entera y posición del mundo. Siguiendo a un gnomo: un paso más de zum y el gnomo en el centro,
+   * sin que el borde del mundo entre en pantalla. La posición se redondea para que los píxeles no tiemblen.
+   */
+  private camera(s: GameState, dt: number) {
+    const { width: w, height: h } = this.app.screen;
+    const g = this.followId === null ? undefined : s.gnomes.find(g => g.id === this.followId);
+    const B = this.baseScale;
+    const S = g ? (B <= 2 ? B * 2 : B + 1) : B;
+    let tx = this.base.x, ty = this.base.y;
+    if (g) {
+      const hw = w / 2 / S, hh = h / 2 / S;
+      tx = WORLD.w <= hw * 2 ? WORLD.w / 2 : Math.min(Math.max(g.x, hw), WORLD.w - hw);
+      ty = WORLD.h <= hh * 2 ? WORLD.h / 2 : Math.min(Math.max(g.y - 8, hh), WORLD.h - hh);
     }
+    if (S !== this.scale) {
+      this.scale = S;
+      this.world.scale.set(S);
+      this.grass.tileScale.set(S);
+      for (const t of [this.nameTag, this.basketCount, this.houseCount]) {
+        t.style.fontSize = Math.max(12, 4 * S);
+        t.style.stroke = { color: '#1a1c2c', width: Math.max(3, S) };
+      }
+    }
+    const k = 1 - Math.exp(-dt * 6);
+    this.cam.x += (tx - this.cam.x) * k;
+    this.cam.y += (ty - this.cam.y) * k;
+    // de vuelta al encuadre normal, se encaja exacto al llegar
+    if (!g && Math.abs(tx - this.cam.x) < 0.5 / S && Math.abs(ty - this.cam.y) < 0.5 / S) this.cam = { x: tx, y: ty };
+    this.world.position.set(Math.floor(w / 2 - this.cam.x * S), Math.floor(h / 2 - this.cam.y * S));
+    this.grass.tilePosition.set(this.world.x, this.world.y);
   }
 
   private toScreen(x: number, y: number) {
@@ -300,17 +483,24 @@ export class SceneView {
     shadow.position.set(-5, 0);
     const ring = new Sprite(this.atlas.rings[0]);
     ring.position.set(-6, -1);
+    const barrow = new Sprite();
+    barrow.anchor.set(0, 1);
     const body = new Sprite();
     body.anchor.set(0.5, 1);
+    const sack = new Sprite();
+    sack.anchor.set(0, 1);
     const item = new Sprite();
+    const sparkle = new Sprite(this.atlas.sparkle);
+    sparkle.anchor.set(0.5);
     const bubble = new Sprite();
+    bubble.anchor.set(0, 1);
     const crown = new Sprite(this.atlas.crown);
-    root.addChild(shadow, ring, body, item, bubble, crown);
+    root.addChild(shadow, ring, barrow, body, sack, item, sparkle, bubble, crown);
     this.entities.addChild(root);
-    return { root, ring, body, item, bubble, crown };
+    return { root, ring, barrow, body, sack, item, sparkle, bubble, crown, bubbleKey: '', pop: 0 };
   }
 
-  private syncGnomes(s: GameState) {
+  private syncGnomes(s: GameState, dt: number) {
     const alive = new Set<number>();
     for (const g of s.gnomes) {
       alive.add(g.id);
@@ -319,23 +509,42 @@ export class SceneView {
         v = this.makeGnomeView();
         this.gnomes.set(g.id, v);
       }
-      this.drawGnome(s, g, v);
+      this.drawGnome(s, g, v, dt);
     }
     for (const [id, v] of this.gnomes) {
       if (alive.has(id)) continue;
       v.root.destroy({ children: true });
       this.gnomes.delete(id);
     }
+    if (this.followId !== null && !alive.has(this.followId)) this.follow(null);
   }
 
-  private drawGnome(s: GameState, g: Gnome, v: GnomeView) {
+  private drawGnome(s: GameState, g: Gnome, v: GnomeView, dt: number) {
     v.root.position.set(Math.round(g.x), Math.round(g.y));
     v.root.zIndex = g.y;
     v.ring.texture = this.atlas.rings[groupOf(s, g).color];
-    const frames = this.atlas.gnome[g.job][g.pose];
+    const frames = (g.legendary ? this.atlas.legendary : this.atlas.gnome)[g.job][g.pose];
     const idx = frameIndex(g.pose, g.t) % frames.length;
     v.body.texture = frames[idx];
-    v.body.scale.x = g.flip ? -1 : 1;
+    const dir = g.flip ? -1 : 1;
+    v.body.scale.x = dir;
+
+    // la carga: los porteadores con carretilla la empujan delante; los demás llevan un saco que crece
+    const loaded = g.pose === 'carry' && g.carry.length > 0;
+    const pushing = loaded && g.job === 'porteador' && s.tree.carretilla > 0;
+    v.barrow.visible = pushing;
+    v.sack.visible = loaded && !pushing;
+    const bob = idx % 2 === 1 ? -1 : 0;
+    if (pushing) {
+      v.barrow.texture = this.atlas.barrow[Math.floor(g.t * 8) % 2];
+      v.barrow.scale.x = dir;
+      v.barrow.position.set(3 * dir, 2);
+    } else if (loaded) {
+      const n = g.carry.length;
+      v.sack.texture = this.atlas.sacks[n <= 1 ? 0 : n <= 3 ? 1 : 2];
+      v.sack.scale.x = dir;
+      v.sack.position.set(dir, -4 + bob);
+    }
 
     // al recoger, el cultivo asoma en la mano en el segundo fotograma
     const plot = g.task?.kind === 'harvest' && g.task.plot !== undefined ? s.plots[g.task.plot] : null;
@@ -345,16 +554,113 @@ export class SceneView {
       v.item.position.set(g.flip ? -7 : 4, -9);
     }
 
-    v.bubble.visible = g.bubble !== null;
+    // el legendario suelta un destello de vez en cuando sobre el gorro dorado
+    v.sparkle.visible = g.legendary && Math.sin(this.time * 2.1 + g.id * 1.3) > 0.9;
+    if (v.sparkle.visible) v.sparkle.position.set(((g.id * 5 + Math.floor(this.time / 3)) % 7) - 3, -13 + (Math.floor(this.time) % 3));
+
+    const b = g.bubble;
+    const tex = !b ? undefined : b.kind === 'crop' ? (b.crop ? this.atlas.cropBubbles[b.crop] : undefined) : this.atlas.bubbles[b.kind];
+    v.bubble.visible = tex !== undefined;
+    if (b && tex) {
+      const key = b.kind === 'crop' ? `crop:${b.crop}` : b.kind;
+      if (key !== v.bubbleKey) {
+        v.bubbleKey = key;
+        v.bubble.texture = tex;
+        v.pop = 0;
+      }
+      // aparece de golpe: pequeño, grande y a su tamaño
+      v.pop += dt;
+      v.bubble.scale.set(v.pop < 0.05 ? 0.5 : v.pop < 0.1 ? 1.25 : 1);
+      // las zz suben y bajan
+      v.bubble.position.set(1, -15 - (b.kind === 'zz' ? Math.floor(g.t * 2) % 2 : 0));
+    } else {
+      v.bubbleKey = '';
+    }
     // la corona flota sobre el gorro; se aparta mientras hay bocadillo
-    v.crown.visible = s.crowns[g.job] === g.id && g.bubble === null;
+    v.crown.visible = s.crowns[g.job] === g.id && !v.bubble.visible;
     if (v.crown.visible) v.crown.position.set(-3, -23 - (Math.floor(g.t * 2) % 2));
-    if (g.bubble === 'zz') {
-      v.bubble.texture = this.atlas.zz;
-      v.bubble.position.set(5, -20 - (Math.floor(g.t * 2) % 2));
-    } else if (g.bubble === 'alert') {
-      v.bubble.texture = this.atlas.alert;
-      v.bubble.position.set(4, -24);
+  }
+
+  private syncCritters(s: GameState, dt: number) {
+    const alive = new Set<number>();
+    for (const c of s.critters) {
+      alive.add(c.id);
+      let v = this.critters.get(c.id);
+      if (!v) {
+        const root = new Container();
+        const shadow = new Sprite(this.atlas.shadow);
+        shadow.anchor.set(0.5, 0);
+        const body = new Sprite();
+        body.anchor.set(0.5, 1);
+        root.addChild(shadow, body);
+        this.entities.addChild(root);
+        v = { root, shadow, body, state: c.state, stateAge: 0 };
+        this.critters.set(c.id, v);
+      }
+      if (v.state !== c.state) {
+        v.state = c.state;
+        v.stateAge = 0;
+      }
+      v.stateAge += dt;
+      this.drawCritter(c, v);
+    }
+    for (const [id, v] of this.critters) {
+      if (alive.has(id)) continue;
+      v.root.destroy({ children: true });
+      this.critters.delete(id);
+    }
+  }
+
+  private drawCritter(c: Critter, v: CritterView) {
+    const a = this.atlas;
+    v.root.position.set(Math.round(c.x), Math.round(c.y));
+    v.root.zIndex = c.y;
+    v.body.scale.x = c.flip ? -1 : 1;
+    v.body.y = 0;
+    v.shadow.visible = true;
+    const moving = Math.hypot(c.tx - c.x, c.ty - c.y) > 0.5;
+    switch (c.kind) {
+      case 'cuervo': {
+        // vuela por encima de todo; en la parcela picotea a ratos
+        const flying = c.state !== 'stay';
+        v.body.texture = flying ? a.crowFly[Math.floor(this.time * 8) % 2] : a.crowPeck[Math.sin(this.time * 5 + c.id) > 0.4 ? 1 : 0];
+        if (flying) v.body.scale.x = 1;
+        v.shadow.visible = !flying;
+        v.shadow.scale.x = 0.9;
+        if (flying) v.root.zIndex = 10000;
+        break;
+      }
+      case 'caracol':
+        v.body.texture = a.snail[Math.floor(c.t * 1.5) % 2];
+        v.shadow.scale.x = 1.1;
+        break;
+      case 'topo': {
+        // asoma, se queda mirando (a veces se agacha) y se esconde; el montículo se queda
+        const rise = c.state === 'in' ? Math.min(5, Math.floor(v.stateAge * 12))
+          : c.state === 'out' ? Math.max(0, 5 - Math.floor(v.stateAge * 12))
+          : Math.sin(this.time * 1.3 + c.id) > 0.85 ? 2 : 5;
+        v.body.texture = a.mole[rise];
+        v.body.scale.x = 1;
+        v.shadow.visible = false;
+        break;
+      }
+      case 'mariposa':
+        // la simulación ya la pone en el aire (unos 12 px sobre la hierba): se ordena por el suelo que tiene debajo
+        v.body.texture = a.butterfly[c.id % a.butterfly.length][Math.floor(this.time * 10 + c.id) % 2];
+        v.body.y = Math.round(Math.sin(this.time * 4 + c.id) * 1.5);
+        v.shadow.visible = false;
+        v.root.zIndex = c.y + 12;
+        break;
+      case 'rana': {
+        // cayendo del cielo: patas estiradas y sin sombra; luego se va a saltos
+        const falling = c.state === 'in';
+        const hop = falling || ((moving || c.state === 'out') && Math.floor(v.stateAge * 4 + c.id) % 2 === 1);
+        v.body.texture = a.frog[hop ? 1 : 0];
+        v.body.y = hop && !falling ? -2 : 0;
+        v.shadow.visible = !falling;
+        v.shadow.scale.x = 0.7;
+        break;
+      }
     }
   }
 
@@ -377,16 +683,54 @@ export class SceneView {
     }
   }
 
-  private syncFloats(s: GameState, dt: number) {
+  private addParticle(texture: Texture, x: number, y: number, vx: number, vy: number, g: number, life: number) {
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5);
+    this.fx.addChild(sprite);
+    this.particles.push({ sprite, x, y, vx, vy, g, t: 0, life });
+  }
+
+  /** Atiende todos los eventos de la simulación (y los vacía) y anima lo que dejan en pantalla. */
+  private syncEvents(s: GameState, dt: number) {
     for (const e of s.events) {
-      if (e.type !== 'coins') continue;
-      const text = new Text({
-        text: `+${e.amount}`,
-        style: { fontFamily: FONT, fontSize: 8 * this.scale, fontWeight: '600', fill: '#ffcd75', stroke: { color: '#1a1c2c', width: this.scale * 1.2 } },
-      });
-      text.anchor.set(0.5);
-      this.overlay.addChild(text);
-      this.floats.push({ text, x: e.x, y: e.y, t: 0 });
+      switch (e.type) {
+        case 'coins': {
+          const text = new Text({
+            text: `+${e.amount}`,
+            style: { fontFamily: FONT, fontSize: 8 * this.scale, fontWeight: '600', fill: '#ffcd75', stroke: { color: '#1a1c2c', width: this.scale * 1.2 } },
+          });
+          text.anchor.set(0.5);
+          this.overlay.addChild(text);
+          this.floats.push({ text, x: e.x, y: e.y, t: 0 });
+          break;
+        }
+        case 'harvest': {
+          const sprite = new Sprite(this.atlas.items[e.crop]);
+          sprite.anchor.set(0.5, 1);
+          this.fx.addChild(sprite);
+          this.flights.push({ sprite, x: e.x, y: e.y, gnome: e.gnome, t: 0 });
+          break;
+        }
+        case 'deliver':
+          this.doorT = DOOR_OPEN;
+          this.pileCount = Math.min(16, this.pileCount + e.count);
+          break;
+        case 'moment':
+          // efectos pequeños: polvo al tropezar, corazones al saludarse, destellos del legendario
+          if (e.kind === 'tropiezo') {
+            for (let i = 0; i < 5; i++) this.addParticle(this.atlas.dust, e.x + (i - 2) * 2, e.y - 1, (i - 2) * 10, -8 - Math.random() * 8, 40, 0.45);
+          } else if (e.kind === 'saludo') {
+            for (let i = 0; i < 2; i++) this.addParticle(this.atlas.heart, e.x - 3 + i * 6, e.y - 18 - i * 3, (i - 0.5) * 4, -10, 0, 0.9);
+          } else if (e.kind === 'legendario') {
+            for (let i = 0; i < 6; i++) {
+              const ang = (i / 6) * Math.PI * 2;
+              this.addParticle(this.atlas.sparkle, e.x, e.y - 10, Math.cos(ang) * 18, Math.sin(ang) * 18, 0, 0.7);
+            }
+          }
+          break;
+        case 'crown':
+          break;
+      }
     }
     s.events.length = 0;
 
@@ -399,6 +743,65 @@ export class SceneView {
     const done = this.floats.filter(f => f.t > 1.2);
     for (const f of done) f.text.destroy();
     if (done.length) this.floats = this.floats.filter(f => f.t <= 1.2);
+
+    // el cultivo hace un arco hasta la mano del gnomo (que puede estar moviéndose)
+    for (const f of this.flights) {
+      f.t += dt;
+      const k = Math.min(1, f.t / FLIGHT_TIME);
+      const g = s.gnomes.find(g => g.id === f.gnome);
+      const tx = g ? g.x + (g.flip ? -4 : 4) : f.x;
+      const ty = g ? g.y - 6 : f.y;
+      f.sprite.position.set(Math.round(f.x + (tx - f.x) * k), Math.round(f.y + (ty - f.y) * k - Math.sin(k * Math.PI) * 10));
+    }
+    const landed = this.flights.filter(f => f.t >= FLIGHT_TIME);
+    for (const f of landed) f.sprite.destroy();
+    if (landed.length) this.flights = this.flights.filter(f => f.t < FLIGHT_TIME);
+
+    for (const p of this.particles) {
+      p.t += dt;
+      p.vy += p.g * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.sprite.position.set(Math.round(p.x), Math.round(p.y));
+      p.sprite.alpha = Math.max(0, 1 - p.t / p.life);
+    }
+    const gone = this.particles.filter(p => p.t >= p.life);
+    for (const p of gone) p.sprite.destroy();
+    if (gone.length) this.particles = this.particles.filter(p => p.t < p.life);
+  }
+
+  /** Puerta del granero abierta un momento tras cada entrega, y el montón que se va vaciando solo. */
+  private syncBarnDoor(dt: number) {
+    this.doorT = Math.max(0, this.doorT - dt);
+    this.door.visible = this.doorT > 0;
+    // entreabierta al abrirse y al cerrarse
+    if (this.door.visible) this.door.texture = this.atlas.door[this.doorT > DOOR_OPEN - 0.08 || this.doorT < 0.08 ? 0 : 1];
+    this.pileCount = Math.max(0, this.pileCount - dt * 0.3);
+    const n = Math.ceil(this.pileCount);
+    this.pile.texture = this.atlas.pile[n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 9 ? 3 : 4];
+  }
+
+  /** Lluvia de ranas: rayas cayendo sobre todo el huerto. */
+  private syncRain(s: GameState) {
+    const r = this.rain;
+    r.clear();
+    if (s.happening?.kind !== 'ranas') return;
+    for (let i = 0; i < 28; i++) {
+      const x = (i * 97 + Math.floor(i / 3) * 13) % WORLD.w;
+      const y = ((this.time * 150 + i * 71) % (WORLD.h + 20)) - 10;
+      r.rect(x, Math.round(y), 1, 4);
+    }
+    r.fill({ color: 0x94b0c2, alpha: 0.55 });
+  }
+
+  /** Flecha que bota sobre el gnomo seguido, por encima del bocadillo o la corona. */
+  private syncMarker(s: GameState) {
+    const g = this.followId === null ? undefined : s.gnomes.find(g => g.id === this.followId);
+    const v = g && this.gnomes.get(g.id);
+    this.marker.visible = !!v;
+    if (!g || !v) return;
+    const top = v.bubble.visible ? -26 : v.crown.visible ? -25 : -18;
+    this.marker.position.set(Math.round(g.x), Math.round(g.y) + top - (Math.floor(this.time * 3) % 2));
   }
 
   private setHovered(lm: Landmark | null) {
@@ -422,14 +825,16 @@ export class SceneView {
     const pt = this.pointer;
     if (pt) {
       // nombre del gnomo bajo el ratón (va antes que los edificios, que pueden estar detrás)
-      const g = s.gnomes.find(g => Math.abs(pt.x - g.x) <= 6 && pt.y <= g.y && pt.y >= g.y - 16);
+      const g = this.gnomeAt(s, pt.x, pt.y);
       lm = g ? null : this.landmarkAt(pt.x, pt.y);
       if (g) {
         const crowned = s.crowns[g.job] === g.id ? `\n${RANKING.corona(OFICIOS[g.job].nombre.toLowerCase())}` : '';
-        this.nameTag.text = `${g.name}\n${OFICIOS[g.job].nombre} · ${groupOf(s, g).name}${crowned}`;
+        // Pixelify Sans junta «fi» en una ligadura rara; el carácter invisible la rompe
+        this.nameTag.text = `${g.name}\n${OFICIOS[g.job].nombre} · ${groupOf(s, g).name}${crowned}`.replace(/f(?=[il])/g, 'f\u200C');
         const p = this.toScreen(g.x, g.y - 18);
         this.nameTag.position.set(p.x, p.y);
         this.nameTag.visible = true;
+        cursor = 'pointer';
       } else if (lm) {
         const label = lm.label ?? MENUS[lm.menu];
         this.nameTag.text = `${label.lugar}\n${label.sub}`;

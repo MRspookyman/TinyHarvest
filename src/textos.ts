@@ -2,7 +2,7 @@
 import {
   BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, MERCADO_PER_LEVEL, PORTER_CAPACITY,
 } from './sim/config';
-import type { Branch, CropId, JobId, NodeId, Priority } from './sim/types';
+import type { Branch, CropId, JobId, NodeId, Priority, TraitId } from './sim/types';
 
 const pct = (f: number) => `${Math.round(f * 100)} %`;
 
@@ -31,7 +31,7 @@ export const UI = {
   ahora: 'Ahora',
   borrar: 'Borrar partida',
   borrarSeguro: '¿Seguro? Pulsa otra vez',
-  pista: 'Haz clic en la tierra para plantar y en lo maduro para recogerlo. Lo maduro no espera para siempre: si nadie lo recoge, se echa a perder. El granero, la casa de gnomos, el tablón y el árbol viejo abren los menús.',
+  pista: 'Haz clic en la tierra para plantar y en lo maduro para recogerlo. Lo maduro no espera para siempre: si nadie lo recoge, se echa a perder. El granero, la casa de gnomos, el tablón y el árbol viejo abren los menús. Haz clic en un gnomo para ver su ficha y seguirlo.',
 };
 
 /** Menús y los elementos del huerto que los abren. */
@@ -165,4 +165,122 @@ export const LOG = {
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
   primeraCorona: (n: string, oficio: string) => `${n} es el primer «mejor ${oficio} del mes». Nadie sabe quién decide esto, pero ya lleva corona.`,
   corona: (nuevo: string, viejo: string, oficio: string) => `${nuevo} le quita a ${viejo} la corona de mejor ${oficio}. Dice que no le importa, pero no se la quita ni para dormir.`,
+  // vida en el huerto (iteración 6)
+  legendario: (n: string) => `Ha llegado ${n}. Los demás gnomos se peinan la barba a toda prisa.`,
+  comer: (n: string) => `${n} se ha comido una zanahoria «para comprobar que estaba buena». Lo estaba.`,
+  pensar: (n: string) => `${n} se ha parado a pensar. No ha dicho en qué.`,
+  disputa: (n: string) => `${n} llega a su parcela y alguien se le ha adelantado. Lo apunta en su libreta de rencores.`,
+  tropiezo: (n: string) => `${n} se ha tropezado con sus propias botas. Asegura que la tierra se ha movido.`,
+  charla: (a: string, b: string) => `${a} y ${b} se paran a comentar lo mucho que trabajan.`,
+  cartas: (a: string, b: string) => `${a} y ${b} juegan a las cartas. Nadie se acuerda de las reglas.`,
+  sentarse: (n: string) => `${n} se sienta en la hierba a ver crecer las cosas.`,
+  mariposa: (n: string) => `${n} persigue una mariposa. La mariposa va ganando.`,
+  cuervo: 'Un cuervo aterriza en el bancal y mira las cosechas con mucho interés.',
+  cuervoCome: (uno: string) => `El cuervo se ha zampado ${uno} y se va sin pagar.`,
+  cuervoFuera: (n: string) => `${n} espanta al cuervo agitando los brazos. El cuervo se ofende.`,
+  caracol: 'Un caracol cruza el bancal. Lleva prisa, a su manera.',
+  topo: 'Un topo asoma en el bancal, mira alrededor y decide quedarse un rato.',
+  topoFuera: 'El topo se va por donde vino. Deja un agujero y ningún comentario.',
+  ranas: 'Llueven ranas. Los gnomos lo encuentran normal para ser martes.',
+  sindicato: 'El sindicato gnomo pide más café. Todos paran con los brazos cruzados.',
+  sindicatoFin: 'Acaba la huelga: los gnomos vuelven al tajo con la taza en la mano.',
+  espantapajaros: (n: string) => `${n} ha decidido que hoy es espantapájaros. Nadie se atreve a llevarle la contraria.`,
+};
+
+/** Rasgos de carácter: se ven en la ficha del gnomo. */
+export const RASGOS: Record<TraitId, { nombre: string; desc: string }> = {
+  perezoso: { nombre: 'Perezoso', desc: 'Anda un poco más despacio y a veces se para a pensar. Dice que es filosofía.' },
+  nervioso: { nombre: 'Nervioso', desc: 'Anda más rápido que nadie y tropieza más que nadie.' },
+  gloton: { nombre: 'Glotón', desc: 'De vez en cuando se come una zanahoria recién recogida. Para probarla.' },
+  cotilla: { nombre: 'Cotilla', desc: 'Se para a charlar con todo el que se cruza. Se sabe la vida de todos.' },
+  dormilon: { nombre: 'Dormilón', desc: 'Echa más siestas, y más largas. Ronca en tres tonos.' },
+  currante: { nombre: 'Currante', desc: 'Trabaja más rápido y casi nunca se sienta. Los demás lo miran raro.' },
+};
+
+/** Gnomo legendario: muy raro; gorro dorado y trabaja mejor. */
+export const LEGENDARIO = {
+  nombre: 'Legendario',
+  desc: 'Un gnomo de leyenda: anda y trabaja un 25 % mejor. Nadie sabe de dónde ha salido.',
+  titulos: ['el Magnífico', 'el Incansable', 'el de las Mil Cosechas', 'el Grande', 'el Deslumbrante', 'el Sabio del Surco'],
+};
+
+/** Ficha de un gnomo: se abre al pulsarlo en el huerto, en el tablón o en el ranking. */
+export const FICHA = {
+  titulo: (n: string) => `Ficha de ${n}`,
+  cerrar: 'Cerrar la ficha',
+  ver: 'Ver ficha',
+  verDe: (n: string) => `Ver la ficha de ${n}`,
+  ayudaTablon: 'Doble clic en un gnomo para ver su ficha.',
+  grupo: 'Grupo',
+  rasgo: 'Carácter',
+  ahora: 'Ahora',
+  mover: 'Mover a…',
+  frase: 'Frase del día',
+  stats: {
+    tasks: 'tareas',
+    value: 'monedas',
+    plants: 'siembras',
+    delivered: 'entregas',
+    walked: 'pasos',
+    naps: 'siestas',
+    complaints: 'quejas',
+  },
+  /** lo que está haciendo; `uno` es «un tomate», `otro` el nombre de pila del otro gnomo */
+  haciendo: {
+    vaARecoger: (uno: string) => `Va a por ${uno}`,
+    recogiendo: (uno: string) => `Recogiendo ${uno} con mucho cuidado`,
+    vaAPlantar: (uno: string) => `Va a plantar ${uno}`,
+    plantando: (uno: string) => `Plantando ${uno}. Le está susurrando algo`,
+    vaAlGranero: 'Lleva la cosecha al granero',
+    entregando: 'Entregando en el granero',
+    vaALaCesta: 'Lleva lo recogido a la cesta',
+    cestaLlena: 'Esperando con el saco lleno: la cesta no da para más',
+    vaAPorCesta: 'Va a por lo que haya en la cesta',
+    paseando: 'Paseando sin rumbo fijo',
+    silbando: 'Paseando y silbando bajito',
+    descansando: 'Recuperando el aliento',
+    siesta: 'Echando la siesta',
+    queja: 'Quejándose a quien quiera oírle',
+    sentado: 'Sentado, viendo crecer las zanahorias',
+    cartas: (otro: string | null) => (otro ? `Jugando a las cartas con ${otro}` : 'Jugando a las cartas solo. Va perdiendo'),
+    mariposa: 'Persiguiendo una mariposa',
+    charla: (otro: string | null) => (otro ? `Charlando con ${otro}` : 'Charlando con una lechuga'),
+    saludo: (otro: string | null) => (otro ? `Saludando a ${otro}` : 'Saludando a nadie en particular'),
+    tropiezo: 'Levantándose del suelo con mucha dignidad',
+    cuervo: 'Espantando a un cuervo',
+    espantapajaros: 'Haciendo de espantapájaros. Muy convencido',
+    huelga: 'En huelga: exige más siestas',
+    aplaudiendo: 'Aplaudiendo algo con entusiasmo',
+    pensando: 'Pensando. O eso dice',
+    comiendo: 'Comiéndose una zanahoria «para probarla»',
+    decidiendo: 'Decidiendo qué hacer con su vida',
+  },
+  /** frases del día: cambian cada minuto; las del rasgo se mezclan con las comunes */
+  frases: [
+    'Hoy siento que soy uno con el rastrillo.',
+    'Una zanahoria me ha mirado raro.',
+    'Si la tierra no se mueve, yo tampoco.',
+    'He soñado con una calabaza que me debía dinero.',
+    'La cesta y yo tenemos una relación complicada.',
+    'No es barro. Es experiencia.',
+    'Mi gorro es más alto que el tuyo. Que conste.',
+    'Plantar es fácil. Lo difícil es esperar.',
+    'Hoy no se me ha olvidado nada. Creo.',
+    'Las lombrices me entienden.',
+    'El trigo susurra cosas. No pienso repetirlas.',
+    'Algún día tendré un huerto propio. Con sillón.',
+    'Un tomate maduro es un tomate feliz.',
+    'Me he encontrado una piedra preciosa. Era una piedra.',
+    'Si el granero se llena, pediremos otro granero.',
+    'Los martes huelen a abono.',
+    'Nadie me ha dicho que no puedo hablar con las semillas.',
+  ],
+  frasesRasgo: {
+    perezoso: ['Correr es para las nubes.', 'Estoy descansando por adelantado.', 'Mañana empiezo. Fijo.'],
+    nervioso: ['¿Has oído eso? Yo sí. Creo.', 'Voy rápido porque la prisa me persigue.', 'Me he tropezado dos veces. Era la misma piedra.'],
+    gloton: ['Esa zanahoria se ha caído sola en mi boca.', 'El hambre es un estado de ánimo.', 'Probar no es comer. Es control de calidad.'],
+    cotilla: ['¿Te has enterado de lo de Anselmo? Yo tampoco, pero ya me enteraré.', 'Yo no cotilleo: informo.', 'Las paredes del granero oyen. Y yo con ellas.'],
+    dormilon: ['Cinco minutitos más.', 'Duermo de pie para ahorrar tiempo.', 'He soñado que trabajaba. Qué cansancio.'],
+    currante: ['¿Descanso? ¿Eso se come?', 'He plantado antes de que saliera el sol. El sol ha llegado tarde.', 'Si paro, me oxido.'],
+  } satisfies Record<TraitId, string[]>,
 };

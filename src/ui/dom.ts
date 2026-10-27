@@ -14,6 +14,8 @@ export interface GameActions {
   deleteGroup(id: number): void;
   moveGnome(gnomeId: number, groupId: number): void;
   selectSeed(crop: CropId): void;
+  /** abre la ficha de un gnomo (y cierra la ventana que haya, para verlo en el huerto) */
+  showGnome(id: number): void;
   reset(): void;
 }
 

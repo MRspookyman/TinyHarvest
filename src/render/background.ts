@@ -76,13 +76,24 @@ export function drawBackground(): HTMLCanvasElement {
   return c;
 }
 
-/** Bancal continuo de cols × rows con surcos de lado a lado. Se coloca en (FIELD.x - 2, FIELD.y - 2). */
-export function drawField(cols: number, rows: number): HTMLCanvasElement {
+/** Oscurece un color #rrggbb multiplicando sus canales: la tierra abonada se ve más negra y rica. */
+function darken(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) * k).toString(16).padStart(2, '0');
+  return `#${ch(16)}${ch(8)}${ch(0)}`;
+}
+
+/**
+ * Bancal continuo de cols × rows con surcos de lado a lado. Se coloca en (FIELD.x - 2, FIELD.y - 2).
+ * abono (0–5): cada nivel oscurece un poco la tierra y le echa más grumos de mantillo.
+ */
+export function drawField(cols: number, rows: number, abono = 0): HTMLCanvasElement {
   const fw = cols * FIELD.cell, fh = rows * FIELD.cell;
   const c = makeCanvas(fw + 4, fh + 4);
   const ctx = c.getContext('2d')!;
+  const k = 1 - 0.05 * abono;
   const rect = (x: number, y: number, w: number, h: number, color: string) => {
-    ctx.fillStyle = color;
+    ctx.fillStyle = darken(color, k);
     ctx.fillRect(x + 2, y + 2, w, h);
   };
   rect(-2, -2, fw + 4, fh + 4, '#3e2519');
@@ -99,11 +110,17 @@ export function drawField(cols: number, rows: number): HTMLCanvasElement {
   for (let i = 0; i < (fw * fh) / 31; i++) {
     rect(Math.floor(sr() * fw), Math.floor(sr() * fh), 1, 1, sr() < 0.6 ? '#6b4430' : '#a06a48');
   }
-  // la hierba se come el borde del bancal
+  // grumos de mantillo
+  for (let i = 0; i < ((fw * fh) / 220) * abono; i++) rect(Math.floor(sr() * fw), Math.floor(sr() * fh), 1, 1, '#3e2519');
+  // la hierba se come el borde del bancal (la hierba no se abona: sin oscurecer)
   const er = rng(23);
   const tuft = (x: number, y: number) => {
-    rect(x, y, 1, 1, '#38b764');
-    if (er() < 0.5) rect(x, y - 1, 1, 1, '#5fcf72');
+    ctx.fillStyle = '#38b764';
+    ctx.fillRect(x + 2, y + 2, 1, 1);
+    if (er() < 0.5) {
+      ctx.fillStyle = '#5fcf72';
+      ctx.fillRect(x + 2, y + 1, 1, 1);
+    }
   };
   for (let x = -2; x < fw + 2; x++) {
     if (er() < 0.35) tuft(x, -2);

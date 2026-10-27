@@ -10,6 +10,7 @@ import {
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
 import type { GameActions } from './ui/dom';
+import { createGnomeCard } from './ui/gnomeCard';
 import { createHud } from './ui/hud';
 import { createDiaryMenu } from './ui/menus/diary';
 import { createGroupsMenu } from './ui/menus/groups';
@@ -56,12 +57,17 @@ async function start() {
     selectSeed: crop => {
       if (cropUnlocked(state, crop)) seed = crop;
     },
+    showGnome: id => {
+      windows.close();
+      card.open(id);
+    },
     reset: () => {
       clearGame();
       state = createState(rng);
       seed = 'zanahoria';
       scene.reset();
       windows.close();
+      card.close();
     },
   };
 
@@ -70,12 +76,15 @@ async function start() {
     grupos: createGroupsMenu(actions),
     arbol: createTreeMenu(actions),
     diario: createDiaryMenu(actions),
-    ranking: createRankingMenu(),
+    ranking: createRankingMenu(actions),
   });
   const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m));
+  // después de las ventanas: su Esc va primero
+  const card = createGnomeCard(stageEl, actions, id => scene.follow(id));
 
   scene.onPlotClick = id => clickPlot(state, id, seed);
   scene.onOpenMenu = m => windows.open(m);
+  scene.onGnomeClick = id => card.open(id);
 
   let sinceSave = 0;
   app.ticker.add(ticker => {
@@ -85,6 +94,7 @@ async function start() {
     scene.sync(state, dt);
     hud.update(state, seed, windows.current);
     windows.update(state);
+    card.update(state);
     sinceSave += dt;
     if (sinceSave >= SAVE_EVERY) {
       sinceSave = 0;
