@@ -1,9 +1,9 @@
-// Lo que está siempre en pantalla: monedas arriba, barra de accesos y semillas abajo, y el último aviso del diario.
+// Lo que está siempre en pantalla: monedas y organización arriba, barra de accesos y semillas abajo, y el último aviso del diario.
 import { CROP_IDS } from '../sim/config';
 import { cropUnlocked, cropValue } from '../sim/sim';
-import type { CropId, GameState } from '../sim/types';
+import type { CropId, GameState, OrgPart } from '../sim/types';
 import { cropIcons, menuIcons } from '../render/icons';
-import { CULTIVOS, MENUS, UI, type MenuId } from '../textos';
+import { CULTIVOS, MENUS, ORG, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
@@ -11,14 +11,48 @@ export interface Hud {
 }
 
 const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'diario'];
+const ORG_PARTS = Object.keys(ORG.partes) as OrgPart[];
+/** por debajo de esto, una parte da pista; la calidad colorea el multiplicador y las barras */
+const ORG_OK = 0.9;
+const quality = (f: number) => (f < 0.5 ? 'bad' : f < 0.8 ? 'mid' : 'good');
 
 export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: GameActions, open: (m: MenuId) => void): Hud {
   topbar.innerHTML = `
     <h1>${UI.titulo}</h1>
     <div class="stats">
       <span class="stat"><i class="coin" aria-hidden="true"></i><b data-coins>0</b> ${UI.monedas}</span>
+      <div class="org" data-org>
+        <button type="button" class="stat org-btn" aria-expanded="false" aria-controls="org-pop" title="${esc(ORG.boton)}">
+          <i class="org-icon" aria-hidden="true"></i><b data-org-mult></b>
+        </button>
+        <div class="org-pop" id="org-pop" role="tooltip">
+          <h3>${ORG.titulo}</h3>
+          <p class="muted">${ORG.ayuda}</p>
+          <ul>
+            ${ORG_PARTS.map(p => `<li><span>${ORG.partes[p]}</span><i class="org-bar"><i data-org-part="${p}"></i></i></li>`).join('')}
+          </ul>
+          <p class="org-tip" data-org-tip></p>
+        </div>
+      </div>
       <span class="stat"><b data-gnomes>0</b> ${UI.gnomos}</span>
     </div>`;
+
+  // el detalle sale al pasar el ratón (CSS) y al pulsar, que es lo que hay en pantallas táctiles
+  const org = topbar.querySelector<HTMLElement>('[data-org]')!;
+  const orgBtn = org.querySelector<HTMLButtonElement>('.org-btn')!;
+  const setOrgOpen = (on: boolean) => {
+    org.classList.toggle('open', on);
+    orgBtn.setAttribute('aria-expanded', String(on));
+  };
+  orgBtn.addEventListener('click', () => setOrgOpen(!org.classList.contains('open')));
+  document.addEventListener('pointerdown', e => {
+    if (!org.contains(e.target as Node)) setOrgOpen(false);
+  });
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !org.classList.contains('open')) return;
+    setOrgOpen(false);
+    e.preventDefault();
+  });
 
   const bar = document.createElement('nav');
   bar.className = 'toolbar';
@@ -63,6 +97,21 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       setText(topbar.querySelector('[data-coins]'), String(Math.floor(s.coins)));
       setText(topbar.querySelector('[data-gnomes]'), String(s.gnomes.length));
       hint.hidden = s.gnomes.length > 0;
+
+      // organización: el multiplicador coloreado por la media de las partes, y pista para la peor
+      const parts = s.org.parts;
+      const mean = ORG_PARTS.reduce((sum, p) => sum + parts[p], 0) / ORG_PARTS.length;
+      setText(topbar.querySelector('[data-org-mult]'), ORG.valor(s.org.mult));
+      if (org.dataset.q !== quality(mean)) org.dataset.q = quality(mean);
+      let worst = ORG_PARTS[0];
+      for (const p of ORG_PARTS) {
+        if (parts[p] < parts[worst]) worst = p;
+        const bar = org.querySelector<HTMLElement>(`[data-org-part="${p}"]`)!;
+        const width = `${Math.round(parts[p] * 100)}%`;
+        if (bar.style.width !== width) bar.style.width = width;
+        if (bar.dataset.q !== quality(parts[p])) bar.dataset.q = quality(parts[p]);
+      }
+      setText(org.querySelector('[data-org-tip]'), parts[worst] < ORG_OK ? ORG.consejo[worst] : ORG.todoBien);
 
       for (const m of MENU_ORDER) toggleClass(bar.querySelector(`[data-menu="${m}"]`), 'active', openMenu === m);
       for (const c of CROP_IDS) {

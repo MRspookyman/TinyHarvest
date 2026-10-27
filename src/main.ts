@@ -85,6 +85,7 @@ async function start() {
   scene.onPlotClick = id => clickPlot(state, id, seed);
   scene.onOpenMenu = m => windows.open(m);
   scene.onGnomeClick = id => card.open(id);
+  const toolbar = stageEl.querySelector<HTMLElement>('.toolbar')!;
 
   let sinceSave = 0;
   app.ticker.add(ticker => {
@@ -95,6 +96,11 @@ async function start() {
     hud.update(state, seed, windows.current);
     windows.update(state);
     card.update(state);
+    // la cámara encuadra el huerto en lo que no tapan la barra de abajo ni la ficha (D13); se aplica al siguiente fotograma
+    scene.setInsets({
+      right: card.el.hidden ? 0 : stageEl.clientWidth - card.el.offsetLeft,
+      bottom: stageEl.clientHeight - toolbar.offsetTop,
+    });
     sinceSave += dt;
     if (sinceSave >= SAVE_EVERY) {
       sinceSave = 0;
@@ -110,9 +116,9 @@ async function start() {
 
 /**
  * Solo en desarrollo, para revisar sin jugar desde cero:
- * ?monedas=500&recolectores=3&sembradores=1&porteadores=1&bancal=4&casa=2
- * (porteadores y bancal compran también lo necesario en el árbol; casa amplía la casa de gnomos N niveles,
- * y si los gnomos pedidos no caben, se amplía lo que haga falta)
+ * ?monedas=500&recolectores=3&sembradores=1&porteadores=1&regadores=1&guardianes=1&bancal=4&casa=2
+ * (porteadores, regadores, guardianes y bancal compran también lo necesario en el árbol; casa amplía la casa de
+ * gnomos N niveles, y si los gnomos pedidos no caben, se amplía lo que haga falta)
  */
 function applyDevParams(state: GameState) {
   const q = new URLSearchParams(location.search);
@@ -121,8 +127,15 @@ function applyDevParams(state: GameState) {
     state.coins += houseCost(state);
     return buyHouse(state);
   };
-  if (n('porteadores')) {
-    for (const id of ['botas', 'saco', 'porteadores'] as const) {
+  const needs = {
+    porteadores: ['botas', 'saco', 'porteadores'],
+    regadores: ['trigo', 'abono', 'regadores'],
+    guardianes: ['botas', 'guardianes'],
+  } as const;
+  for (const [param, nodes] of Object.entries(needs)) {
+    if (!n(param)) continue;
+    for (const id of nodes) {
+      if (state.tree[id] > 0) continue;
       state.coins += nodeCost(state, id);
       buyNode(state, id);
     }
@@ -132,7 +145,9 @@ function applyDevParams(state: GameState) {
     buyNode(state, 'bancal');
   }
   for (let i = 0; i < n('casa'); i++) freeHouse();
-  const jobs = { recolectores: 'recolector', sembradores: 'sembrador', porteadores: 'porteador' } as const;
+  const jobs = {
+    recolectores: 'recolector', sembradores: 'sembrador', porteadores: 'porteador', regadores: 'regador', guardianes: 'guardian',
+  } as const;
   for (const [param, job] of Object.entries(jobs)) {
     for (let i = 0; i < n(param); i++) {
       while (state.gnomes.length >= houseCapacity(state) && !houseMaxed(state)) freeHouse();

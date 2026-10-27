@@ -1,4 +1,4 @@
-// Ficha de un gnomo: panel pequeño en una esquina que no tapa el huerto. Mientras está abierta, la cámara lo sigue.
+// Ficha de un gnomo: panel estrecho en una esquina, plegable, para no tapar el huerto. Mientras está abierta, la cámara lo sigue.
 import { GROUP_PALETTE } from '../sim/config';
 import type { GameState, Gnome } from '../sim/types';
 import { crownIcon, jobIcons, legendIcon, traitIcons } from '../render/icons';
@@ -7,6 +7,8 @@ import { esc, html, pixelImg, type GameActions } from './dom';
 import { PX_PER_STEP } from './menus/ranking';
 
 export interface GnomeCard {
+  /** el panel, para que la cámara sepa cuánto tapa */
+  readonly el: HTMLElement;
   open(id: number): void;
   close(): void;
   readonly current: number | null;
@@ -14,6 +16,7 @@ export interface GnomeCard {
 }
 
 const STATS = Object.keys(FICHA.stats) as (keyof typeof FICHA.stats)[];
+const FOLD_KEY = 'tiny-harvest:ficha-plegada';
 
 /** Nombre de pila: «Pepín» de «Pepín Barbatiesa». */
 const firstName = (s: GameState, id: number | undefined) => s.gnomes.find(g => g.id === id)?.name.split(' ')[0] ?? null;
@@ -57,6 +60,14 @@ function doing(s: GameState, g: Gnome): string {
     case 'strike': return H.huelga;
     case 'cheer': return H.aplaudiendo;
     case 'think': return H.pensando;
+    case 'water': {
+      if (!plot || plot.stage < 0) return H.regandoTierra;
+      const uno = CULTIVOS[plot.crop].uno;
+      return working ? H.regando(uno) : H.vaARegar(uno);
+    }
+    case 'refill': return working ? H.llenando : H.vaAlPozo;
+    case 'patrol': return H.patrullando;
+    case 'watch': return bubble === 'eye' ? H.haVisto : H.vigilando;
   }
 }
 
@@ -80,8 +91,12 @@ export function createGnomeCard(
     <aside class="gnome-card" aria-labelledby="gnome-card-name" hidden>
       <header class="card-head">
         <div class="card-title" data-head></div>
-        <button type="button" class="win-close" aria-label="${FICHA.cerrar}" title="${FICHA.cerrar}">×</button>
+        <div class="card-btns">
+          <button type="button" class="win-close card-fold" data-fold aria-expanded="true"></button>
+          <button type="button" class="win-close" data-close aria-label="${FICHA.cerrar}" title="${FICHA.cerrar}">×</button>
+        </div>
       </header>
+      <p class="card-now"><span>${FICHA.ahora}</span><b data-now></b></p>
       <div class="card-body" data-body></div>
       <label class="prio card-move">
         <span>${FICHA.mover}</span>
@@ -90,13 +105,38 @@ export function createGnomeCard(
     </aside>`);
   host.append(el);
   const head = el.querySelector<HTMLElement>('[data-head]')!;
+  const now = el.querySelector<HTMLElement>('[data-now]')!;
   const body = el.querySelector<HTMLElement>('[data-body]')!;
   const move = el.querySelector<HTMLSelectElement>('[data-move]')!;
+  const foldBtn = el.querySelector<HTMLButtonElement>('[data-fold]')!;
   let current: number | null = null;
   let sig = '';
   let moveSig = '';
 
-  el.querySelector('.win-close')!.addEventListener('click', () => close());
+  // plegada solo enseña el nombre y lo que hace, para ver más huerto; se recuerda entre partidas
+  const setFolded = (folded: boolean) => {
+    el.classList.toggle('folded', folded);
+    foldBtn.textContent = folded ? '+' : '−';
+    foldBtn.title = folded ? FICHA.desplegar : FICHA.plegar;
+    foldBtn.setAttribute('aria-label', foldBtn.title);
+    foldBtn.setAttribute('aria-expanded', String(!folded));
+    try {
+      localStorage.setItem(FOLD_KEY, folded ? '1' : '0');
+    } catch {
+      // sin almacenamiento: se pliega igual, solo que no se recuerda
+    }
+  };
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(FOLD_KEY);
+  } catch {
+    // sin almacenamiento
+  }
+  // la primera vez, plegada si la pantalla es baja (portátiles pequeños, tabletas en horizontal)
+  setFolded(stored === null ? window.innerHeight < 700 : stored === '1');
+  foldBtn.addEventListener('click', () => setFolded(!el.classList.contains('folded')));
+
+  el.querySelector('[data-close]')!.addEventListener('click', () => close());
   move.addEventListener('change', () => {
     if (current !== null) actions.moveGnome(current, Number(move.value));
     move.blur();
@@ -133,14 +173,13 @@ export function createGnomeCard(
         <p>${oficio}${crowned ? ` · ${RANKING.corona(oficio.toLowerCase())}` : ''}</p>
         ${g.legendary ? `<span class="badge legend" title="${esc(LEGENDARIO.desc)}">${pixelImg(legendIcon, 'px legend-icon')}${LEGENDARIO.nombre}</span>` : ''}
       </div>`;
+    now.textContent = doing(s, g);
     body.innerHTML = `
       <dl class="card-facts">
         <dt>${FICHA.grupo}</dt>
         <dd><i class="dot" style="background:${group ? GROUP_PALETTE[group.color] : 'transparent'}"></i>${esc(group?.name ?? '')}</dd>
         <dt>${FICHA.rasgo}</dt>
         <dd>${pixelImg(traitIcons[g.trait], 'px trait-icon')}<b>${RASGOS[g.trait].nombre}</b> <span class="muted">${RASGOS[g.trait].desc}</span></dd>
-        <dt>${FICHA.ahora}</dt>
-        <dd class="card-now">${doing(s, g)}</dd>
       </dl>
       <ul class="card-stats">
         ${STATS.map(k => `<li><b>${statValue(g, k)}</b> ${FICHA.stats[k]}</li>`).join('')}
@@ -149,6 +188,7 @@ export function createGnomeCard(
   }
 
   return {
+    el,
     open,
     close,
     get current() {

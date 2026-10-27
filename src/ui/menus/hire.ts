@@ -1,5 +1,5 @@
 // Granero: ampliar la casa de gnomos y contratar gnomos.
-import { JOB_IDS } from '../../sim/config';
+import { JOB_IDS, JOB_NODE } from '../../sim/config';
 import { hireCost, houseCapacity, houseCost, houseMaxed, jobUnlocked } from '../../sim/sim';
 import type { GameState, JobId } from '../../sim/types';
 import { houseIcon, jobIcons } from '../../render/icons';
@@ -18,16 +18,20 @@ export function createHireMenu(actions: GameActions): Menu {
         </div>
         <button type="button" class="btn" data-buy-house></button>
       </article>
-      ${JOB_IDS.map(j => `
+      ${JOB_IDS.map(j => {
+        // el oficio que se desbloquea en el árbol dice en qué nodo
+        const node = JOB_NODE[j];
+        return `
         <article class="job" data-job="${j}">
           ${pixelImg(jobIcons[j], 'px job-icon')}
           <div class="job-text">
             <header><b>${OFICIOS[j].nombre}</b><span class="muted" data-count></span></header>
             <p>${OFICIOS[j].desc}</p>
-            <p class="lock-note" data-lock hidden>${UI.bloqueadaEnArbol}: «${ARBOL.porteadores.nombre}».</p>
+            ${node ? `<p class="lock-note" data-lock hidden>${UI.bloqueadaEnArbol}: «${ARBOL[node].nombre}».</p>` : ''}
           </div>
           <button type="button" class="btn" data-hire="${j}"></button>
-        </article>`).join('')}
+        </article>`;
+      }).join('')}
     </div>`);
 
   el.addEventListener('click', e => {
@@ -60,7 +64,8 @@ export function createHireMenu(actions: GameActions): Menu {
         const jobCost = hireCost(s, j);
         const btn = card.querySelector<HTMLButtonElement>('[data-hire]');
         card.classList.toggle('locked', !unlocked);
-        card.querySelector<HTMLElement>('[data-lock]')!.hidden = unlocked;
+        const lock = card.querySelector<HTMLElement>('[data-lock]');
+        if (lock) lock.hidden = unlocked;
         setText(card.querySelector('[data-count]'), UI.tienes(s.gnomes.filter(g => g.job === j).length));
         setText(btn, full ? CASA.lleno : UI.contratar(jobCost));
         setDisabled(btn, !unlocked || full || s.coins < jobCost);

@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.12 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.13 · **Última actualización:** 2026-10-27
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -447,7 +447,47 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 - **Se cumple el objetivo** (hueco medio ≤ 15 s y máximo ≤ 30 s incluso al principio, nada pasa del 40 %).
 - **Con 40 gnomos hay unos 2 momentos por segundo** (unos 3 por gnomo y minuto). Por eso los bocadillos se han acortado. Si al jugar resulta agobiante, se baja `LIFE.greet` y la probabilidad de siesta en `config.ts`.
 - **El ritmo apenas cambia:** árbol completo en 60,5 min (activo) y 67,9 min (tranquilo), frente a 59 y 65 antes. Los rasgos y las huelgas añaden 1,5–3 min.
-- **Pendiente visto en la prueba:** la ficha tapa el borde derecho del bancal a 1280×800 (el gnomo seguido sigue centrado). La barra de abajo tapa las esquinas inferiores de la valla con el bancal al máximo.
+- **Pendiente visto en la prueba:** la ficha tapa el borde derecho del bancal a 1280×800 (el gnomo seguido sigue centrado). La barra de abajo tapa las esquinas inferiores de la valla con el bancal al máximo. *(Resuelto en la iteración 7, D13.)*
+
+### Iteración 7: contenido (hecha y probada)
+
+| Cambio | Detalle |
+|---|---|
+| **Regador** (C1) | Gorro azul y regadera. Llena la regadera en el **pozo** (6 riegos) y riega parcelas que están creciendo. Una parcela regada se ve más oscura y crece un 40 % más rápido durante 90 s. El **tomate y el melón tienen sed**: secos crecen al 30 % y se les ven grietas en la tierra. Se desbloquea con *Regadores* (cuelga de abono). La *Regadera* (3 niveles) hace que el riego dure más y sea más rápido. |
+| **Guardián** (C3) | Gorro gris con bastón y farol. Patrulla alrededor del bancal y a ratos vigila al pie de su **atalaya**. Cuando ve un cuervo o un topo (ojo en el bocadillo), va a espantarlo. Así los demás no dejan su trabajo y los topos no bloquean parcelas. Se desbloquea con *Guardianes* (cuelga de botas). El *Silbato* (3 niveles) hace que vea más lejos y ande más rápido. |
+| **Fresa y melón** (C2) | *Fresa*: vale 8, crece en 24 s y aguanta solo 10 s madura; rinde con muchos recolectores. *Melón*: vale 60, crece en 300 s, aguanta 60 s y tiene sed; es el mejor con pocos recolectores y regadores. |
+| **Multiplicador de organización** (B6) | Lo que se vende se multiplica por hasta ×1,30 según cómo va la cadena en los últimos 2 minutos. Cuenta cuatro cosas: *cosecha a tiempo*, *cesta sin atascos*, *tierra sembrada* y *riego de los sedientos*. La peor de las cuatro pesa la mitad, así que un cuello de botella se nota. En la barra de arriba sale «×1,18» con un desplegable de barras y una pista sobre lo que peor va. |
+| **Más sitio para mirar** (D13) | La ficha es más estrecha y se puede plegar a nombre + «Ahora». La cámara encuadra el huerto en el hueco que dejan la ficha y la barra de abajo, así que la valla del bancal al máximo ya no queda tapada. El aviso del diario pasa arriba. |
+| **Cada mejora se ve** | El pozo gana tejado, cubo, flores y hiedra con la regadera; la atalaya gana bandera, campana y banderines con el silbato; el cartel del bancal tiene tablas para fresa y melón. |
+| **Partida** | Versión 5, con migración desde la 4. |
+
+**Prueba (2026-10-27):** `tsc`, los 46 tests (5 nuevos) y `npm run build` pasan. En Chrome a 1280×800 se ha visto lo siguiente, sin errores en la consola:
+- Regadores llenando en el pozo y regando, con el bocadillo de la gota.
+- Tierra regada más oscura y grietas en el melón seco.
+- El guardián patrullando y en la atalaya.
+- Fresas que se pudren enseguida si nadie las recoge.
+- La valla entera por encima de la barra.
+- El multiplicador con su desplegable: con el bancal lleno de melón y solo 2 regadores, el riego sale en rojo y la pista dice «hacen falta regadores».
+
+**Resultados del bot (`npm run balance`)**
+
+El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo):
+
+| Plantilla | Zanahoria | Trigo | Fresa | Tomate | Calabaza | Melón |
+|---|---|---|---|---|---|---|
+| 2 rec + 2 sem | 2,9 | 5,2 | 3,5 | 2,0 | **9,9** | 0,0 |
+| 4 + 3 + 2 regadores | 5,5 | 10,2 | 7,2 | 16,2 | 15,8 | **20,9** |
+| 8 + 5 | 10,9 | **17,0** | 14,3 | 4,2 | 10,5 | 0,0 |
+| 12 + 8 + 4 regadores | 15,0 | 21,3 | 20,3 | **22,3** | 17,4 | 21,0 |
+| 20 + 12 | 21,1 | 20,4 | **21,2** | 4,4 | 10,6 | 0,0 |
+| 26 + 12 | **22,1** | 20,2 | 21,3 | 4,4 | 10,5 | 0,0 |
+
+- **Los seis cultivos son el mejor en alguna plantilla.** Tomate y melón solo con regadores: sin agua apenas rinden.
+- **Regador:** con 12 + 8 y el bancal mezclado, 2 regadores suben de 14,0 a 20,1 monedas/s.
+- **Guardián:** con un cuervo cada 10 s y un topo cada 15 s, otros gnomos dejan su trabajo para espantar 10–38 veces sin guardián y 1–14 con él. Los topos bloquean parcelas 480 s sin guardián y 94–191 s con él. Cuando no hay nadie libre salva la cosecha (2 cultivos comidos sin él, 0 con él).
+- **Organización:** bien llevado ×1,29; regular (melón y tomate sin regadores) ×1,11; mal llevado (atasco en la cesta, o sin sembradores) ×1,07–1,08. La primera versión, con la media sola, no bajaba de ×1,14; por eso la peor parte pesa ahora la mitad.
+- **Ritmo:** árbol completo en 64 min (activo) y 70 min (tranquilo). El hueco más largo sin nada que comprar sube a 7 min, entre el melón y el último nodo.
+- **Vida en el huerto:** los objetivos de la iteración 6 se siguen cumpliendo (hueco medio de 5,5 s al principio, máximo 21,9 s).
 
 ---
 
@@ -477,15 +517,15 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 | B3 | **Contratar más caro** (×1,30 por gnomo y árbol ×3, ajustado con el bot) | S | Medio | B1 | ✅ It5 |
 | B4 | **Casa de gnomos:** el tope de gnomos depende de este edificio (el primer edificio del juego) | M | Alto | — | ✅ It5 |
 | B5 | **Más nodos en el árbol** (carretilla, cestos con paja, puesto en el mercado) | M | Medio | B1 | ✅ It5 |
-| B6 | **Multiplicador de organización:** premiar una cadena de trabajo eficiente | M | Medio | A1, A2 | It7 |
+| B6 | **Multiplicador de organización:** premiar una cadena de trabajo eficiente (hasta ×1,30) | M | Medio | A1, A2 | ✅ It7 |
 
 **C. Contenido**
 
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
-| C1 | **Regador** (gorro azul): acelera el crecimiento; el tomate podría necesitarlo | M | Medio | — | It7 |
-| C2 | **Fresa y melón** (cultivos con sus sprites) | S–M | Medio | B2 | It7 |
-| C3 | **Guardián y cuervos** | M | Medio | — | It7 |
+| C1 | **Regador** (gorro azul), pozo y riego; tomate y melón con sed | M | Medio | — | ✅ It7 |
+| C2 | **Fresa y melón** | S–M | Medio | B2 | ✅ It7 |
+| C3 | **Guardián** (gorro gris) contra cuervos y topos, con atalaya | M | Medio | — | ✅ It7 |
 | C4 | **Calabaza que ocupa 2×2 parcelas** | L | Bajo | — | Más adelante |
 | C5 | **Molino y mercado** | M–L | Medio | B4 | Más adelante |
 
@@ -505,7 +545,7 @@ El mejor cultivo según la plantilla (bancal 9×6 de un solo cultivo, mejoras a 
 | D10 | **Medir la vida** (sección f de `npm run balance`) | S | Medio (herramienta) | D6–D9 | ✅ It6 |
 | D11 | **Día y noche, y tiempo** (atardecer, luciérnagas, farolillos; la lluvia acelera el crecimiento) | M–L | Medio | — | Más adelante |
 | D12 | **Los edificios cambian con cada mejora:** cada nodo del árbol deja huella en el huerto; el árbol viejo crece con el total de mejoras y el tablón se llena con los grupos | M | Alto | — | ✅ It6 (pedido del autor) |
-| D13 | **Más sitio para mirar:** que la ficha no tape el bancal a 1280×800 (plegable o más estrecha) y que la barra de abajo no tape la valla | S | Bajo | D1 | It7 |
+| D13 | **Más sitio para mirar:** ficha plegable y cámara que encuadra el hueco libre | S | Bajo | D1 | ✅ It7 |
 
 **E. Largo plazo**
 
@@ -587,6 +627,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.13 (2026-10-27):** iteración 7, «contenido». Regador con pozo y riego (tomate y melón con sed), guardián con atalaya contra cuervos y topos, fresa y melón, multiplicador de organización hasta ×1,30 con desplegable en la barra, ficha plegable y cámara que respeta la barra y la ficha. Seis cultivos, cada uno el mejor para alguna plantilla; árbol completo en 64–70 min.
 - **v0.12 (2026-10-27):** iteración 6, «vida en el huerto». Rasgos y legendarios, bocadillos de intención, reacciones entre gnomos, ociosos con gracia, más vida en la cosecha, bichos y sucesos (cuervo, caracol, topo, ranas, sindicato, espantapájaros), ficha del gnomo con cámara que lo sigue, cada mejora visible en el huerto (D12, pedido del autor), medida de la vida en el bot y migración de partidas. Pasa algo distinto cada 0,5–5 s de media y el árbol se completa en 60–68 min.
 - **v0.11 (2026-10-27):** iteración 5, «economía y ritmo». Cada cultivo tiene su ventaja (rápido y laborioso frente a lento y cómodo) y es el mejor para alguna plantilla. Gnomos un 30 % más caros, árbol ×3, casa de gnomos (primer edificio, de 8 a 40 camas) y tres nodos nuevos (carretilla, cestos con paja, mercado). Árbol completo en 59–65 min según el bot. Bloque «vida en el huerto» añadido al backlog para la iteración 6 (D6–D11).
 - **v0.10 (2026-10-27):** respondidas con simulaciones las tres preguntas abiertas. Podredumbre: los aguantes se quedan, pero el aviso no se veía, así que ahora hay sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder). Corona: una por oficio y solo fama. Duración sin prestigio: ~1 h, con ×1,30 por gnomo y árbol ×3 como punto de partida para la iteración 5.

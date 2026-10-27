@@ -1,9 +1,10 @@
 // Simulación pura: sin DOM ni render. Todo lo que pasa en el huerto ocurre aquí.
 import {
-  BASE_SPEED, BASKET, BUBBLE_TIME, CARRETILLA_PER_LEVEL, CLEAR_TIME, CONSERVAS_PER_LEVEL, COST_GROWTH, CRITTER_SPEED, CROPS,
-  CROW_EAT, CROW_NOTICE, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HAPPENING_EVERY, HAPPENING_TIME,
-  HARVEST_TIME, HOUSE, IDLE_AREA, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST, MERCADO_PER_LEVEL,
-  MOLE_TIME, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WORLD,
+  BASE_SPEED, BASKET, BUBBLE_TIME, CARRETILLA_PER_LEVEL, CLEAR_TIME, CONSERVAS_PER_LEVEL, COST_GROWTH, CRITTER_SPEED, CROP_IDS, CROPS,
+  CROW_EAT, CROW_NOTICE, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, GUARD, HAPPENING_EVERY, HAPPENING_TIME,
+  HARVEST_TIME, HOUSE, IDLE_AREA, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
+  MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TRAIT_WALK, TRAIT_WORK, TREE,
+  VALUE_DISTANCE_BIAS, WATER, WELL, WORLD,
 } from './config';
 import { makeGnome, randomTrait } from './state';
 import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS } from '../textos';
@@ -35,10 +36,14 @@ export function buyNode(s: GameState, id: NodeId): boolean {
   if (id === 'bancal') {
     const f = fieldSize(s);
     log(s, LOG.bancal(f.cols, f.rows));
-  } else if (id === 'trigo' || id === 'tomate' || id === 'calabaza') {
-    log(s, LOG.desbloqueo(CULTIVOS[id].plural));
+  } else if ((CROP_IDS as string[]).includes(id)) {
+    log(s, LOG.desbloqueo(CULTIVOS[id as CropId].plural));
   } else if (id === 'porteadores') {
     log(s, LOG.porteadores);
+  } else if (id === 'regadores') {
+    log(s, LOG.regadores);
+  } else if (id === 'guardianes') {
+    log(s, LOG.guardianes);
   } else {
     log(s, LOG.mejora(ARBOL[id].nombre));
   }
@@ -46,21 +51,35 @@ export function buyNode(s: GameState, id: NodeId): boolean {
 }
 
 export const cropUnlocked = (s: GameState, c: CropId) => c === 'zanahoria' || s.tree[c] > 0;
-export const jobUnlocked = (s: GameState, j: JobId) => j !== 'porteador' || s.tree.porteadores > 0;
+export const jobUnlocked = (s: GameState, j: JobId) => {
+  const node = JOB_NODE[j];
+  return !node || s.tree[node] > 0;
+};
 export const walkSpeed = (s: GameState) => BASE_SPEED * (1 + 0.2 * s.tree.botas);
 export const workMult = (s: GameState) => Math.max(0.3, 1 - 0.18 * s.tree.cafe);
-/** velocidad de un gnomo concreto: la del huerto con su rasgo y, si es legendario, un poco más */
+/** velocidad de un gnomo concreto: la del huerto con su rasgo y, si es legendario, un poco más (el guardián, con silbato) */
 export const gnomeWalkSpeed = (s: GameState, g: Gnome) =>
-  walkSpeed(s) * (TRAIT_WALK[g.trait] ?? 1) * (g.legendary ? LEGENDARY.mult : 1);
+  walkSpeed(s) * (TRAIT_WALK[g.trait] ?? 1) * (g.legendary ? LEGENDARY.mult : 1)
+  * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1);
 /** multiplicador del tiempo de trabajo de un gnomo concreto (menos = más rápido) */
 export const gnomeWorkMult = (s: GameState, g: Gnome) =>
   (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1);
 export const capacity = (s: GameState) => 1 + s.tree.saco;
 export const basketMax = (s: GameState) => BASKET.base + BASKET.perLevel * s.tree.cesta;
+/** segundos por fase con el abono, a velocidad normal (ver growRate) */
 export const stageTime = (s: GameState, crop: CropId) => (CROPS[crop].grow * 0.85 ** s.tree.abono) / RIPE;
+/** a qué velocidad crece ahora la parcela: más rápido regada, muy despacio si tiene sed y está seca */
+export const growRate = (p: Plot) => (p.wet > 0 ? WATER.boost : CROPS[p.crop].thirsty ? WATER.dry : 1);
+/** segundos que dura un riego, con la regadera */
+export const waterTime = (s: GameState) => WATER.duration * (1 + WATER.regaderaTime * s.tree.regadera);
+/** segundos que tarda un regador normal en regar una parcela, con la regadera */
+export const waterWork = (s: GameState) => WATER.work * (1 - WATER.regaderaWork * s.tree.regadera);
+/** hasta dónde ve el guardián (px del mundo), con el silbato */
+export const guardRange = (s: GameState) => GUARD.sight + GUARD.silbatoSight * s.tree.silbato;
 export const hasPorters = (s: GameState) => s.gnomes.some(g => g.job === 'porteador');
-/** monedas que da un cultivo al venderse, con el mercado */
-export const cropValue = (s: GameState, crop: CropId) => CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado);
+/** monedas que da un cultivo al venderse, con el mercado y el multiplicador de organización */
+export const cropValue = (s: GameState, crop: CropId) =>
+  CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado) * s.org.mult;
 /** segundos que aguanta madura, con las conservas */
 export const keepTime = (s: GameState, crop: CropId) => CROPS[crop].keep * (1 + CONSERVAS_PER_LEVEL * s.tree.conservas);
 /** cultivos que se lleva un porteador de la cesta en cada viaje, con la carretilla */
@@ -261,6 +280,7 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
     p.stage = 0;
     p.t = 0;
     p.res = null;
+    p.wet = 0;
     return 'plant';
   }
   return null;
@@ -269,33 +289,128 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
 // ---------- Simulación ----------
 
 export function tick(s: GameState, dt: number, rng: Rng) {
+  const org = orgOf(s);
+  orgDecay(org, dt);
+  for (const p of s.plots) {
+    if (!isOpen(s, p)) continue;
+    org.open += dt;
+    if (p.stage === -1 || p.stage === ROTTEN) {
+      org.emptyFor[p.id] += dt;
+      if (org.emptyFor[p.id] > ORG.grace) org.idle += dt;
+    } else {
+      org.emptyFor[p.id] = 0;
+    }
+  }
   for (const p of s.plots) {
     if (p.stage < 0 || p.stage === ROTTEN) continue;
-    p.t += dt;
     if (p.stage === RIPE) {
+      p.t += dt;
       if (p.t >= keepTime(s, p.crop)) rot(s, p, rng);
       continue;
     }
+    if (CROPS[p.crop].thirsty) {
+      org.thirsty += dt;
+      if (p.wet > 0) org.watered += dt;
+    }
+    p.t += dt * growRate(p);
+    p.wet = Math.max(0, p.wet - dt);
     const st = stageTime(s, p.crop);
     while (p.t >= st && p.stage < RIPE) {
       p.t -= st;
       p.stage++;
     }
-    if (p.stage === RIPE) p.t = 0;
+    if (p.stage === RIPE) {
+      // el riego se gasta creciendo: lo maduro vuelve a estar seco
+      p.t = 0;
+      p.wet = 0;
+      org.ripened++;
+    }
+  }
+  for (const g of s.gnomes) {
+    // solo cuenta el rato que trabaja: un recolector ocioso no disimula a otro atascado en la cesta
+    const k = g.task?.kind;
+    if (g.job !== 'recolector' || (k !== 'harvest' && k !== 'drop' && k !== 'deliver' && k !== 'wait')) continue;
+    org.picking += dt;
+    if (k === 'wait') org.waiting += dt;
   }
   for (const g of s.gnomes) updateGnome(s, g, dt, rng);
   meetings(s, rng);
   updateCritters(s, dt);
   updateEvents(s, dt, rng);
   updateCrowns(s, rng);
+  updateOrg(s, org);
 }
 
 function rot(s: GameState, p: Plot, rng: Rng) {
   p.stage = ROTTEN;
   p.t = 0;
   s.rotted++;
+  orgOf(s).lost++;
   if (rng() < 0.25) log(s, LOG.podrido(CULTIVOS[p.crop].uno));
 }
+
+// ---------- Multiplicador de organización ----------
+
+/**
+ * Contadores del multiplicador, olvidados con una ventana exponencial de ORG.window s. Internos: no se guardan
+ * (al cargar se empieza sin datos, que vale como «todo en orden») ni se pintan; lo que se ve es s.org.
+ */
+interface OrgCounters {
+  /** cosecha: cultivos que han madurado y los que se han perdido (podridos o comidos por el cuervo) */
+  ripened: number;
+  lost: number;
+  /** cesta: segundos de recolector, y de ellos los que ha pasado esperando con la cesta llena */
+  picking: number;
+  waiting: number;
+  /** siembra: segundos de parcela abierta, y de ellos los que ha pasado vacía más de ORG.grace s */
+  open: number;
+  idle: number;
+  /** riego: segundos de cultivo con sed creciendo, y de ellos los que estaba regado */
+  thirsty: number;
+  watered: number;
+  /** lo que lleva vacía cada parcela (no se olvida: es un reloj) */
+  emptyFor: number[];
+  /** cultivos que se han comido los cuervos en esta sesión (no se olvida; para medir al guardián) */
+  eaten: number;
+}
+const DECAYED = ['ripened', 'lost', 'picking', 'waiting', 'open', 'idle', 'thirsty', 'watered'] as const;
+const orgCounters = new WeakMap<GameState, OrgCounters>();
+
+function orgOf(s: GameState): OrgCounters {
+  let c = orgCounters.get(s);
+  if (!c) {
+    c = {
+      ripened: 0, lost: 0, picking: 0, waiting: 0, open: 0, idle: 0, thirsty: 0, watered: 0,
+      emptyFor: s.plots.map(() => 0), eaten: 0,
+    };
+    orgCounters.set(s, c);
+  }
+  return c;
+}
+
+function orgDecay(c: OrgCounters, dt: number) {
+  const k = Math.exp(-dt / ORG.window);
+  for (const key of DECAYED) c[key] *= k;
+}
+
+/** sin datos (o con todo olvidado) la parte vale 1: nada ha ido mal */
+const share = (good: number, total: number, floor: number) =>
+  Math.min(1, Math.max(0, (good + floor) / (total + floor)));
+
+function updateOrg(s: GameState, c: OrgCounters) {
+  const parts = s.org.parts;
+  parts.cosecha = share(c.ripened - c.lost, c.ripened, ORG.floorCount);
+  parts.cesta = share(c.picking - c.waiting, c.picking, ORG.floorTime);
+  parts.siembra = share(c.open - c.idle, c.open, ORG.floorTime);
+  parts.riego = share(c.watered, c.thirsty, ORG.floorTime);
+  // media y peor parte a partes iguales: un cuello de botella se nota aunque el resto vaya bien
+  const p = [parts.cosecha, parts.cesta, parts.siembra, parts.riego];
+  const score = (1 - ORG.worstWeight) * (p.reduce((a, b) => a + b, 0) / p.length) + ORG.worstWeight * Math.min(...p);
+  s.org.mult = Math.round((1 + ORG.max * score) * 100) / 100;
+}
+
+/** cultivos que se han comido los cuervos desde que empezó la sesión (no se guarda) */
+export const cropsEaten = (s: GameState) => orgOf(s).eaten;
 
 function moment(s: GameState, kind: MomentKind, x: number, y: number) {
   s.events.push({ type: 'moment', kind, x: Math.round(x), y: Math.round(y) });
@@ -402,6 +517,7 @@ function releaseTask(s: GameState, g: Gnome) {
   if (g.task?.plot !== undefined) {
     const p = s.plots[g.task.plot];
     if (p.res === g.id) p.res = null;
+    if (p.wres === g.id) p.wres = null;
   }
   think(g);
 }
@@ -413,15 +529,17 @@ function releaseTask(s: GameState, g: Gnome) {
  * - urgente: de lo maduro que aún da tiempo a salvar, lo que menos margen tiene. Lo que se va a echar
  *   a perder antes de llegar queda al final (por distancia). Para los sembradores, la más cerca.
  * - solo_X: la más cerca de ese cultivo.
+ * El regador mira su propia reserva (wres) y, salvo en «valioso», riega antes lo que tiene sed.
  */
 function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | null {
   const prio = groupOf(s, g).priority;
   const only = prio.startsWith('solo_') ? prio.slice('solo_'.length) : null;
   const speed = gnomeWalkSpeed(s, g);
+  const waters = g.job === 'regador';
   let best: Plot | null = null;
   let bestScore = Infinity;
   for (const p of s.plots) {
-    if (p.res !== null || !isOpen(s, p) || !filter(p)) continue;
+    if ((waters ? p.wres : p.res) !== null || !isOpen(s, p) || !filter(p)) continue;
     if (only && p.crop !== only) continue;
     const st = plotStand(p);
     const dist = Math.hypot(st.x - g.x, st.y - g.y);
@@ -429,6 +547,8 @@ function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | 
     if (prio === 'valioso') {
       const crop = g.job === 'sembrador' ? seedFor(s, g, p) : p.crop;
       score = -cropValue(s, crop) / (dist + VALUE_DISTANCE_BIAS);
+    } else if (waters) {
+      if (CROPS[p.crop].thirsty) score -= UNSAVABLE;
     } else if (prio === 'urgente' && p.stage === RIPE) {
       const margin = keepTime(s, p.crop) - p.t - dist / speed - HARVEST_TIME;
       score = margin >= 0 ? margin - UNSAVABLE : dist;
@@ -441,8 +561,37 @@ function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | 
   return best;
 }
 
-/** desplaza las parcelas salvables por delante de cualquier distancia en «urgente» */
+/** desplaza por delante de cualquier distancia: lo salvable en «urgente», lo que tiene sed para el regador */
 const UNSAVABLE = 1e6;
+
+/** crece, está seca o casi, y aún le queda crecer lo bastante para que el riego cunda */
+const needsWater = (s: GameState, p: Plot) =>
+  p.stage >= 0 && p.stage < RIPE && p.wet < WATER.low && (RIPE - p.stage) * stageTime(s, p.crop) - p.t > WATER.low;
+
+/** riegos que le quedan en la regadera a cada regador. Interno: al cargar la partida llegan con la regadera llena. */
+const canLeft = new WeakMap<Gnome, number>();
+
+function goRefill(g: Gnome) {
+  goTo(g, WELL.x + WELL.w / 2, WELL.y + WELL.h + 2, { kind: 'refill' });
+  intent(g, 'well');
+}
+
+/** el guardián da una vuelta: a un punto al azar por fuera del bancal abierto, o a vigilar al pie de su torre */
+function patrol(s: GameState, g: Gnome, rng: Rng) {
+  if (rng() < 0.15) return goTo(g, GUARD.post.x + rng() * 6 - 3, GUARD.post.y, { kind: 'watch' });
+  const { cols, rows } = fieldSize(s);
+  const x0 = FIELD.x - GUARD.margin, x1 = FIELD.x + cols * FIELD.cell + GUARD.margin;
+  const y0 = FIELD.y - GUARD.margin, y1 = FIELD.y + rows * FIELD.cell + GUARD.margin;
+  const w = x1 - x0, h = y1 - y0;
+  // un punto al azar del perímetro
+  let d = rng() * 2 * (w + h);
+  let x: number, y: number;
+  if (d < w) [x, y] = [x0 + d, y0];
+  else if ((d -= w) < h) [x, y] = [x1, y0 + d];
+  else if ((d -= h) < w) [x, y] = [x1 - d, y1];
+  else [x, y] = [x0, y1 - (d - w)];
+  goTo(g, x, y, { kind: 'patrol' });
+}
 
 /** el topo está en esa parcela: no se puede sembrar hasta que se vaya */
 export const moleOn = (s: GameState, plot: number) =>
@@ -484,6 +633,21 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
       intent(g, 'crop', seedFor(s, g, p));
       return;
     }
+  } else if (g.job === 'regador') {
+    const left = canLeft.get(g) ?? WATER.can;
+    if (left <= 0) return goRefill(g);
+    const p = pickPlot(s, g, p => needsWater(s, p));
+    if (p) {
+      p.wres = g.id;
+      const st = plotStand(p);
+      goTo(g, st.x, st.y, { kind: 'water', plot: p.id });
+      intent(g, 'water');
+      return;
+    }
+    // sin nada que regar, aprovecha para llenar la regadera
+    if (left < WATER.can) return goRefill(g);
+  } else if (g.job === 'guardian') {
+    return patrol(s, g, rng);
   } else {
     if (g.carry.length) return goDeliver(s, g, rng);
     // cada porteador que ya va a la cesta se lleva su carga; si no queda nada para este, no va
@@ -718,6 +882,17 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
   } else if (task.kind === 'pickup') {
     if (!s.basket.length) return think(g);
     work(g, PICKUP_TIME * gnomeWorkMult(s, g), 'harvest', task);
+  } else if (task.kind === 'water' && p) {
+    // ya ha madurado o la ha regado el jugador… (no es una disputa: busca otra sin enfadarse)
+    if (!needsWater(s, p)) return releaseTask(s, g);
+    work(g, waterWork(s) * gnomeWorkMult(s, g), 'water', task);
+  } else if (task.kind === 'refill') {
+    work(g, WATER.refill * gnomeWorkMult(s, g), 'harvest', task);
+  } else if (task.kind === 'patrol') {
+    if (rng() < GUARD.watch) work(g, 2 + rng() * 3, 'watch', { kind: 'watch' });
+    else think(g);
+  } else if (task.kind === 'watch') {
+    work(g, 4 + rng() * 4, 'watch', task);
   } else if (task.kind === 'wander') {
     work(g, 0.6 + rng(), 'idle', { kind: 'rest' });
   } else if (task.kind === 'sit') {
@@ -731,9 +906,16 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
   } else if (task.kind === 'shoo') {
     const c = s.critters.find(c => c.id === task.critter);
     if (!c || c.state !== 'stay') return think(g);
-    flyAway(c);
     work(g, 1, 'scare', task);
-    if (rng() < 0.6) log(s, LOG.cuervoFuera(g.name));
+    if (c.kind === 'topo') {
+      // el topo se mete en su agujero antes de tiempo
+      c.state = 'out';
+      c.t = 0;
+      if (rng() < 0.6) log(s, LOG.topoGuardian(g.name));
+    } else {
+      flyAway(c);
+      if (rng() < 0.6) log(s, g.job === 'guardian' ? LOG.cuervoGuardian(g.name) : LOG.cuervoFuera(g.name));
+    }
   } else if (task.kind === 'scarecrow') {
     work(g, HAPPENING_TIME.espantapajaros, 'scare', task);
   } else if (task.kind !== 'chase') {
@@ -783,9 +965,21 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
       p.crop = seedFor(s, g, p);
       p.stage = 0;
       p.t = 0;
+      p.wet = 0;
       g.stats.plants++;
       g.stats.tasks++;
     }
+  } else if (task?.kind === 'water' && p) {
+    if (p.wres === g.id) p.wres = null;
+    if (p.stage >= 0 && p.stage < RIPE) {
+      p.wet = waterTime(s);
+      canLeft.set(g, (canLeft.get(g) ?? WATER.can) - 1);
+      g.stats.tasks++;
+      s.events.push({ type: 'water', plot: p.id });
+      if (rng() < 0.04) log(s, `${g.name} ${pick(rng, LOG.regar)}`);
+    }
+  } else if (task?.kind === 'refill') {
+    canLeft.set(g, WATER.can);
   } else if (task?.kind === 'pickup') {
     const before = g.carry.length;
     g.carry.push(...s.basket.splice(0, porterCapacity(s)));
@@ -847,6 +1041,9 @@ function updateCritters(s: GameState, dt: number) {
         c.state = 'out';
         c.t = 0;
         log(s, LOG.topoFuera);
+      } else if (c.state === 'stay' && c.plot !== undefined && !shooed(s, c)) {
+        // los topos solo los espanta el guardián; los demás no saben qué hacer con ellos
+        callGuard(s, c, plotStand(s.plots[c.plot]));
       }
     } else if (c.kind === 'mariposa') {
       if (c.state === 'stay' && c.t >= 20) {
@@ -888,6 +1085,33 @@ function canShoo(g: Gnome): boolean {
   return g.state === 'walk' && (k === 'harvest' || k === 'plant' || k === 'drop' || k === 'deliver' || k === 'pickup');
 }
 
+const shooed = (s: GameState, c: Critter) => s.gnomes.some(g => g.task?.kind === 'shoo' && g.task.critter === c.id);
+
+/**
+ * El guardián libre (patrullando o vigilando) más cercano va a por el bicho: si lo tiene a la vista
+ * (guardRange), en el acto; si no, cuando se entera, a los CROW_NOTICE s, como los demás.
+ * Devuelve true si hay algún guardián libre: entonces el bicho es cosa suya y nadie más deja su trabajo.
+ */
+function callGuard(s: GameState, c: Critter, st: { x: number; y: number }): boolean {
+  let best: Gnome | null = null;
+  let bestD = Infinity;
+  for (const g of s.gnomes) {
+    if (g.job !== 'guardian' || (g.state !== 'think' && g.task?.kind !== 'patrol' && g.task?.kind !== 'watch')) continue;
+    const d = Math.hypot(g.x - c.x, g.y - c.y);
+    if (d < bestD) {
+      bestD = d;
+      best = g;
+    }
+  }
+  if (!best) return false;
+  if (bestD > guardRange(s) && c.t < CROW_NOTICE) return true;
+  releaseTask(s, best);
+  goTo(best, st.x, st.y, { kind: 'shoo', critter: c.id });
+  say(best, 'eye');
+  moment(s, 'vigilancia', best.x, best.y);
+  return true;
+}
+
 function updateCrow(s: GameState, c: Critter, arrived: boolean) {
   const p = c.plot !== undefined ? s.plots[c.plot] : null;
   if (c.state === 'in' && arrived) {
@@ -904,11 +1128,15 @@ function updateCrow(s: GameState, c: Critter, arrived: boolean) {
     log(s, LOG.cuervoCome(CULTIVOS[p.crop].uno));
     p.stage = -1;
     p.t = 0;
+    const org = orgOf(s);
+    org.lost++;
+    org.eaten++;
     return flyAway(c);
   }
-  if (c.t < CROW_NOTICE || s.gnomes.some(g => g.task?.kind === 'shoo' && g.task.critter === c.id)) return;
-  // el gnomo libre más cercano va a espantarlo
+  if (shooed(s, c)) return;
   const st = plotStand(p);
+  if (callGuard(s, c, st) || c.t < CROW_NOTICE) return;
+  // sin guardián libre, el gnomo libre más cercano va a espantarlo
   let best: Gnome | null = null;
   let bestD = Infinity;
   for (const g of s.gnomes) {

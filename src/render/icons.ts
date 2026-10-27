@@ -1,5 +1,6 @@
 // Iconos pixel art para la interfaz HTML (barra, ventanas y árbol de mejoras).
 // Se dibujan en canvas y se pasan a la interfaz como data URL.
+import { CROP_IDS, JOB_IDS } from '../sim/config';
 import type { CropId, JobId, NodeId, TraitId } from '../sim/types';
 import { makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
 import { BASE, basketCanvas, crownCanvas, gnomeIcon, PLANT_MAPS, PLANT_PAL, SACK } from './sprites';
@@ -212,6 +213,31 @@ const PODIUM_ICON: PixelMap = [
   'OOOOOOOOOOOOOOOO',
 ];
 
+/** Regadera grande con el pitorro hacia la derecha y unas gotas. */
+const WATERING_CAN: PixelMap = [
+  '....OOOO......',
+  '...O....O.....',
+  '...O....O...B.',
+  '.OOOOOOOOO.OOB',
+  'OGGGGGGGGO.OGO',
+  'OGlGGGGGGOOGO.',
+  'OGlGGGGGGGGO..',
+  'OGGGGGGGGGO..B',
+  'OGGGGGGGGO..B.',
+  '.OOOOOOOO.....',
+];
+/** Silbato de latón con su cordón. */
+const WHISTLE: PixelMap = [
+  '..........RR',
+  '.........R..',
+  '..OOOOOOOR..',
+  '.OYYYYYYYO..',
+  'OYWYYYYOYO..',
+  'OYYYYYOOOO..',
+  '.OYYYO......',
+  '..OOO.......',
+];
+
 const url = (c: HTMLCanvasElement) => c.toDataURL();
 
 export const menuIcons: Record<MenuId, string> = {
@@ -225,18 +251,11 @@ export const menuIcons: Record<MenuId, string> = {
 export const crownIcon = url(crownCanvas());
 export const houseIcon = url(mapCanvas(HOUSE_ICON, P));
 
-export const cropIcons: Record<CropId, string> = {
-  zanahoria: url(mapCanvas(PLANT_MAPS.zanahoria[4], PLANT_PAL)),
-  trigo: url(mapCanvas(PLANT_MAPS.trigo[4], PLANT_PAL)),
-  tomate: url(mapCanvas(PLANT_MAPS.tomate[4], PLANT_PAL)),
-  calabaza: url(mapCanvas(PLANT_MAPS.calabaza[4], PLANT_PAL)),
-};
+export const cropIcons = Object.fromEntries(
+  CROP_IDS.map(c => [c, url(mapCanvas(PLANT_MAPS[c][4], PLANT_PAL))]),
+) as Record<CropId, string>;
 
-export const jobIcons: Record<JobId, string> = {
-  recolector: url(gnomeIcon('recolector')),
-  sembrador: url(gnomeIcon('sembrador')),
-  porteador: url(gnomeIcon('porteador')),
-};
+export const jobIcons = Object.fromEntries(JOB_IDS.map(j => [j, url(gnomeIcon(j))])) as Record<JobId, string>;
 
 export const nodeIcons: Record<NodeId, string> = {
   botas: url(mapCanvas(BOOT, P)),
@@ -252,6 +271,12 @@ export const nodeIcons: Record<NodeId, string> = {
   calabaza: cropIcons.calabaza,
   conservas: url(mapCanvas(STRAW_BASKET, P)),
   mercado: url(mapCanvas(MARKET, P)),
+  guardianes: jobIcons.guardian,
+  silbato: url(mapCanvas(WHISTLE, P)),
+  regadores: jobIcons.regador,
+  regadera: url(mapCanvas(WATERING_CAN, P)),
+  fresa: cropIcons.fresa,
+  melon: cropIcons.melon,
 };
 
 export const rootIcon = url(mapCanvas(PLANT_MAPS.zanahoria[1], PLANT_PAL));

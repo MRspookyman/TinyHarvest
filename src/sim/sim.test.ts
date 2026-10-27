@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL, MOLE_TIME, RIPE,
-  ROTTEN, TREE,
+  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL,
+  MOLE_TIME, ORG, RIPE, ROTTEN, TREE, WATER,
 } from './config';
 import {
   basketMax, buyHouse, buyNode, clickPlot, createGroup, deleteGroup, fieldSize, hire, hireCost, houseCapacity, isOpen,
-  moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, startEvent, tick,
+  moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, stageTime,
+  startEvent, tick, waterTime,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
 import type { GameState, JobId, Rng, TraitId } from './types';
@@ -27,12 +28,19 @@ function run(s: GameState, seconds: number, rng: Rng) {
 /** Contrata gratis. Por defecto un currante normal (sin título), que no se para a pensar ni se come la cosecha. */
 function hireFree(s: GameState, job: JobId, rng: Rng, trait: TraitId = 'currante') {
   s.coins += hireCost(s, job);
-  if (job === 'porteador') s.tree.porteadores = 1;
+  const node = JOB_NODE[job];
+  if (node) s.tree[node] = 1;
   hire(s, job, rng);
   const g = s.gnomes[s.gnomes.length - 1];
   g.trait = trait;
   g.legendary = false;
   return g;
+}
+
+/** lo vendido vale entre el valor base y el máximo del multiplicador de organización (que cambia mientras se juega) */
+function expectSold(coins: number, base: number) {
+  expect(coins).toBeGreaterThanOrEqual(base);
+  expect(coins).toBeLessThanOrEqual(base * (1 + ORG.max) + 1e-9);
 }
 
 function park(g: { state: string; timer: number; task: unknown }) {
@@ -126,7 +134,7 @@ describe('árbol de mejoras', () => {
     s.tree.mercado = 2;
     s.plots[0].stage = RIPE;
     clickPlot(s, 0, 'zanahoria');
-    expect(s.coins).toBeCloseTo(CROPS.zanahoria.value * (1 + 2 * MERCADO_PER_LEVEL));
+    expect(s.coins).toBeCloseTo(CROPS.zanahoria.value * (1 + 2 * MERCADO_PER_LEVEL) * s.org.mult);
     s.tree.conservas = 1;
     const p = s.plots[0];
     p.stage = RIPE;
@@ -187,7 +195,7 @@ describe('cultivos', () => {
     const s = createState(seeded(1));
     s.plots[0].stage = RIPE;
     expect(clickPlot(s, 0, 'zanahoria')).toBe('harvest');
-    expect(s.coins).toBe(CROPS.zanahoria.value);
+    expect(s.coins).toBe(CROPS.zanahoria.value * s.org.mult);
     expect(s.plots[0].stage).toBe(-1);
   });
 
@@ -217,7 +225,7 @@ describe('gnomos', () => {
     s.plots[plotId(1, 1)].stage = RIPE;
     hireFree(s, 'recolector', rng);
     run(s, 30, rng);
-    expect(s.coins).toBe(CROPS.zanahoria.value);
+    expectSold(s.coins, CROPS.zanahoria.value);
   });
 
   it('con porteadores, la cosecha pasa por la cesta', () => {
@@ -235,7 +243,7 @@ describe('gnomos', () => {
     porter.timer = 0;
     run(s, 30, rng);
     expect(s.basket).toHaveLength(0);
-    expect(s.coins).toBe(2 * CROPS.zanahoria.value);
+    expectSold(s.coins, 2 * CROPS.zanahoria.value);
   });
 
   it('con la cesta llena, el recolector espera con el saco', () => {
@@ -435,7 +443,8 @@ describe('ranking', () => {
     s.plots[plotId(1, 1)].stage = RIPE;
     const g = hireFree(s, 'recolector', rng);
     run(s, 30, rng);
-    expect(g.stats).toMatchObject({ harvests: 1, value: CROPS.zanahoria.value, delivered: 1, tasks: 2 });
+    expect(g.stats).toMatchObject({ harvests: 1, delivered: 1, tasks: 2 });
+    expectSold(g.stats.value, CROPS.zanahoria.value);
     expect(g.stats.walked).toBeGreaterThan(0);
   });
 
@@ -446,7 +455,7 @@ describe('ranking', () => {
     const p = hireFree(s, 'porteador', rng);
     for (const g of [a, b, p]) park(g);
     tick(s, 1 / 30, rng);
-    expect(s.crowns).toEqual({ recolector: null, sembrador: null, porteador: null });
+    expect(s.crowns).toEqual(Object.fromEntries(JOB_IDS.map(j => [j, null])));
     // el porteador hace menos tareas que los recolectores, pero es el mejor de su oficio
     a.stats.tasks = 50;
     p.stats.tasks = 10;
@@ -631,5 +640,110 @@ describe('vida en el huerto', () => {
     }
     expect(s.events.some(e => e.type === 'moment' && e.kind === 'comer')).toBe(true);
     expect(g.stats.harvests).toBeGreaterThan(g.stats.delivered + g.carry.length);
+  });
+});
+
+describe('regador y guardián', () => {
+  /** lo que lleva crecido una parcela, en fases */
+  const growth = (s: GameState, p: GameState['plots'][number]) => p.stage + p.t / stageTime(s, p.crop);
+
+  /** bancal vacío salvo dos tomateras recién plantadas, una a cada lado */
+  function twoTomatoes(rng: Rng) {
+    const s = createState(rng);
+    s.tree.tomate = 1;
+    for (const p of s.plots) p.stage = -1;
+    const near = s.plots[plotId(0, 0)];
+    const far = s.plots[plotId(2, 2)];
+    for (const p of [near, far]) Object.assign(p, { crop: 'tomate', stage: 0, t: 0 });
+    return { s, near, far };
+  }
+
+  it('un tomate sin regar crece muy despacio', () => {
+    const rng = seeded(21);
+    const { s, near } = twoTomatoes(rng);
+    run(s, CROPS.tomate.grow, rng);
+    expect(near.stage).toBeLessThan(RIPE);
+    run(s, CROPS.tomate.grow * (1 / WATER.dry - 1) + 1, rng);
+    expect(near.stage).toBe(RIPE);
+  });
+
+  it('el regador riega una tomatera seca y crece más rápido que la que no ha regado', () => {
+    const rng = seeded(22);
+    const { s, near, far } = twoTomatoes(rng);
+    const g = hireFree(s, 'regador', rng);
+    for (let i = 0; i < 30 * 30 && !near.wet && !far.wet; i++) tick(s, 1 / 30, rng);
+    expect(s.events.some(e => e.type === 'water')).toBe(true);
+    // se queda quieto: solo una de las dos está regada
+    if (g.task?.plot !== undefined) s.plots[g.task.plot].wres = null;
+    park(g);
+    const [wet, dry] = near.wet ? [near, far] : [far, near];
+    expect(wet.wet).toBeCloseTo(waterTime(s), 0);
+    expect(dry.wet).toBe(0);
+    const before = [growth(s, wet), growth(s, dry)];
+    run(s, 20, rng);
+    expect(growth(s, wet) - before[0]).toBeGreaterThan(3 * (growth(s, dry) - before[1]));
+  });
+
+  it('el guardián espanta al cuervo antes de que coma y los demás siguen a lo suyo', () => {
+    const rng = seeded(23);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = isOpen(s, p) ? 0 : -1;
+    const p = s.plots[plotId(2, 2)];
+    p.stage = RIPE;
+    const guard = hireFree(s, 'guardian', rng);
+    // un sembrador libre al lado: sin guardián iría él
+    const sower = hireFree(s, 'sembrador', rng);
+    Object.assign(sower, plotStand(s.plots[plotId(1, 2)]));
+    expect(startEvent(s, 'cuervo', rng)).toBe(true);
+    let guardShooed = false;
+    for (let i = 0; i < (CROW_EAT + 5) * 30; i++) {
+      tick(s, 1 / 30, rng);
+      expect(sower.task?.kind).not.toBe('shoo');
+      if (guard.task?.kind === 'shoo') guardShooed = true;
+    }
+    expect(guardShooed).toBe(true);
+    expect(p.stage).toBe(RIPE);
+    expect(s.events.some(e => e.type === 'moment' && e.kind === 'vigilancia')).toBe(true);
+  });
+});
+
+describe('multiplicador de organización', () => {
+  it('baja cuando todo se echa a perder y sube cuando el trabajo fluye', () => {
+    const rng = seeded(24);
+    const s = createState(rng);
+    expect(s.org.mult).toBeCloseTo(1 + ORG.max);
+    for (const p of s.plots) p.stage = isOpen(s, p) ? RIPE : -1;
+    run(s, 90, rng);
+    const bad = s.org.mult;
+    expect(s.org.parts.cosecha).toBeLessThan(0.3);
+    expect(bad).toBeLessThan(1 + ORG.max * 0.6);
+    for (let i = 0; i < 3; i++) hireFree(s, 'recolector', rng);
+    for (let i = 0; i < 2; i++) hireFree(s, 'sembrador', rng);
+    run(s, 300, rng);
+    expect(s.org.mult).toBeGreaterThan(bad + 0.1);
+    expect(s.org.parts.cosecha).toBeGreaterThan(0.8);
+  });
+});
+
+describe('guardado v5', () => {
+  it('una partida v4 carga sin riego y con los oficios nuevos a cero', () => {
+    const rng = seeded(25);
+    const s = createState(rng);
+    const g = hireFree(s, 'recolector', rng);
+    s.plots[0].stage = 1;
+    const old = JSON.parse(JSON.stringify(serialize(s)));
+    old.v = 4;
+    for (const p of old.plots) delete p.wet;
+    for (const k of ['regador', 'guardian']) {
+      delete old.hired[k];
+      delete old.crowns[k];
+    }
+    const loaded = deserialize(old, rng)!;
+    expect(loaded.plots.every(p => p.wet === 0 && p.wres === null)).toBe(true);
+    expect(loaded.plots[0].stage).toBe(1);
+    expect(loaded.hired).toMatchObject({ recolector: 1, regador: 0, guardian: 0 });
+    expect(loaded.crowns).toMatchObject({ regador: null, guardian: null });
+    expect(loaded.gnomes[0].name).toBe(g.name);
+    expect(serialize(loaded).v).toBe(SAVE_VERSION);
   });
 });

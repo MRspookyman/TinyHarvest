@@ -1,11 +1,12 @@
 // Árbol viejo: el árbol de mejoras. Crece hacia arriba desde la raíz; cada nodo cuelga de su padre.
 import { CONSERVAS_PER_LEVEL, MERCADO_PER_LEVEL, NODE_IDS, TREE, TREE_ROOT } from '../../sim/config';
-import { fieldSize, nodeCost, nodeMaxed, nodeReachable, porterCapacity } from '../../sim/sim';
+import { fieldSize, guardRange, nodeCost, nodeMaxed, nodeReachable, porterCapacity, waterTime } from '../../sim/sim';
 import type { GameState, NodeId } from '../../sim/types';
 import { nodeIcons, rootIcon } from '../../render/icons';
 import { ARBOL, RAMAS, UI } from '../../textos';
 import { html, pixelImg, setDisabled, setText, toggleClass, type GameActions } from '../dom';
 import type { Menu } from '../windows';
+import { PX_PER_STEP } from './ranking';
 
 type Selection = NodeId | 'root';
 
@@ -109,6 +110,8 @@ export function createTreeMenu(actions: GameActions): Menu {
       } else if (id === 'carretilla') extra = `${UI.ahora}: ${UI.porViaje(porterCapacity(s))}`;
       else if (id === 'conservas') extra = `${UI.ahora}: ${UI.masAguante(Math.round(CONSERVAS_PER_LEVEL * s.tree.conservas * 100))}`;
       else if (id === 'mercado') extra = `${UI.ahora}: ${UI.masCaro(Math.round(MERCADO_PER_LEVEL * s.tree.mercado * 100))}`;
+      else if (id === 'regadera') extra = `${UI.ahora}: ${UI.riegoDura(Math.round(waterTime(s)))}`;
+      else if (id === 'silbato') extra = `${UI.ahora}: ${UI.vigilaA(Math.round(guardRange(s) / PX_PER_STEP))}`;
       setText(el.querySelector('[data-d-extra]'), extra);
       buy.hidden = false;
       setText(buy, maxed ? UI.alMaximo : UI.comprar(cost));

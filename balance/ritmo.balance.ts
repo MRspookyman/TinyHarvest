@@ -2,12 +2,12 @@
 import { test } from 'vitest';
 import {
   BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROP_IDS, CROPS, DOOR, FIELD, HARVEST_TIME, HOUSE, IDLE_AREA, MAX_GNOMES,
-  NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TREE,
+  JOB_NODE, NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TREE, WATER, WELL,
 } from '../src/sim/config';
 import {
-  buyHouse, buyNode, capacity, clickPlot, cropUnlocked, cropValue, hasPorters, hire, hireCost, houseCapacity, houseCost,
-  houseMaxed, isOpen, jobUnlocked, nodeCost, nodeMaxed, nodeReachable, plotStand, porterCapacity, setGroupSeed,
-  setPriority, stageTime, tick, walkSpeed, workMult,
+  buyHouse, buyNode, capacity, clickPlot, cropsEaten, cropUnlocked, cropValue, hasPorters, hire, hireCost, houseCapacity,
+  houseCost, houseMaxed, isOpen, jobUnlocked, nodeCost, nodeMaxed, nodeReachable, plotStand, porterCapacity, setGroupSeed,
+  setPriority, stageTime, startEvent, tick, walkSpeed, waterTime, waterWork, workMult,
 } from '../src/sim/sim';
 import { createState } from '../src/sim/state';
 import type { CropId, GameState, JobId, MomentKind, NodeId, Priority, Rng } from '../src/sim/types';
@@ -81,11 +81,21 @@ function chooseCrop(s: GameState, clicksPerSec: number): CropId {
     harvest = Math.min(harvest, (s.hired.porteador * porterCapacity(s)) / porterTrip + player);
   }
   const plant = s.hired.sembrador / (PLANT_TIME * wm + (1.5 * meanDist(centre.x, centre.y)) / speed) + player;
+  // riegos por segundo de los regadores: ir de una parcela a otra y regar, más el viaje al pozo cada WATER.can riegos
+  const well = { x: WELL.x + WELL.w / 2, y: WELL.y + WELL.h + 2 };
+  const waterHop = (1.5 * meanDist(centre.x, centre.y)) / speed + waterWork(s) * wm;
+  const refill = ((2 * meanDist(well.x, well.y)) / speed + WATER.refill * wm) / WATER.can;
+  const waterings = s.hired.regador / (waterHop + refill);
   let best: CropId = 'zanahoria';
   let bestRate = -1;
   for (const c of CROP_IDS) {
     if (!cropUnlocked(s, c)) continue;
-    const field = stands.length / (stageTime(s, c) * RIPE + latency);
+    // parte del crecimiento que pasa regado: cada riego cubre su duración (o lo que le queda por crecer pasado
+    // el umbral WATER.low, por debajo del cual el regador ya no riega)
+    const grow = stageTime(s, c) * RIPE;
+    const wetShare = Math.min(1, (waterings * Math.max(0, Math.min(waterTime(s), grow - WATER.low))) / stands.length);
+    const speedUp = wetShare * WATER.boost + (1 - wetShare) * (CROPS[c].thirsty ? WATER.dry : 1);
+    const field = stands.length / (grow / speedUp + latency);
     const rate = Math.min(field, harvest, plant) * cropValue(s, c);
     if (rate > bestRate) {
       bestRate = rate;
@@ -111,6 +121,11 @@ function purchaseOptions(s: GameState, rng: Rng): Purchase[] {
     job('recolector');
     if (s.hired.sembrador < Math.ceil(s.hired.recolector / 1.5)) job('sembrador');
     if (jobUnlocked(s, 'porteador') && s.hired.porteador < Math.floor(s.hired.recolector / 3)) job('porteador');
+    // un regador por cada 5 recolectores en cuanto hay algún cultivo con sed que sembrar
+    const thirsty = CROP_IDS.some(c => CROPS[c].thirsty && cropUnlocked(s, c));
+    if (jobUnlocked(s, 'regador') && thirsty && s.hired.regador < Math.floor(s.hired.recolector / 5)) job('regador');
+    // un guardián en cuanto se puede (dos con el huerto grande)
+    if (jobUnlocked(s, 'guardian') && s.hired.guardian < (s.hired.recolector >= 20 ? 2 : 1)) job('guardian');
   } else if (!houseMaxed(s)) {
     opts.push({ cost: houseCost(s), buy: () => buyHouse(s) });
   }
@@ -141,21 +156,22 @@ function playerClick(s: GameState, crop: CropId): boolean {
   return false;
 }
 
+/** nodos del árbol que son hito por sí mismos (el minuto en que se compra el primer nivel) */
+const NODE_MILESTONES = [
+  'trigo', 'fresa', 'porteadores', 'guardianes', 'regadores', 'tomate', 'conservas', 'carretilla', 'calabaza', 'mercado',
+  'melon',
+] as const satisfies readonly NodeId[];
 const MILESTONES = [
-  'automático', 'trigo', 'porteadores', 'tomate', 'conservas', 'carretilla', 'calabaza', 'mercado', 'bancal al máximo',
-  'casa al máximo', `${MAX_GNOMES} gnomos`, 'árbol completo',
+  'automático', ...NODE_MILESTONES, 'primer regador', 'primer guardián', 'bancal al máximo', 'casa al máximo',
+  `${MAX_GNOMES} gnomos`, 'árbol completo',
 ] as const;
 type Milestone = (typeof MILESTONES)[number];
 
 const milestoneReached = {
   'automático': s => s.hired.recolector >= 1 && s.hired.sembrador >= 1,
-  trigo: s => s.tree.trigo > 0,
-  porteadores: s => s.tree.porteadores > 0,
-  tomate: s => s.tree.tomate > 0,
-  conservas: s => s.tree.conservas > 0,
-  carretilla: s => s.tree.carretilla > 0,
-  calabaza: s => s.tree.calabaza > 0,
-  mercado: s => s.tree.mercado > 0,
+  ...Object.fromEntries(NODE_MILESTONES.map(id => [id, (s: GameState) => s.tree[id] > 0])),
+  'primer regador': s => s.hired.regador > 0,
+  'primer guardián': s => s.hired.guardian > 0,
   'bancal al máximo': s => nodeMaxed(s, 'bancal'),
   'casa al máximo': s => houseMaxed(s),
   [`${MAX_GNOMES} gnomos`]: s => s.gnomes.length >= MAX_GNOMES,
@@ -226,7 +242,7 @@ function runProfile(profile: Profile): RunResult {
     step: n,
     earned: s.totalEarned,
     coins: s.coins,
-    gnomes: `${s.hired.recolector}/${s.hired.sembrador}/${s.hired.porteador}`,
+    gnomes: `${s.hired.recolector}/${s.hired.sembrador}/${s.hired.porteador}/${s.hired.regador}/${s.hired.guardian}`,
     beds: houseCapacity(s),
     bancal: s.tree.bancal,
     crop,
@@ -317,21 +333,21 @@ test('a) Ritmo', () => {
       prev = x;
       return [f1(x.step / STEPS_PER_MIN), Math.round(x.earned), Math.round(x.coins), f2(rate), x.gnomes, x.beds, x.bancal, x.crop, x.rotted];
     });
-    out.push(table(['min', 'ganado total', 'monedas', 'monedas/s (tramo)', 'rec/sem/port', 'camas', 'bancal', 'sembrando', 'echados a perder'], rows));
+    out.push(table(['min', 'ganado total', 'monedas', 'monedas/s (tramo)', 'rec/sem/port/reg/guard', 'camas', 'bancal', 'sembrando', 'echados a perder'], rows));
   }
   console.log(`\n${out.join('\n')}\n`);
 });
 
 // ---------- b), c) y e): bancal completo ----------
 
+/** Bancal al máximo con todos los cultivos desbloqueados. `extra`: otros oficios (desbloquea lo que haga falta). */
 function fullField(
   rng: Rng, rec: number, sem: number, cropOf: (col: number) => CropId, upgrades: Partial<Record<NodeId, number>> = {},
+  extra: Partial<Record<JobId, number>> = {},
 ): GameState {
   const s = createState(rng);
   s.tree.bancal = TREE.bancal.max;
-  s.tree.trigo = 1;
-  s.tree.tomate = 1;
-  s.tree.calabaza = 1;
+  for (const c of CROP_IDS) if (c !== 'zanahoria') s.tree[c] = 1;
   Object.assign(s.tree, upgrades);
   s.house = HOUSE.max;
   for (const p of s.plots) {
@@ -343,6 +359,11 @@ function fullField(
   s.coins = 1e12;
   for (let i = 0; i < rec; i++) hire(s, 'recolector', rng);
   for (let i = 0; i < sem; i++) hire(s, 'sembrador', rng);
+  for (const [job, n] of Object.entries(extra) as [JobId, number][]) {
+    const node = JOB_NODE[job];
+    if (node) s.tree[node] = Math.max(1, s.tree[node]);
+    for (let i = 0; i < n; i++) hire(s, job, rng);
+  }
   s.coins = 0;
   s.totalEarned = 0;
   setGroupSeed(s, s.groups[0].id, null);
@@ -434,36 +455,50 @@ const BEST_STAFFING = [
   { rec: 8, sem: 5 },
   { rec: 12, sem: 8 },
   { rec: 20, sem: 12 },
-  { rec: 28, sem: 12 },
+  { rec: 26, sem: 12 },
 ];
 const BEST_MIN = 10;
+
+/** variantes de cada plantilla: tal cual y con regadores (que es lo que pide el melón) */
+const BEST_VARIANTS: { name: string; extra: Partial<Record<JobId, number>>; upgrades: Partial<Record<NodeId, number>> }[] = [
+  { name: '', extra: {}, upgrades: {} },
+  { name: ' + 2 reg', extra: { regador: 2 }, upgrades: {} },
+  { name: ' + 4 reg', extra: { regador: 4 }, upgrades: {} },
+];
 
 test('e) El mejor cultivo según la plantilla', () => {
   const rateRows: (string | number)[][] = [];
   const rotRows: (string | number)[][] = [];
+  const wins = new Map<CropId, number>();
   for (const st of BEST_STAFFING) {
-    const rates: number[] = [];
-    const rots: number[] = [];
-    let pick: CropId = 'zanahoria';
-    for (const c of CROP_IDS) {
-      const rng = mulberry32(SEED);
-      const s = fullField(rng, st.rec, st.sem, () => c, BEST_UPGRADES);
-      if (c === CROP_IDS[0]) pick = chooseCrop(s, 0);
-      for (let n = 0; n < BEST_MIN * STEPS_PER_MIN; n++) step(s, rng);
-      const harvested = s.gnomes.reduce((a, g) => a + g.stats.harvests, 0);
-      rates.push(s.totalEarned / (BEST_MIN * 60));
-      rots.push(harvested + s.rotted ? (100 * s.rotted) / (harvested + s.rotted) : 0);
+    for (const v of BEST_VARIANTS) {
+      const rates: number[] = [];
+      const rots: number[] = [];
+      // la casa no da para más de MAX_GNOMES: esa variante no se puede montar
+      if (st.rec + st.sem + Object.values(v.extra).reduce((a, n) => a + n, 0) > MAX_GNOMES) continue;
+      let pick: CropId = 'zanahoria';
+      for (const c of CROP_IDS) {
+        const rng = mulberry32(SEED);
+        const s = fullField(rng, st.rec, st.sem, () => c, { ...BEST_UPGRADES, ...v.upgrades }, v.extra);
+        if (c === CROP_IDS[0]) pick = chooseCrop(s, 0);
+        for (let n = 0; n < BEST_MIN * STEPS_PER_MIN; n++) step(s, rng);
+        const harvested = s.gnomes.reduce((a, g) => a + g.stats.harvests, 0);
+        rates.push(s.totalEarned / (BEST_MIN * 60));
+        rots.push(harvested + s.rotted ? (100 * s.rotted) / (harvested + s.rotted) : 0);
+      }
+      const best = rates.indexOf(Math.max(...rates));
+      wins.set(CROP_IDS[best], (wins.get(CROP_IDS[best]) ?? 0) + 1);
+      const label = `${st.rec} rec + ${st.sem} sem${v.name}`;
+      rateRows.push([label, ...rates.map((r, i) => (i === best ? `**${f2(r)}**` : f2(r))), pick]);
+      rotRows.push([label, ...rots.map(r => `${f1(r)} %`)]);
     }
-    const best = rates.indexOf(Math.max(...rates));
-    const label = `${st.rec} rec + ${st.sem} sem`;
-    rateRows.push([label, ...rates.map((r, i) => (i === best ? `**${f2(r)}**` : f2(r))), pick]);
-    rotRows.push([label, ...rots.map(r => `${f1(r)} %`)]);
   }
   const ups = Object.entries(BEST_UPGRADES).map(([k, v]) => `${k} ${v}`).join(', ');
   const out = [
     `## e) El mejor cultivo según la plantilla (bancal ${FIELD.maxCols}×${FIELD.maxRows} de un solo cultivo, ${ups}, sin porteadores, ${BEST_MIN} min, sin clics)`, '',
     '### monedas/s (en negrita, el mejor de la fila)', '',
     table(['Plantilla', ...CROP_IDS, 'elegiría el bot'], rateRows),
+    '', `Filas que gana cada cultivo: ${CROP_IDS.map(c => `${c} ${wins.get(c) ?? 0}`).join(', ')}`,
     '', '### % echado a perder (de lo que llegó a madurar)', '',
     table(['Plantilla', ...CROP_IDS], rotRows),
   ];
@@ -530,6 +565,106 @@ test('f) Vida en el huerto', () => {
     table(['Plantilla', 'momentos/min', 'hueco medio (s)', 'hueco máximo (s)', 'el más común', 'tipos distintos'], rows),
     '', '### Momentos por tipo', '',
     table(['Momento', ...LIFE_STAFFING.map(st => st.name)], kindRows),
+  ];
+  console.log(`\n${out.join('\n')}\n`);
+});
+
+// ---------- g) Regador y guardián ----------
+
+const GH_MIN = 10;
+const mixedCrops = (col: number) => CROP_IDS[col % CROP_IDS.length];
+const pct0 = (f: number) => `${Math.round(f * 100)} %`;
+/** cada cuánto baja un cuervo y asoma un topo en la prueba del guardián (los sucesos normales también siguen) */
+const CROW_EVERY = 10;
+const MOLE_EVERY = 15;
+
+test('g) Regador y guardián', () => {
+  // regadores: mismo bancal y plantilla, con y sin ellos
+  const waterRows: (string | number)[][] = [];
+  for (const field of [{ name: 'mezclado', cropOf: mixedCrops }, { name: 'solo melón', cropOf: (): CropId => 'melon' }]) {
+    for (const reg of [0, 2]) {
+      const rng = mulberry32(SEED);
+      const s = fullField(rng, 12, 8, field.cropOf, BEST_UPGRADES, { regador: reg });
+      const value = new Map<CropId, number>();
+      for (let n = 0; n < GH_MIN * STEPS_PER_MIN; n++) {
+        tick(s, DT, rng);
+        for (const e of s.events) if (e.type === 'harvest') value.set(e.crop, (value.get(e.crop) ?? 0) + CROPS[e.crop].value);
+        s.events.length = 0;
+      }
+      const total = [...value.values()].reduce((a, v) => a + v, 0);
+      const thirsty = CROP_IDS.filter(c => CROPS[c].thirsty).reduce((a, c) => a + (value.get(c) ?? 0), 0);
+      waterRows.push([field.name, reg, f2(s.totalEarned / (GH_MIN * 60)), total ? pct0(thirsty / total) : '—', pct0(s.org.parts.riego)]);
+    }
+  }
+  // guardián: cuervos y topos a menudo
+  const guardRows: (string | number)[][] = [];
+  for (const st of [{ rec: 0, sem: 0 }, { rec: 4, sem: 3 }, { rec: 12, sem: 8 }]) {
+    for (const guard of [0, 1]) {
+      const rng = mulberry32(SEED);
+      const s = fullField(rng, st.rec, st.sem, mixedCrops, BEST_UPGRADES, { regador: 2, guardian: guard });
+      let interrupted = 0;
+      let moleTime = 0;
+      for (let n = 0; n < GH_MIN * STEPS_PER_MIN; n++) {
+        if (n % Math.round(CROW_EVERY / DT) === 0) startEvent(s, 'cuervo', rng);
+        if (n % Math.round(MOLE_EVERY / DT) === 0) startEvent(s, 'topo', rng);
+        const before = new Set(s.gnomes.filter(g => g.task?.kind === 'shoo').map(g => g.id));
+        step(s, rng);
+        interrupted += s.gnomes.filter(g => g.job !== 'guardian' && g.task?.kind === 'shoo' && !before.has(g.id)).length;
+        moleTime += s.critters.filter(c => c.kind === 'topo' && c.state !== 'out').length * DT;
+      }
+      guardRows.push([
+        st.rec ? `${st.rec} rec + ${st.sem} sem + 2 reg` : 'solo 2 reg (nadie libre)', guard, cropsEaten(s), interrupted,
+        Math.round(moleTime), f2(s.totalEarned / (GH_MIN * 60)),
+      ]);
+    }
+  }
+  const out = [
+    `## g) Regador y guardián (bancal al máximo, ${Object.entries(BEST_UPGRADES).map(([k, v]) => `${k} ${v}`).join(', ')}, ${GH_MIN} min, sin clics)`, '',
+    '### Regadores (12 rec + 8 sem)', '',
+    table(['Bancal', 'regadores', 'monedas/s', 'parte del valor cosechado en cultivos con sed', 'riego (org)'], waterRows),
+    '', `### Guardián (un cuervo cada ${CROW_EVERY} s y un topo cada ${MOLE_EVERY} s)`, '',
+    table(['Plantilla', 'guardianes', 'cultivos comidos', 'veces que otro gnomo dejó su trabajo para espantar', 's de parcela con topo', 'monedas/s'], guardRows),
+  ];
+  console.log(`\n${out.join('\n')}\n`);
+});
+
+// ---------- h) Organización ----------
+
+const ORG_SETUPS: {
+  name: string; rec: number; sem: number; cropOf: (col: number) => CropId;
+  upgrades: Partial<Record<NodeId, number>>; extra: Partial<Record<JobId, number>>;
+}[] = [
+  {
+    name: 'bien llevado: 12 rec + 8 sem + 4 port + 2 reg + 1 guard, cesta 1, carretilla 1', rec: 12, sem: 8, cropOf: mixedCrops,
+    upgrades: { ...BEST_UPGRADES, cesta: 1, carretilla: 1 }, extra: { porteador: 4, regador: 2, guardian: 1 },
+  },
+  {
+    name: 'regular: 12 rec + 3 sem + 2 port, sin regadores', rec: 12, sem: 3, cropOf: mixedCrops,
+    upgrades: BEST_UPGRADES, extra: { porteador: 2 },
+  },
+  {
+    name: 'mal llevado (atasco en la cesta): 20 rec + 4 sem + 1 port, cesta 0, zanahoria, fresa y tomate sin regar', rec: 20, sem: 4,
+    cropOf: col => (['zanahoria', 'fresa', 'tomate'] as const)[col % 3], upgrades: BEST_UPGRADES, extra: { porteador: 1 },
+  },
+  {
+    name: 'mal llevado (sin sembradores): 16 rec + 1 port, zanahoria, fresa y tomate sin regar', rec: 16, sem: 0,
+    cropOf: col => (['zanahoria', 'fresa', 'tomate'] as const)[col % 3], upgrades: BEST_UPGRADES, extra: { porteador: 1 },
+  },
+];
+
+test('h) Organización', () => {
+  const rows = ORG_SETUPS.map(o => {
+    const rng = mulberry32(SEED);
+    const s = fullField(rng, o.rec, o.sem, o.cropOf, o.upgrades, o.extra);
+    for (let n = 0; n < GH_MIN * STEPS_PER_MIN; n++) step(s, rng);
+    const p = s.org.parts;
+    return [o.name, `**×${f2(s.org.mult)}**`, pct0(p.cosecha), pct0(p.cesta), pct0(p.siembra), pct0(p.riego), f2(s.totalEarned / (GH_MIN * 60))];
+  });
+  const out = [
+    `## h) Organización (bancal al máximo, ${GH_MIN} min, sin clics; el multiplicador y sus partes al final)`, '',
+    'Objetivo: que se separen a simple vista (bien llevado ≥ ×1,20; mal llevado ≤ ×1,08). La peor parte pesa la mitad,',
+    'así que un solo cuello de botella baja el multiplicador aunque el resto vaya bien.', '',
+    table(['Huerto', 'multiplicador', 'cosecha', 'cesta', 'siembra', 'riego', 'monedas/s'], rows),
   ];
   console.log(`\n${out.join('\n')}\n`);
 });

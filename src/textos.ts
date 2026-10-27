@@ -1,8 +1,8 @@
 // Todos los textos del juego. Para retocar el tono, se cambia aquí.
 import {
-  BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, MERCADO_PER_LEVEL, PORTER_CAPACITY,
+  BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, GUARD, MERCADO_PER_LEVEL, PORTER_CAPACITY, WATER,
 } from './sim/config';
-import type { Branch, CropId, JobId, NodeId, Priority, TraitId } from './sim/types';
+import type { Branch, CropId, JobId, NodeId, OrgPart, Priority, TraitId } from './sim/types';
 
 const pct = (f: number) => `${Math.round(f * 100)} %`;
 
@@ -28,6 +28,8 @@ export const UI = {
   porViaje: (n: number) => `${n} cultivos por viaje`,
   masAguante: (p: number) => `lo maduro aguanta un ${p} % más`,
   masCaro: (p: number) => `todo se vende un ${p} % más caro`,
+  riegoDura: (n: number) => `cada riego dura ${n} s`,
+  vigilaA: (n: number) => `el guardián ve un bicho a ${n} pasos`,
   ahora: 'Ahora',
   borrar: 'Borrar partida',
   borrarSeguro: '¿Seguro? Pulsa otra vez',
@@ -48,6 +50,8 @@ export const OFICIOS: Record<JobId, { nombre: string; desc: string }> = {
   recolector: { nombre: 'Recolector', desc: 'Recoge lo que madura y lo lleva al granero. A veces, también lo que no.' },
   sembrador: { nombre: 'Sembrador', desc: 'Planta en las parcelas vacías, y arranca y vuelve a plantar las echadas a perder. Con una fe inquebrantable.' },
   porteador: { nombre: 'Porteador', desc: `Lleva la cosecha de la cesta al granero, de ${PORTER_CAPACITY} en ${PORTER_CAPACITY} (más con carretilla). Con porteadores, los recolectores dejan lo recogido en la cesta del bancal.` },
+  regador: { nombre: 'Regador', desc: `Riega lo que crece: regado crece un ${pct(WATER.boost - 1)} más rápido durante ${WATER.duration} s. Los tomates y los melones, sin regar, casi ni se mueven. Lleva agua para ${WATER.can} riegos y vuelve al pozo a por más, silbando.` },
+  guardian: { nombre: 'Guardián', desc: 'Patrulla alrededor del bancal y espanta cuervos y topos antes de que hagan de las suyas. Así los demás no dejan su trabajo. Se toma el cargo muy en serio.' },
 };
 
 export const CULTIVOS: Record<CropId, { nombre: string; uno: string; plural: string }> = {
@@ -55,6 +59,8 @@ export const CULTIVOS: Record<CropId, { nombre: string; uno: string; plural: str
   trigo: { nombre: 'Trigo', uno: 'un haz de trigo', plural: 'trigo' },
   tomate: { nombre: 'Tomate', uno: 'un tomate', plural: 'tomates' },
   calabaza: { nombre: 'Calabaza', uno: 'una calabaza', plural: 'calabazas' },
+  fresa: { nombre: 'Fresa', uno: 'una fresa', plural: 'fresas' },
+  melon: { nombre: 'Melón', uno: 'un melón', plural: 'melones' },
 };
 
 export function prioridad(p: Priority): string {
@@ -70,9 +76,10 @@ export const RAMAS: Record<Branch, string> = { gnomos: 'Gnomos', bancal: 'Bancal
 /** Descripción de las semillas sacada de CROPS, para que los números no se queden viejos. */
 function semillaDesc(crop: CropId, cola: string): string {
   const c = CROPS[crop];
-  if (crop === 'trigo') return `Permite plantar trigo: vale ${c.value}, tarda ${c.grow} s y aguanta ${c.keep} s maduro. ${cola}`;
-  if (crop === 'tomate') return `Permite plantar tomates: valen ${c.value}, tardan ${c.grow} s y aguantan ${c.keep} s maduros. ${cola}`;
-  return `Permite plantar ${CULTIVOS[crop].plural}: valen ${c.value}, tardan ${c.grow} s y aguantan ${c.keep} s maduras. ${cola}`;
+  const sed = c.thirsty ? ` Tiene sed: sin regar crece al ${pct(WATER.dry)} de su velocidad.` : '';
+  if (crop === 'trigo') return `Permite plantar trigo: vale ${c.value}, tarda ${c.grow} s y aguanta ${c.keep} s maduro.${sed} ${cola}`;
+  const maduros = crop === 'tomate' || crop === 'melon' ? 'maduros' : 'maduras';
+  return `Permite plantar ${CULTIVOS[crop].plural}: valen ${c.value}, tardan ${c.grow} s y aguantan ${c.keep} s ${maduros}.${sed} ${cola}`;
 }
 
 export const ARBOL: Record<NodeId, { nombre: string; desc: string }> = {
@@ -89,6 +96,12 @@ export const ARBOL: Record<NodeId, { nombre: string; desc: string }> = {
   calabaza: { nombre: 'Semillas de calabaza', desc: semillaDesc('calabaza', 'Lentísima y cómoda: una siembra, una siesta larga y un viaje que vale la pena.') },
   conservas: { nombre: 'Cestos con paja', desc: `Lo maduro aguanta un ${pct(CONSERVAS_PER_LEVEL)} más por nivel antes de echarse a perder. La paja pica, pero no se queja nadie.` },
   mercado: { nombre: 'Puesto en el mercado', desc: `Todos los cultivos se venden un ${pct(MERCADO_PER_LEVEL)} más caros por nivel. Los gnomos regatean con mucho teatro.` },
+  fresa: { nombre: 'Semillas de fresa', desc: semillaDesc('fresa', 'Rápida y rentable, pero se pocha en un suspiro: hace falta gente atenta (o paja).') },
+  melon: { nombre: 'Semillas de melón', desc: semillaDesc('melon', 'Lo más valioso del huerto, si alguien se acuerda de regarlo.') },
+  regadores: { nombre: 'Cofradía del Agua', desc: 'Permite contratar regadores en el granero y abre el pozo. Juran que el agua del pozo tiene propiedades. No las tiene.' },
+  regadera: { nombre: 'Regadera con alcachofa fina', desc: `El riego dura un ${pct(WATER.regaderaTime)} más y se riega un ${pct(WATER.regaderaWork)} más rápido por nivel.` },
+  guardianes: { nombre: 'Orden de la Atalaya', desc: 'Permite contratar guardianes en el granero. Vienen con torre propia y una mirada muy intensa.' },
+  silbato: { nombre: 'Silbato de hojalata', desc: `El guardián ve ${GUARD.silbatoSight} pasos más lejos y anda un ${pct(GUARD.silbatoSpeed)} más rápido por nivel. Los cuervos lo odian.` },
 };
 
 /** Casa de gnomos: cada gnomo necesita una cama. Se gestiona desde el granero. */
@@ -185,6 +198,12 @@ export const LOG = {
   sindicato: 'El sindicato gnomo pide más café. Todos paran con los brazos cruzados.',
   sindicatoFin: 'Acaba la huelga: los gnomos vuelven al tajo con la taza en la mano.',
   espantapajaros: (n: string) => `${n} ha decidido que hoy es espantapájaros. Nadie se atreve a llevarle la contraria.`,
+  // iteración 7
+  regadores: 'Abre la Cofradía del Agua. El pozo ya tiene quien lo mire con cariño.',
+  guardianes: 'La Orden de la Atalaya acepta miembros. Los cuervos empiezan a preocuparse.',
+  regar: ['riega una tomatera y le dice que no tenga prisa.', 'ha regado una piedra. Por si acaso.', 'se ha regado los pies. Dice que también crecen.'],
+  cuervoGuardian: (n: string) => `${n} ve venir al cuervo y lo echa antes de que pruebe bocado. Lo apunta en su cuaderno de guardia.`,
+  topoGuardian: (n: string) => `${n} le pide educadamente al topo que se vaya. El topo se va, ofendidísimo.`,
 };
 
 /** Rasgos de carácter: se ven en la ficha del gnomo. */
@@ -208,6 +227,8 @@ export const LEGENDARIO = {
 export const FICHA = {
   titulo: (n: string) => `Ficha de ${n}`,
   cerrar: 'Cerrar la ficha',
+  plegar: 'Plegar la ficha: solo el nombre y lo que hace',
+  desplegar: 'Desplegar la ficha',
   ver: 'Ver ficha',
   verDe: (n: string) => `Ver la ficha de ${n}`,
   ayudaTablon: 'Doble clic en un gnomo para ver su ficha.',
@@ -253,6 +274,14 @@ export const FICHA = {
     aplaudiendo: 'Aplaudiendo algo con entusiasmo',
     pensando: 'Pensando. O eso dice',
     comiendo: 'Comiéndose una zanahoria «para probarla»',
+    vaARegar: (uno: string) => `Va a regar ${uno}`,
+    regando: (uno: string) => `Regando ${uno}. Le cuenta que va a llover`,
+    regandoTierra: 'Regando la tierra, por si acaso',
+    vaAlPozo: 'Va al pozo a por agua',
+    llenando: 'Llenando la regadera. Sin prisa',
+    patrullando: 'Patrullando el bancal con cara de importante',
+    vigilando: 'Vigilando con la mano en la frente',
+    haVisto: 'Ha visto algo. No le quita ojo',
     decidiendo: 'Decidiendo qué hacer con su vida',
   },
   /** frases del día: cambian cada minuto; las del rasgo se mezclan con las comunes */
@@ -283,4 +312,26 @@ export const FICHA = {
     dormilon: ['Cinco minutitos más.', 'Duermo de pie para ahorrar tiempo.', 'He soñado que trabajaba. Qué cansancio.'],
     currante: ['¿Descanso? ¿Eso se come?', 'He plantado antes de que saliera el sol. El sol ha llegado tarde.', 'Si paro, me oxido.'],
   } satisfies Record<TraitId, string[]>,
+};
+
+/** Multiplicador de organización (B6): junto a las monedas; al pulsarlo se ve cómo va cada parte. */
+export const ORG = {
+  titulo: 'Organización',
+  valor: (m: number) => `×${m.toFixed(2).replace('.', ',')}`,
+  boton: 'Organización: lo bien que funciona el huerto. Multiplica lo que se cobra. Pulsa para ver el detalle',
+  ayuda: 'Un huerto bien llevado vende más caro. Así va cada parte en los últimos minutos:',
+  partes: {
+    cosecha: 'Cosecha a tiempo',
+    cesta: 'Cesta sin atascos',
+    siembra: 'Tierra sembrada',
+    riego: 'Riego de los sedientos',
+  } satisfies Record<OrgPart, string>,
+  /** pista para la parte que peor va */
+  consejo: {
+    cosecha: `Se echa a perder la cosecha: más recolectores o prioridad «${prioridad('urgente').toLowerCase()}».`,
+    cesta: 'Los recolectores esperan con la cesta llena: más porteadores o una cesta más grande.',
+    siembra: 'Hay tierra vacía mirando al cielo: más sembradores.',
+    riego: 'Los cultivos con sed crecen a duras penas: hacen falta regadores (o más).',
+  } satisfies Record<OrgPart, string>,
+  todoBien: 'Todo marcha como un reloj de cuco. Los gnomos no se lo creen ni ellos.',
 };

@@ -1,11 +1,11 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WILT_WARNING, WORLD } from '../sim/config';
-import { basketMax, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin } from '../sim/sim';
+import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WELL, WILT_WARNING, WORLD } from '../sim/config';
+import { basketMax, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, waterTime } from '../sim/sim';
 import type { Critter, GameState, Gnome } from '../sim/types';
 import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
-import { DecorView } from './decor';
+import { DecorView, TOWER, WELL_DRAW_H } from './decor';
 import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, oldTreeStage, outlined } from './landmarks';
 import { frameIndex, type Atlas } from './sprites';
 
@@ -96,6 +96,8 @@ export class SceneView {
   private field = new Sprite();
   private entities = new Container();
   private marks = new Graphics();
+  /** tierra mojada por el regador y grietas de sed (sobre el bancal, bajo las plantas) */
+  private soil = new Graphics();
   private hover = new Graphics();
   /** efectos sobre todo lo demás: cultivos volando, polvo, lluvia de ranas, flecha del seguido */
   private fx = new Container();
@@ -144,6 +146,8 @@ export class SceneView {
   private layoutKey = '';
   private fieldKey = '';
   private time = 0;
+  /** pantalla tapada por la interfaz HTML (barra de abajo, ficha del gnomo a la derecha), en px de pantalla */
+  private insets = { right: 0, bottom: 0 };
 
   constructor(private app: Application, private atlas: Atlas) {
     this.world.addChild(new Sprite(Texture.from(drawBackground())));
@@ -153,7 +157,7 @@ export class SceneView {
     this.marker.anchor.set(0.5, 1);
     this.marker.visible = false;
     this.fx.addChild(this.rain, this.marker);
-    this.world.addChild(this.field, this.marks, this.entities, this.fx, this.hover);
+    this.world.addChild(this.field, this.soil, this.marks, this.entities, this.fx, this.hover);
     app.stage.addChild(this.grass, this.world, this.overlay);
 
     for (let i = 0; i < FIELD.maxCols * FIELD.maxRows; i++) {
@@ -238,6 +242,12 @@ export class SceneView {
   /** La cámara se acerca un paso de escala entera y mantiene centrado al gnomo; null vuelve al encuadre normal. */
   follow(id: number | null) {
     this.followId = id;
+  }
+
+  /** Lo que tapa la interfaz: el encuadre se ajusta y se centra en el resto de la pantalla. */
+  setInsets(i: { right: number; bottom: number }) {
+    if (i.right === this.insets.right && i.bottom === this.insets.bottom) return;
+    this.insets = { right: i.right, bottom: i.bottom };
   }
 
   /** Borra las vistas de los gnomos (al empezar partida nueva). */
@@ -366,23 +376,28 @@ export class SceneView {
 
   /** El encuadre normal enseña el granero y el bancal abierto con la mayor escala entera que quepa. */
   private layout(s: GameState) {
-    const { width: w, height: h } = this.app.screen;
-    const key = `${w}x${h}|${this.fieldKey}`;
+    const { width: sw, height: sh } = this.app.screen;
+    // el encuadre cabe en lo que no tapa la interfaz
+    const w = Math.max(1, sw - this.insets.right), h = Math.max(1, sh - this.insets.bottom);
+    const key = `${sw}x${sh}|${this.insets.right}x${this.insets.bottom}|${this.fieldKey}|${s.tree.regadores > 0}|${s.tree.guardianes > 0}`;
     if (key === this.layoutKey) return;
     const first = this.layoutKey === '';
     this.layoutKey = key;
 
     const f = fieldSize(s);
-    const x0 = OLD_TREE.x - 4, y0 = BARN.y - 12;
-    const x1 = FIELD.x + f.cols * FIELD.cell + 12;
+    // el pozo y la atalaya solo cuentan cuando se ven
+    const well = s.tree.regadores > 0, tower = s.tree.guardianes > 0;
+    const x0 = OLD_TREE.x - 4;
+    const y0 = Math.min(BARN.y - 12, well ? WELL.y + WELL.h - WELL_DRAW_H - 2 : Infinity, tower ? TOWER.y - 2 : Infinity);
+    const x1 = Math.max(FIELD.x + f.cols * FIELD.cell + 12, tower ? TOWER.x + TOWER.w + 4 : 0);
     const y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 14, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4);
     const bw = x1 - x0, bh = y1 - y0;
     this.baseScale = Math.max(1, Math.floor(Math.min(w / bw, h / bh)));
     this.base = { x: x0 + bw / 2, y: y0 + bh / 2 };
     // al cambiar el tamaño de la ventana no hace falta un paseo de cámara
     if (first || this.followId === null) this.cam = { ...this.base };
-    this.grass.width = w;
-    this.grass.height = h;
+    this.grass.width = sw;
+    this.grass.height = sh;
   }
 
   /**
@@ -390,7 +405,9 @@ export class SceneView {
    * sin que el borde del mundo entre en pantalla. La posición se redondea para que los píxeles no tiemblen.
    */
   private camera(s: GameState, dt: number) {
-    const { width: w, height: h } = this.app.screen;
+    const { width: sw, height: sh } = this.app.screen;
+    // la cámara centra en la parte de la pantalla que no tapa la interfaz
+    const w = Math.max(1, sw - this.insets.right), h = Math.max(1, sh - this.insets.bottom);
     const g = this.followId === null ? undefined : s.gnomes.find(g => g.id === this.followId);
     const B = this.baseScale;
     const S = g ? (B <= 2 ? B * 2 : B + 1) : B;
@@ -423,6 +440,9 @@ export class SceneView {
   }
 
   private syncPlants(s: GameState) {
+    const soil = this.soil;
+    soil.clear();
+    const wetMax = waterTime(s);
     for (const p of s.plots) {
       const sp = this.plants[p.id];
       const sparkle = this.sparkles[p.id];
@@ -431,6 +451,14 @@ export class SceneView {
       sparkle.visible = false;
       if (!open) continue;
       const o = plotOrigin(p);
+      if (p.wet > 0) {
+        // regada: la tierra se oscurece y se va aclarando según se seca
+        soil.rect(o.x, o.y, FIELD.cell, FIELD.cell).fill({ color: 0x1a1c2c, alpha: 0.3 * Math.min(1, p.wet / wetMax) });
+      } else if (CROPS[p.crop].thirsty && p.stage >= 0 && p.stage < RIPE) {
+        // con sed y seca: grietas claras en la tierra, para que se note que le falta agua
+        for (const [x, y] of [[3, 14], [4, 15], [5, 15], [6, 14], [7, 15], [11, 13], [12, 14], [13, 14], [14, 15], [12, 12]]) soil.rect(o.x + x, o.y + y, 1, 1);
+        soil.fill({ color: 0xe0b07a, alpha: 0.75 });
+      }
       sp.zIndex = o.y + 15;
       if (p.stage < 0) {
         sp.texture = this.atlas.hole;
@@ -730,6 +758,12 @@ export class SceneView {
           break;
         case 'crown':
           break;
+        case 'water': {
+          // salpicadura: gotas que saltan de la planta y caen
+          const o = plotOrigin(s.plots[e.plot]);
+          for (let i = 0; i < 7; i++) this.addParticle(this.atlas.drop, o.x + 9 + (i - 3) * 1.5, o.y + 12, (i - 3) * 9, -22 - (i % 3) * 8, 140, 0.5);
+          break;
+        }
       }
     }
     s.events.length = 0;

@@ -1,5 +1,6 @@
 import {
-  CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, PRIORITIES, ROTTEN, TRAIT_IDS, TREE,
+  CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, ORG, PRIORITIES, RIPE, ROTTEN,
+  TRAIT_IDS, TREE,
 } from './config';
 import { GRUPOS, LOG } from '../textos';
 import type { CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Priority, Rng, TraitId } from './types';
@@ -23,7 +24,7 @@ export function createState(rng: Rng): GameState {
   const plots: Plot[] = [];
   for (let row = 0; row < FIELD.maxRows; row++) {
     for (let col = 0; col < FIELD.maxCols; col++) {
-      plots.push({ id: plots.length, col, row, crop: 'zanahoria', stage: -1, t: 0, res: null });
+      plots.push({ id: plots.length, col, row, crop: 'zanahoria', stage: -1, t: 0, res: null, wet: 0, wres: null });
     }
   }
   // una fila ya sembrada para que haya algo que recoger desde el principio
@@ -37,14 +38,16 @@ export function createState(rng: Rng): GameState {
     plots,
     basket: [],
     gnomes: [],
-    hired: { recolector: 0, sembrador: 0, porteador: 0 },
+    hired: Object.fromEntries(JOB_IDS.map(j => [j, 0])) as Record<JobId, number>,
     groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano', seed: null }],
     nextGroupId: 2,
     nextId: 1,
     manualHarvests: 0,
     rotted: 0,
     house: 0,
-    crowns: { recolector: null, sembrador: null, porteador: null },
+    // sin datos todas las partes valen 1 (ver ORG)
+    org: { mult: 1 + ORG.max, parts: { cosecha: 1, cesta: 1, siembra: 1, riego: 1 } },
+    crowns: Object.fromEntries(JOB_IDS.map(j => [j, null])) as Record<JobId, number | null>,
     critters: [],
     nextCritterId: 1,
     nextEventIn: EVENT_GAP.first,
@@ -56,11 +59,12 @@ export function createState(rng: Rng): GameState {
 
 // ---------- Guardado ----------
 // Solo se guarda el estado duradero. Lo que el gnomo estaba haciendo se descarta
-// y al cargar vuelve a pensar; no se simula el tiempo que pasó fuera. Los bichos y los sucesos tampoco se guardan.
+// y al cargar vuelve a pensar; no se simula el tiempo que pasó fuera. Los bichos y los sucesos tampoco se guardan,
+// ni el multiplicador de organización: se recalcula solo.
 // Los campos opcionales (semilla del grupo, estadísticas, podredumbre) se rellenan al cargar si faltan;
-// los cambios de forma van en MIGRATIONS.
+// los cambios de forma van en MIGRATIONS. Los oficios y cultivos que falten (partidas viejas) empiezan en cero.
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 /** la partida más vieja que se sabe cargar */
 const OLDEST_VERSION = 3;
 
@@ -78,7 +82,7 @@ export interface SaveData {
   rotted: number;
   house: number;
   crowns: Record<JobId, number | null>;
-  plots: { crop: CropId; stage: number; t: number }[];
+  plots: { crop: CropId; stage: number; t: number; wet: number }[];
   gnomes: {
     id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[]; stats: GnomeStats;
     trait: TraitId; legendary: boolean;
@@ -100,8 +104,8 @@ export function serialize(s: GameState): SaveData {
     manualHarvests: s.manualHarvests,
     rotted: s.rotted,
     house: s.house,
+    plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet })),
     crowns: { ...s.crowns },
-    plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t })),
     gnomes: s.gnomes.map(g => ({
       id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry], stats: { ...g.stats },
       trait: g.trait, legendary: g.legendary,
@@ -127,6 +131,10 @@ const MIGRATIONS: ((d: RawSave, rng: Rng) => void)[] = [
     if (Array.isArray(d.gnomes)) {
       for (const g of d.gnomes) if (g && typeof g === 'object') Object.assign(g, { trait: randomTrait(rng), legendary: false });
     }
+  },
+  // v4 → v5 (iteración 7): parcelas sin regar; los oficios nuevos (regador, guardián) se rellenan al cargar
+  d => {
+    if (Array.isArray(d.plots)) for (const p of d.plots) if (p && typeof p === 'object') Object.assign(p, { wet: 0 });
   },
 ];
 
@@ -172,6 +180,8 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
       const stage = Math.floor(num(p?.stage, -1));
       plot.stage = stage >= -1 && stage <= ROTTEN ? stage : -1;
       plot.t = Math.max(0, num(p?.t, 0));
+      // solo lo que crece puede estar regado
+      plot.wet = plot.stage >= 0 && plot.stage < RIPE ? Math.max(0, num(p?.wet, 0)) : 0;
     });
   }
   if (Array.isArray(d.gnomes)) {

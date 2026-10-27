@@ -2,9 +2,9 @@
 // Los edificios pulsables (granero, tablón, árbol viejo, casa) se dibujan en landmarks.ts; aquí va lo demás.
 // Cada objeto es un sprite suelto en la capa de entidades, ordenado por su base como los gnomos.
 import { Sprite, Texture, type Container } from 'pixi.js';
-import { BARN, BASKET, DOOR, FIELD, HOUSE, TREE } from '../sim/config';
+import { BARN, BASKET, CROP_IDS, DOOR, FIELD, HOUSE, TREE, WELL } from '../sim/config';
 import { hasPorters } from '../sim/sim';
-import type { GameState } from '../sim/types';
+import type { CropId, GameState, NodeId } from '../sim/types';
 import { blit, makeCanvas, type PixelMap } from './pixelart';
 
 type Ctx = CanvasRenderingContext2D;
@@ -210,18 +210,26 @@ function drawCompost(level: number): HTMLCanvasElement {
   return c;
 }
 
-/** icono pintado en cada tabla del poste: zanahoria, trigo, tomate, calabaza */
-const CROP_ICONS: PixelMap[] = [['.g.', 'ooo', '.o.'], ['y.y', 'yyy', '.y.'], ['.g.', 'rrr', 'rrr'], ['.g.', 'ooo', 'OOO']];
-const ICON_PAL = { g: '#38b764', o: '#ef7d57', O: '#b86f50', y: '#ffcd75', r: '#b13e53' };
-/** Poste indicador del bancal: una tabla pintada por cultivo conocido (level = cultivos, 1–4). */
-function drawSignpost(level: number): HTMLCanvasElement {
-  const w = 14, h = 6 + 4 * level;
+/** icono pintado en la tabla de cada cultivo del poste */
+const CROP_ICONS: Record<CropId, PixelMap> = {
+  zanahoria: ['.g.', 'ooo', '.o.'],
+  trigo: ['y.y', 'yyy', '.y.'],
+  fresa: ['ggg', 'ryr', '.r.'],
+  tomate: ['.g.', 'rrr', 'rrr'],
+  calabaza: ['.g.', 'ooo', 'OOO'],
+  melon: ['GdG', 'GdG', '.G.'],
+};
+const ICON_PAL = { g: '#38b764', o: '#ef7d57', O: '#b86f50', y: '#ffcd75', r: '#b13e53', G: '#38b764', d: '#257179' };
+/** Poste indicador del bancal: una tabla pintada por cultivo conocido (mask = bits de CROP_IDS conocidos). */
+function drawSignpost(mask: number): HTMLCanvasElement {
+  const known = CROP_IDS.filter((_, i) => mask & (1 << i));
+  const w = 14, h = 6 + 4 * known.length;
   const c = makeCanvas(w, h);
   const ctx = c.getContext('2d')!;
   rect(ctx, 1, 0, 4, h, O);
   rect(ctx, 2, 1, 2, h - 1, '#8b5a3c');
   rect(ctx, 3, 1, 1, h - 1, '#5a3a2a');
-  for (let i = 0; i < level; i++) {
+  known.forEach((crop, i) => {
     const y = 1 + i * 4, flip = i % 2 === 1;
     // tablas en flecha hacia el bancal, alternando un poco el largo
     const len = flip ? 11 : 12;
@@ -229,7 +237,112 @@ function drawSignpost(level: number): HTMLCanvasElement {
     rect(ctx, len, y + 1, 1, 2, O);
     rect(ctx, 1, y + 1, len - 1, 2, '#c8925f');
     rect(ctx, len - 1, y + 1, 1, 2, '#c8925f');
-    blit(ctx, CROP_ICONS[i], 6, y, ICON_PAL);
+    blit(ctx, CROP_ICONS[crop], 6, y, ICON_PAL);
+  });
+  return c;
+}
+
+/** alto máximo del dibujo del pozo (con tejadillo); scene.ts lo usa para el encuadre */
+export const WELL_DRAW_H = 26;
+/**
+ * Pozo del regador, 16 × WELL_DRAW_H, apoyado en la base de WELL. level = 1 + regadera:
+ * 1 brocal de piedra con torno, 2 tejadillo, 3 cubo colgando, 4 flores al pie, 5 hiedra entre las piedras.
+ */
+function drawWell(level: number): HTMLCanvasElement {
+  const H = WELL_DRAW_H;
+  const c = makeCanvas(16, H);
+  const ctx = c.getContext('2d')!;
+  // postes y travesaño con el torno
+  for (const x of [1, 12]) {
+    rect(ctx, x, H - 20, 3, 11, O);
+    rect(ctx, x + 1, H - 19, 1, 10, '#8b5a3c');
+  }
+  rect(ctx, 1, H - 20, 14, 2, O);
+  rect(ctx, 2, H - 19, 12, 1, '#c8925f');
+  rect(ctx, 15, H - 19, 1, 3, O);
+  // cuerda (y cubo, desde el nivel 3)
+  rect(ctx, 8, H - 18, 1, level >= 3 ? 4 : 7, '#d9a066');
+  if (level >= 3) {
+    rect(ctx, 6, H - 14, 5, 4, O);
+    rect(ctx, 7, H - 13, 3, 2, '#8b5a3c');
+    rect(ctx, 7, H - 12, 3, 1, '#94b0c2');
+  }
+  // brocal: boca oscura con un brillo de agua y piedras
+  rect(ctx, 0, H - 10, 16, 10, O);
+  rect(ctx, 1, H - 9, 14, 2, '#333c57');
+  rect(ctx, 4, H - 9, 3, 1, '#41a6f6');
+  rect(ctx, 1, H - 7, 14, 6, '#94b0c2');
+  for (const [x, y] of [[4, 7], [9, 7], [13, 7], [1, 5], [6, 5], [11, 5], [4, 3], [9, 3], [13, 3]]) rect(ctx, x, H - y, 1, 2, '#566c86');
+  for (const y of [5, 3]) rect(ctx, 1, H - y + 1, 14, 1, '#566c86');
+  if (level >= 2) {
+    // tejadillo a dos aguas
+    for (let i = 0; i < 6; i++) {
+      rect(ctx, 7 - i, H - 26 + i, 2 + 2 * i, 1, O);
+      if (i > 0) rect(ctx, 8 - i, H - 26 + i, 2 * i, 1, i % 2 ? '#b13e53' : '#8e2f44');
+    }
+    rect(ctx, 0, H - 21, 16, 1, O);
+  }
+  if (level >= 4) {
+    for (const [x, color] of [[0, '#e8687d'], [2, '#ffcd75'], [13, '#f4f4f4'], [15, '#e8687d']] as const) {
+      rect(ctx, x, H - 2, 1, 1, color);
+      rect(ctx, x, H - 1, 1, 1, '#38b764');
+    }
+  }
+  if (level >= 5) for (const [x, y] of [[2, 6], [3, 5], [3, 4], [12, 6], [11, 4], [12, 3]]) rect(ctx, x, H - y, 1, 1, '#38b764');
+  return c;
+}
+
+/** Atalaya del guardián, a la derecha del poste indicador; GUARD.post (en sim) está a su pie. */
+export const TOWER = { x: 176, y: 19, w: 17, h: 36 } as const;
+/**
+ * Atalaya de madera con escalera y tejado de pizarra. level = 1 + silbato:
+ * 2 banderín en la punta, 3 campana bajo el tejado, 4 guirnalda en la barandilla.
+ */
+function drawTower(level: number): HTMLCanvasElement {
+  const { w, h } = TOWER;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d')!;
+  const y0 = 5;
+  // patas, riostras y escalera
+  for (const x of [1, 13]) {
+    rect(ctx, x, y0 + 16, 3, h - y0 - 16, O);
+    rect(ctx, x + 1, y0 + 16, 1, h - y0 - 16, '#8b5a3c');
+  }
+  for (let i = 0; i < 9; i++) {
+    rect(ctx, 4 + i, y0 + 18 + i, 1, 1, '#5a3a2a');
+    rect(ctx, 12 - i, y0 + 18 + i, 1, 1, '#5a3a2a');
+  }
+  rect(ctx, 6, y0 + 16, 1, h - y0 - 16, '#a8723f');
+  rect(ctx, 10, y0 + 16, 1, h - y0 - 16, '#a8723f');
+  for (let y = y0 + 18; y < h; y += 3) rect(ctx, 7, y, 3, 1, '#c8925f');
+  // garita: postes, barandilla y suelo
+  for (const x of [2, 13]) {
+    rect(ctx, x, y0 + 7, 2, 8, O);
+    rect(ctx, x + (x === 2 ? 1 : 0), y0 + 8, 1, 6, '#8b5a3c');
+  }
+  rect(ctx, 2, y0 + 10, 13, 2, O);
+  rect(ctx, 3, y0 + 10, 11, 1, '#8b5a3c');
+  rect(ctx, 0, y0 + 14, w, 3, O);
+  rect(ctx, 1, y0 + 15, w - 2, 1, '#c8925f');
+  // tejado de pizarra
+  for (let i = 0; i < 7; i++) {
+    rect(ctx, 7 - i, y0 + i, 3 + 2 * i, 1, O);
+    if (i > 0) rect(ctx, 8 - i, y0 + i, 1 + 2 * i, 1, i % 2 ? '#566c86' : '#94b0c2');
+  }
+  rect(ctx, 0, y0 + 7, w, 1, O);
+  if (level >= 2) {
+    rect(ctx, 8, 0, 1, y0, O);
+    rect(ctx, 9, 0, 3, 1, '#b13e53');
+    rect(ctx, 9, 1, 2, 1, '#b13e53');
+    rect(ctx, 9, 2, 1, 1, '#b13e53');
+  }
+  if (level >= 3) {
+    rect(ctx, 7, y0 + 8, 3, 2, '#ffcd75');
+    rect(ctx, 8, y0 + 10, 1, 1, '#f4b41b');
+  }
+  if (level >= 4) {
+    const flags = ['#b13e53', '#ffcd75', '#41a6f6', '#38b764'];
+    for (let x = 3; x <= 13; x += 2) rect(ctx, x, y0 + 12, 1, 1, flags[(x >> 1) % flags.length]);
   }
   return c;
 }
@@ -313,8 +426,9 @@ function drawGatePost(withDoor: boolean): HTMLCanvasElement {
 
 // ---------- vista ----------
 
-/** Cuántos cultivos conoce el huerto: la zanahoria y los que se han desbloqueado (van en orden). */
-const knownCrops = (s: GameState) => 1 + s.tree.trigo + s.tree.tomate + s.tree.calabaza;
+/** Cultivos que conoce el huerto como bits de CROP_IDS: los que no tienen nodo en el árbol se conocen desde el principio. */
+const knownCrops = (s: GameState) =>
+  CROP_IDS.reduce((mask, c, i) => (!(c in TREE) || s.tree[c as NodeId] > 0 ? mask | (1 << i) : mask), 0);
 
 export class DecorView {
   private sacks: Prop;
@@ -328,6 +442,8 @@ export class DecorView {
   private bands: Prop;
   private fence: Prop[];
   private gate: Prop[];
+  private well: Prop;
+  private tower: Prop;
 
   /** Los sprites van directos a `parent` (la capa de entidades) para ordenarse con los gnomos. */
   constructor(parent: Container) {
@@ -342,6 +458,8 @@ export class DecorView {
     this.bands = new Prop(parent, drawBasketBands);
     this.fence = [false, true].flatMap(bottom => [false, true].map(right => new Prop(parent, () => drawFenceCorner(bottom, right))));
     this.gate = [true, false].map(door => new Prop(parent, () => drawGatePost(door)));
+    this.well = new Prop(parent, drawWell);
+    this.tower = new Prop(parent, drawTower);
   }
 
   sync(s: GameState) {
@@ -361,6 +479,9 @@ export class DecorView {
     // sobre el bancal, en la hierba de arriba, donde no pasa nadie
     this.compost.show(t.abono, FIELD.x + 12, FIELD.y - 3);
     this.sign.show(knownCrops(s), FIELD.x + 44, FIELD.y - 2);
+    // pozo del regador y atalaya del guardián: aparecen con su oficio y se adornan con su mejora
+    this.well.show(t.regadores > 0 ? 1 + t.regadera : 0, WELL.x - 2, WELL.y + WELL.h);
+    this.tower.show(t.guardianes > 0 ? 1 + t.silbato : 0, TOWER.x, TOWER.y + TOWER.h);
     // la cesta solo se ve con porteadores (como en scene.ts); los refuerzos van justo encima
     const basketTop = BASKET.y - 4 - 9;
     this.bands.show(hasPorters(s) || s.basket.length > 0 ? t.cesta : 0, BASKET.x - 8, basketTop + 11, BASKET.y - 4 + 0.5);

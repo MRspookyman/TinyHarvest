@@ -13,6 +13,8 @@
   --gold-dark: #ef7d57;
   --red: #b13e53;
   --outline: #1a1c2c;
+  --green: #a7f070;
+  --green-dark: #38b764;
   --fg: #f4f4f4;
   --font-display: 'Pixelify Sans', 'Courier New', monospace;
   --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -33,12 +35,37 @@ img.px { image-rendering: pixelated; display: block; }
 #app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 
 /* ---------- barra superior ---------- */
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; background: var(--wood-dark); border-bottom: var(--px) solid var(--outline); box-shadow: inset 0 calc(-1 * var(--px)) 0 var(--wood); color: var(--fg); }
+.topbar { position: relative; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; background: var(--wood-dark); border-bottom: var(--px) solid var(--outline); box-shadow: inset 0 calc(-1 * var(--px)) 0 var(--wood); color: var(--fg); }
 .topbar h1 { font-size: 1.4rem; text-shadow: 2px 2px 0 var(--outline); }
 .stats { display: flex; gap: 20px; font-family: var(--font-display); font-size: 1.1rem; }
 .stat { display: inline-flex; align-items: center; gap: 6px; color: var(--paper-dark); }
 .stat b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .coin { width: 14px; height: 14px; background: var(--gold); box-shadow: inset -3px -3px 0 var(--gold-dark), 0 0 0 2px var(--outline); }
+
+/* organización: multiplicador junto a las monedas; el color dice lo bien que va */
+.org { position: relative; display: flex; }
+.org-btn { border: 0; background: none; padding: 2px 4px; font: inherit; cursor: pointer; }
+.org-btn:hover, .org.open .org-btn { background: var(--wood); }
+/* icono: tres barritas de gráfica, en píxeles */
+.org-icon { width: 14px; height: 14px; background: linear-gradient(currentColor 0 0) 0 100% / 4px 6px no-repeat, linear-gradient(currentColor 0 0) 5px 100% / 4px 10px no-repeat, linear-gradient(currentColor 0 0) 10px 100% / 4px 14px no-repeat; }
+.org[data-q='bad'] .org-btn, .org[data-q='bad'] .org-btn b { color: var(--gold-dark); }
+.org[data-q='mid'] .org-btn, .org[data-q='mid'] .org-btn b { color: var(--gold); }
+.org[data-q='good'] .org-btn, .org[data-q='good'] .org-btn b { color: var(--green); }
+.org-pop {
+  display: none; position: absolute; top: calc(100% + 10px); right: -60px; width: 300px;
+  padding: 10px 12px; background: var(--paper); color: var(--ink); box-shadow: 0 0 0 var(--px) var(--outline), 0 6px 0 rgba(26, 28, 44, 0.35);
+  font-family: var(--font-body); font-size: 0.85rem;
+}
+.org.open .org-pop { display: block; }
+@media (hover: hover) { .org:hover .org-pop { display: block; } }
+.org-pop h3 { font-size: 1rem; margin-bottom: 2px; }
+.org-pop ul { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.org-pop li { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 8px; }
+.org-bar { display: block; height: 10px; background: var(--paper-dark); box-shadow: 0 0 0 2px var(--ink-soft); }
+.org-bar i { display: block; height: 100%; background: var(--green-dark); }
+.org-bar i[data-q='bad'] { background: var(--red); }
+.org-bar i[data-q='mid'] { background: var(--gold-dark); }
+.org-tip { font-weight: 700; color: var(--ink-soft); }
 
 /* ---------- huerto ---------- */
 #stage { position: relative; min-height: 0; overflow: hidden; }
@@ -50,10 +77,12 @@ img.px { image-rendering: pixelated; display: block; }
   font-family: var(--font-display); font-size: 0.95rem; text-align: center; pointer-events: none;
   box-shadow: 0 0 0 var(--px) var(--outline);
 }
-.hint { top: 14px; }
-.ticker { bottom: 100px; opacity: 0; }
+/* el aviso sale arriba: abajo taparía la última fila del bancal grande, que llega justo hasta la barra.
+   La pista (solo al empezar, con el bancal pequeño) va abajo, sobre la barra */
+.ticker { top: 14px; opacity: 0; }
+.hint { bottom: 100px; }
 .ticker.show { animation: ticker 5s ease forwards; }
-@keyframes ticker { 0% { opacity: 0; transform: translate(-50%, 6px); } 8%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+@keyframes ticker { 0% { opacity: 0; transform: translate(-50%, -6px); } 8%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
 
 /* ---------- barra de herramientas ---------- */
 .toolbar {
@@ -88,7 +117,8 @@ img.px { image-rendering: pixelated; display: block; }
   border: 24px solid transparent; border-image: var(--frame-img) 8 fill / 24px; image-rendering: pixelated;
   color: var(--ink); filter: drop-shadow(0 6px 0 rgba(26, 28, 44, 0.35));
 }
-.win-arbol { width: min(920px, 100%); }
+/* el árbol tiene 19 nodos: ventana más ancha y nodos algo más pequeños para que no se toquen */
+.win-arbol { width: min(1040px, 100%); }
 .win-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 2px 10px; border-bottom: var(--px) solid var(--paper-dark); margin: -6px -4px 12px; }
 .win-head h2 { font-size: 1.6rem; color: var(--ink); }
 .win-head p { font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
@@ -136,11 +166,11 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .tree-lines polyline.lit { stroke: var(--wood); stroke-dasharray: none; }
 .branch-label { position: absolute; top: 90%; transform: translate(-50%, -50%); font-weight: 700; font-size: 0.75rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.08em; pointer-events: none; }
 .node {
-  position: absolute; transform: translate(-50%, -50%); width: 52px; height: 52px; padding: 0;
+  position: absolute; transform: translate(-50%, -50%); width: 46px; height: 46px; padding: 0;
   display: grid; place-items: center; background: var(--paper); cursor: pointer;
   border: 0; box-shadow: 0 0 0 var(--px) var(--outline), inset 0 calc(-1 * var(--px)) 0 var(--paper-dark);
 }
-.node img { width: 32px; height: 32px; object-fit: contain; }
+.node img { width: 30px; height: 30px; object-fit: contain; }
 .node.root { background: var(--wood-light); }
 .node.locked { background: #cbb996; }
 .node.locked img { filter: brightness(0) opacity(0.3); }
@@ -228,7 +258,7 @@ img.crown-icon { display: inline-block; width: 14px; height: 10px; margin: 0 2px
 
 /* ---------- ficha del gnomo ---------- */
 .gnome-card {
-  position: absolute; top: 12px; right: 12px; width: min(300px, calc(100% - 24px)); max-height: calc(100% - 120px);
+  position: absolute; top: 12px; right: 12px; width: min(264px, calc(100% - 24px)); max-height: calc(100% - 120px);
   display: flex; flex-direction: column; gap: 8px;
   border: 24px solid transparent; border-image: var(--frame-img) 8 fill / 24px; image-rendering: pixelated;
   color: var(--ink); filter: drop-shadow(0 6px 0 rgba(26, 28, 44, 0.35));
@@ -236,11 +266,15 @@ img.crown-icon { display: inline-block; width: 14px; height: 10px; margin: 0 2px
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -6px -4px 0; padding-bottom: 8px; border-bottom: var(--px) solid var(--paper-dark); }
 .card-title { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
 .card-job { width: 32px; height: 34px; flex: none; }
-.card-title h2 { font-size: 1.2rem; overflow-wrap: anywhere; }
+.card-title h2 { font-size: 1.1rem; overflow-wrap: break-word; }
 .card-title p { font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-soft); }
 .badge.legend { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; background: var(--gold); color: var(--ink); }
 img.legend-icon { width: 18px; height: 18px; }
 .gnome-card .win-close { width: 30px; height: 30px; }
+.card-btns { display: flex; gap: 4px; flex: none; }
+/* plegada: nombre y «Ahora», nada más */
+.gnome-card.folded .card-body, .gnome-card.folded .card-move, .gnome-card.folded .card-title p, .gnome-card.folded .badge.legend { display: none; }
+.gnome-card.folded .card-head { padding-bottom: 4px; }
 .card-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; font-size: 0.88rem; }
 .card-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; }
 .card-facts dt { padding-top: 2px; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
@@ -248,7 +282,9 @@ img.legend-icon { width: 18px; height: 18px; }
 .card-facts .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; box-shadow: 0 0 0 2px var(--outline); }
 .card-facts img.trait-icon { width: 24px; height: 20px; margin-right: 4px; vertical-align: -5px; opacity: 1; }
 .card-facts .muted { display: block; font-size: 0.82rem; }
-.card-now { font-family: var(--font-display); }
+.card-now { display: flex; flex-direction: column; font-size: 0.88rem; }
+.card-now span { font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+.card-now b { font-family: var(--font-display); font-weight: 400; }
 .card-stats { list-style: none; margin: 0; padding: 6px 8px; display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; gap: 2px 8px; background: var(--paper-dark); font-size: 0.8rem; white-space: nowrap; }
 .card-stats b { font-variant-numeric: tabular-nums; }
 .card-quote { margin: 0; padding: 6px 10px; background: #fff8e6; box-shadow: inset var(--px) 0 0 var(--gold-dark); font-style: italic; }
@@ -261,5 +297,4 @@ img.legend-icon { width: 18px; height: 18px; }
   .job .btn { grid-column: 1 / -1; justify-self: start; }
   .tool span { display: none; }
   .tool { min-width: 0; }
-  .ticker { bottom: 84px; }
 }

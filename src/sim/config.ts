@@ -22,7 +22,7 @@ export const IDLE_AREA = { x0: 50, x1: 104, y0: 128, y1: 146 } as const;
  * Pozo del regador (iteración 7): entre el tablón y el bancal, en la hierba de arriba. (x, y, w, h) es su caja;
  * el regador se pone en (x + w/2, y + h + 2) para llenar la regadera. Solo se dibuja con «regadores» comprado.
  */
-export const WELL = { x: 99, y: 40, w: 12, h: 16 } as const;
+export const WELL = { x: 98, y: 28, w: 12, h: 16 } as const;
 
 export const STAGES = 5;
 export const RIPE = STAGES - 1;
@@ -31,30 +31,41 @@ export const ROTTEN = STAGES;
 
 export interface CropDef {
   value: number;
-  /** segundos de semilla a madura */
+  /** segundos de semilla a madura (seco y sin abono; regada crece más rápido, ver WATER) */
   grow: number;
   /** segundos que aguanta madura antes de echarse a perder */
   keep: number;
+  /** con sed: sin regar crece a WATER.dry de su velocidad */
+  thirsty?: boolean;
 }
 export const CROPS: Record<CropId, CropDef> = {
   // Rápido y laborioso → lento y cómodo. Contando ~10 s de espera entre madurar y volver a sembrar,
   // monedas/s por parcela: 0,25 → 0,22 → 0,19 → 0,16; monedas por viaje: 5 → 9 → 18 → 45.
   zanahoria: { value: 5, grow: 10, keep: 20 },
   trigo: { value: 9, grow: 31, keep: 60 },
-  tomate: { value: 18, grow: 85, keep: 30 },
+  // la fresa queda entre la zanahoria y el trigo (más valor por viaje que la una, más por parcela que el otro),
+  // pero se estropea enseguida: pide gente de sobra o conservas
+  fresa: { value: 8, grow: 24, keep: 10 },
+  tomate: { value: 20, grow: 85, keep: 30, thirsty: true },
   calabaza: { value: 45, grow: 270, keep: 120 },
+  // el melón es lo que más vale por viaje y por riego, pero solo crece si alguien lo riega
+  melon: { value: 60, grow: 300, keep: 60, thirsty: true },
 };
 /** a partir de esta fracción del aguante, la planta amarillea: deja al menos 10 s de aviso */
 export const WILT_WARNING = 0.5;
-export const CROP_IDS: CropId[] = ['zanahoria', 'trigo', 'tomate', 'calabaza'];
+export const CROP_IDS: CropId[] = ['zanahoria', 'trigo', 'fresa', 'tomate', 'calabaza', 'melon'];
 export const PRIORITIES: Priority[] = ['cercano', 'valioso', 'urgente', ...CROP_IDS.map(c => `solo_${c}` as const)];
 
 export const JOBS: Record<JobId, { base: number }> = {
   recolector: { base: 12 },
   sembrador: { base: 18 },
   porteador: { base: 45 },
+  regador: { base: 50 },
+  guardian: { base: 60 },
 };
-export const JOB_IDS: JobId[] = ['recolector', 'sembrador', 'porteador'];
+export const JOB_IDS: JobId[] = ['recolector', 'sembrador', 'porteador', 'regador', 'guardian'];
+/** el nodo del árbol que desbloquea cada oficio; los que no salen aquí se contratan desde el principio */
+export const JOB_NODE: Partial<Record<JobId, NodeId>> = { porteador: 'porteadores', regador: 'regadores', guardian: 'guardianes' };
 export const COST_GROWTH = 1.3;
 /** tope absoluto; el tope real lo marca la casa de gnomos (HOUSE) */
 export const MAX_GNOMES = 40;
@@ -95,18 +106,75 @@ export const TREE: Record<NodeId, NodeDef> = {
   porteadores: { branch: 'gnomos', base: 240, mult: 1, max: 1, parent: 'saco', x: 31, y: 26 },
   cesta: { branch: 'gnomos', base: 450, mult: 2, max: 3, parent: 'porteadores', x: 31, y: 6 },
   carretilla: { branch: 'gnomos', base: 600, mult: 2.5, max: 3, parent: 'porteadores', x: 14, y: 20 },
+  guardianes: { branch: 'gnomos', base: 350, mult: 1, max: 1, parent: 'botas', x: 44, y: 38 },
+  silbato: { branch: 'gnomos', base: 500, mult: 2.5, max: 3, parent: 'guardianes', x: 44, y: 15 },
   bancal: { branch: 'bancal', base: 75, mult: 1.55, max: 9, parent: null, x: 50, y: 62 },
   trigo: { branch: 'cultivos', base: 180, mult: 1, max: 1, parent: null, x: 76, y: 70 },
   abono: { branch: 'cultivos', base: 135, mult: 2.2, max: 5, parent: 'trigo', x: 91, y: 47 },
+  fresa: { branch: 'cultivos', base: 400, mult: 1, max: 1, parent: 'trigo', x: 57, y: 47 },
   tomate: { branch: 'cultivos', base: 750, mult: 1, max: 1, parent: 'trigo', x: 69, y: 47 },
   calabaza: { branch: 'cultivos', base: 3000, mult: 1, max: 1, parent: 'tomate', x: 69, y: 26 },
+  melon: { branch: 'cultivos', base: 12000, mult: 1, max: 1, parent: 'calabaza', x: 69, y: 6 },
   conservas: { branch: 'cultivos', base: 400, mult: 2.5, max: 3, parent: 'abono', x: 91, y: 26 },
-  mercado: { branch: 'cultivos', base: 1200, mult: 1.8, max: 5, parent: 'conservas', x: 80, y: 7 },
+  mercado: { branch: 'cultivos', base: 1200, mult: 2.15, max: 5, parent: 'conservas', x: 91, y: 6 },
+  regadores: { branch: 'cultivos', base: 500, mult: 1, max: 1, parent: 'abono', x: 80, y: 26 },
+  regadera: { branch: 'cultivos', base: 700, mult: 2.5, max: 3, parent: 'regadores', x: 80, y: 6 },
 };
 /** efectos de los nodos nuevos de la iteración 5 */
 export const CARRETILLA_PER_LEVEL = 3;
 export const CONSERVAS_PER_LEVEL = 0.25;
 export const MERCADO_PER_LEVEL = 0.15;
+
+/**
+ * Riego (iteración 7). Una parcela regada crece WATER.boost veces más rápido durante `duration` s (más con la
+ * regadera); un cultivo con sed sin regar crece a WATER.dry de su velocidad. El regador lleva agua para `can`
+ * riegos y vuelve al pozo (WELL) a llenar la regadera. Riega lo que crece y está seco o casi (menos de `low` s).
+ */
+export const WATER = {
+  duration: 90,
+  /** la regadera alarga el riego un tanto por uno por nivel… */
+  regaderaTime: 0.3,
+  /** …y acorta lo que tarda en regar */
+  regaderaWork: 0.15,
+  boost: 1.4,
+  dry: 0.3,
+  can: 6,
+  /** segundos que tarda en regar una parcela y en llenar la regadera */
+  work: 1,
+  refill: 1.5,
+  low: 8,
+} as const;
+/**
+ * Guardián (iteración 7): patrulla por fuera del bancal y a veces se para a vigilar (en `post`, al pie de su
+ * torre, o donde esté). Ve los bichos a `sight` px (más con el silbato) y va a por ellos en el acto.
+ */
+export const GUARD = {
+  sight: 60,
+  /** px de vista y tanto por uno de velocidad que da cada nivel de silbato */
+  silbatoSight: 25,
+  silbatoSpeed: 0.15,
+  /** a cuánto del borde del bancal patrulla */
+  margin: 6,
+  watch: 0.35,
+  post: { x: 184, y: 57 },
+} as const;
+/**
+ * Multiplicador de organización (B6): 1 + max × (media de las partes y peor parte, mezcladas según `worstWeight`).
+ * Cada parte es un cociente de contadores
+ * que se olvidan con una ventana exponencial de `window` s. Sin datos una parte vale 1 (nada ha ido mal todavía),
+ * así que una partida nueva empieza con el multiplicador entero y lo va ajustando: el primer minuto no castiga.
+ * `floor` es el peso de ese «sin datos» (en cultivos para la cosecha y en segundos para las demás).
+ */
+export const ORG = {
+  max: 0.3,
+  /** peso de la peor parte frente a la media: así un solo cuello de botella baja el multiplicador de verdad */
+  worstWeight: 0.5,
+  window: 120,
+  /** una parcela vacía empieza a contar como desatendida pasados estos segundos */
+  grace: 5,
+  floorCount: 1,
+  floorTime: 10,
+} as const;
 export const NODE_IDS = Object.keys(TREE) as NodeId[];
 export const TREE_ROOT = { x: 50, y: 90 } as const;
 

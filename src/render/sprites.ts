@@ -1,18 +1,22 @@
 // Sprites del juego, según la hoja de estilo (estilo/gnomo.html).
 import { Texture } from 'pixi.js';
 import { blit, makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
-import { GROUP_PALETTE } from '../sim/config';
+import { CROP_IDS, GROUP_PALETTE, JOB_IDS } from '../sim/config';
 import type { BubbleKind, CropId, JobId, Pose } from '../sim/types';
 
 export const BASE: Palette = {
   O: '#1a1c2c', S: '#f2b98c', N: '#e07a5f', W: '#f4f4f4', w: '#94b0c2', B: '#257179', K: '#333c57',
   G: '#38b764', C: '#ef7d57', P: '#d9a066', p: '#a8723f', R: '#b13e53', Z: '#f4f4f4', Y: '#ffcd75',
+  // agua de la regadera
+  A: '#41a6f6', a: '#73eff7',
 };
 
 export const HATS: Record<JobId, [string, string]> = {
   recolector: ['#b13e53', '#5d275d'],
   sembrador: ['#a7f070', '#38b764'],
   porteador: ['#8b5a3c', '#5a3a2a'],
+  regador: ['#41a6f6', '#3b5dc9'],
+  guardian: ['#94b0c2', '#566c86'],
 };
 
 // ---------- Gnomo 16 × 16 ----------
@@ -69,6 +73,35 @@ const STARS: Px[][] = [
   [[2, 2, 'Y'], [12, 1, 'Y'], [8, 0, 'W']],
   [[4, 0, 'Y'], [13, 3, 'Y'], [6, 1, 'W']],
 ];
+// regadera de zinc colgando de la mano derecha (el regador no la suelta nunca); clara para que se vea sobre la hierba
+const CAN: Px[] = [
+  [14, 12, 'O'], [14, 13, 'O'], [15, 13, 'O'],
+  [13, 14, 'O'], [14, 14, 'a'], [15, 14, 'O'],
+  [13, 15, 'O'], [14, 15, 'w'], [15, 15, 'O'],
+  [13, 16, 'O'], [14, 16, 'O'], [15, 16, 'O'],
+];
+// regando: la regadera hacia delante e inclinada, con el pitorro abajo; las gotas caen a saltos
+const WATER_CAN: Px[] = [
+  [12, 11, 'O'], [13, 11, 'O'], [14, 11, 'O'],
+  [13, 12, 'a'], [14, 12, 'w'], [15, 12, 'O'],
+  [13, 13, 'w'], [14, 13, 'w'], [15, 13, 'O'],
+  [13, 14, 'O'], [14, 14, 'O'], [15, 14, 'w'],
+];
+const WATER_DROPS: Px[][] = [
+  [[15, 15, 'A'], [14, 16, 'a']],
+  [[15, 16, 'A'], [14, 15, 'A']],
+];
+// bastón del guardián con un farolillo en la punta
+const STAFF: Px[] = [
+  [14, 2, 'O'], [13, 3, 'O'], [14, 3, 'Y'], [15, 3, 'O'], [14, 4, 'O'],
+  ...[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].flatMap(y => [[14, y, 'p'], [15, y, 'O']] as Px[]),
+  [13, 13, 'S'],
+];
+// vigilando: la mano derecha de visera bajo el ala del gorro
+const WATCH_ARM: Px[] = [
+  [12, 13, 'O'], [13, 13, '.'], [13, 12, 'W'], [14, 12, 'O'], [13, 11, 'W'], [14, 11, 'O'],
+  [10, 10, 'S'], [11, 10, 'S'], [12, 10, 'S'], [13, 10, 'S'], [14, 10, 'O'],
+];
 
 const hatPal = (job: JobId): Palette => ({ ...BASE, H: HATS[job][0], h: HATS[job][1] });
 /** Legendario: gorro dorado con una banda del color del oficio, para que se siga sabiendo qué hace. */
@@ -92,28 +125,38 @@ function gnomeCanvas(pal: Palette, body: PixelMap, feet: PixelMap, dy: number, p
   return c;
 }
 
-/** Gnomo quieto, para los iconos de los menús. */
-export const gnomeIcon = (job: JobId) => gnomeCanvas(hatPal(job), BODY, FEET.n, 0);
+/** Gnomo quieto, para los iconos de los menús (con su herramienta, para distinguir oficios del mismo tono). */
+export const gnomeIcon = (job: JobId) => gnomeCanvas(hatPal(job), BODY, FEET.n, 0, TOOLS[job]);
 
-function gnomeFrames(pal: Palette, body: PixelMap): Record<Pose, Texture[]> {
-  const f = (b: PixelMap, feet: PixelMap, dy: number, px?: readonly Px[]) => Texture.from(gnomeCanvas(pal, b, feet, dy, px));
+/** Lo que cada oficio lleva siempre en la mano al andar y trabajar. */
+const TOOLS: Record<JobId, readonly Px[]> = { recolector: [], sembrador: [], porteador: [], regador: CAN, guardian: STAFF };
+
+function gnomeFrames(pal: Palette, body: PixelMap, job: JobId): Record<Pose, Texture[]> {
+  const tool = TOOLS[job];
+  const f = (b: PixelMap, feet: PixelMap, dy: number, px: readonly Px[] = []) => Texture.from(gnomeCanvas(pal, b, feet, dy, px));
+  // herramienta en la mano: en las poses con los brazos ocupados se suelta
+  const ft = (b: PixelMap, feet: PixelMap, dy: number) => f(b, feet, dy, tool);
   const sq1 = squash(body, [4]);
   const sq2 = squash(body, [2, 4]);
-  const idle = [f(body, FEET.n, 0), f(sq1, FEET.n, 0)];
+  const idle = [ft(body, FEET.n, 0), ft(sq1, FEET.n, 0)];
   // el saco (o la carretilla) se dibuja aparte, porque crece con la carga
-  const walk = WALK.map(w => f(body, FEET[w.f], w.dy));
+  const walk = WALK.map(w => ft(body, FEET[w.f], w.dy));
   return {
     idle,
     sleep: idle,
     walk,
     carry: walk,
-    harvest: [f(sq1, FEET.n, 0), f(sq2, FEET.n, 0)],
-    complain: [f(body, FEET.n, 0), f(body, FEET.n, -1)],
+    harvest: [ft(sq1, FEET.n, 0), ft(sq2, FEET.n, 0)],
+    complain: [ft(body, FEET.n, 0), ft(body, FEET.n, -1)],
     // sentado: dos filas más bajo, respira despacio
     sit: [f(sq1.slice(0, -1), FEET.sit, 0), f(sq2.slice(0, -1), FEET.sit, 0)],
     wave: [f(body, FEET.n, 0, ARM_A), f(body, FEET.n, 0, ARM_B)],
     fall: STARS.map(st => f(sq2.slice(0, -1), FEET.fall, 0, [...FALL_LEGS, ...st])),
     scare: [f(body, FEET.n, 0, ARMS_UP), f(body, FEET.s, -1, ARMS_UP)],
+    // regando, agachado un poco en el segundo fotograma
+    water: WATER_DROPS.map((drops, i) => f(i ? sq1 : body, FEET.n, 0, [...WATER_CAN, ...drops])),
+    // mirando a lo lejos: se pone de puntillas a ratos
+    watch: [f(body, FEET.n, 0, WATCH_ARM), f(body, FEET.t, -1, WATCH_ARM)],
   };
 }
 
@@ -130,6 +173,8 @@ export function frameIndex(pose: Pose, t: number): number {
     case 'wave': return Math.floor(t * 5) % 2;
     case 'fall': return Math.floor(t * 4) % 2;
     case 'scare': return Math.floor(t * 6) % 2;
+    case 'water': return Math.floor(t * 3) % 2;
+    case 'watch': return Math.floor(t * 1.2) % 2;
   }
 }
 
@@ -139,6 +184,10 @@ const ITEMS: Record<CropId, PixelMap> = {
   trigo: ['Y.Y', 'YUY', '.T.', 'TTT'],
   tomate: ['.G.', 'RRR', 'RWR', 'RRR'],
   calabaza: ['.g.', 'CcC', 'CcC', 'CCC'],
+  // fresa: picuda, con semillitas
+  fresa: ['GlG', 'RRR', 'RYR', '.R.'],
+  // melón a rayas
+  melon: ['.KKK.', 'KGgGK', 'KlgGK', 'KGgGK', '.KKK.'],
 };
 const RING: PixelMap = ['.XXXXXXXXXX.', 'X..........X', '.XXXXXXXXXX.'];
 const BASKET_BASE: PixelMap = [
@@ -172,7 +221,7 @@ const BUBBLE: PixelMap = [
 ];
 const BUBBLE_PAL: Palette = {
   O: '#1a1c2c', W: '#f4f4f4', K: '#333c57', w: '#94b0c2', R: '#b13e53', r: '#e8687d', Y: '#ffcd75', C: '#ef7d57',
-  S: '#f2b98c', P: '#d9a066', p: '#a8723f', G: '#38b764',
+  S: '#f2b98c', P: '#d9a066', p: '#a8723f', G: '#38b764', B: '#41a6f6', b: '#73eff7',
 };
 const BUBBLE_ICONS: Record<Exclude<BubbleKind, 'crop'>, PixelMap> = {
   sack: SACK,
@@ -190,6 +239,12 @@ const BUBBLE_ICONS: Record<Exclude<BubbleKind, 'crop'>, PixelMap> = {
   // boca relamiéndose
   yum: ['K.....K', '.KKKKK.', '..rrr..'],
   note: ['..KK.', '..K.K', '..K..', '..K..', 'KKK..', 'KK...'],
+  // gota de agua
+  water: ['..B..', '.BBB.', 'BbBBB', 'BbBBB', '.BBB.'],
+  // cubo del pozo, lleno
+  well: ['..KKK..', '.K...K.', 'OBBbBBO', 'OpPpPpO', '.OpPpO.', '..OOO..'],
+  // ojo bien abierto
+  eye: ['..OOO..', '.OWWWO.', 'OWBKBWO', '.OWWWO.', '..OOO..'],
 };
 
 /** Carretilla de los porteadores (mira a la derecha, el asa hacia el gnomo); dos fotogramas de rueda. */
@@ -403,6 +458,53 @@ const TOMATO_RIPE = [
 const TOMATO_GREEN = TOMATO_RIPE.map(r => r.replace(/R/g, 'l').replace(/r/g, 'G'));
 const SPROUT_STAKE = SPROUT.map((r, i) => (i >= 4 && i <= 12 ? r.slice(0, 10) + 'w' + r.slice(11) : r));
 
+const FLOWER: PixelMap = ['.W.', 'WYW', '.W.'];
+const BERRY: PixelMap = ['.G.', 'RYR', 'RRR', '.r.'];
+/** Fresa: mata baja; florece en blanco y luego cuelgan las fresas por delante de las hojas. */
+function strawberry(stage: 2 | 3 | 4): PixelMap {
+  const g = grid();
+  mound(g);
+  for (const [x, y] of [[7, 10], [8, 10], [7, 11], [8, 11]]) put(g, x, y, 'g');
+  if (stage === 2) {
+    stamp(g, LEAF, 4, 8);
+    stamp(g, LEAF, 8, 7);
+    return toMap(g);
+  }
+  for (const [x, y] of [[1, 7], [5, 6], [9, 6], [12, 8], [6, 8]]) stamp(g, LEAF, x, y);
+  if (stage === 3) {
+    for (const [x, y] of [[3, 4], [10, 3], [13, 6]]) stamp(g, FLOWER, x, y);
+  } else {
+    stamp(g, FLOWER, 10, 3);
+    for (const [x, y] of [[1, 9], [11, 9], [6, 9]]) stamp(g, BERRY, x, y);
+  }
+  return toMap(g);
+}
+
+/** Melón: guía que se arrastra con zarcillos y un melón grande a rayas. */
+function melon(stage: 2 | 3 | 4): PixelMap {
+  const g = grid();
+  mound(g);
+  for (let x = stage === 2 ? 4 : 2; x <= (stage === 2 ? 11 : 13); x++) put(g, x, 11, 'g');
+  // zarcillo enroscado al final de la guía
+  for (const [x, y] of [[12, 10], [13, 9], [12, 8]]) put(g, x + (stage === 2 ? 0 : 2), y, 'G');
+  if (stage === 2) {
+    stamp(g, LEAF, 2, 8);
+    stamp(g, LEAF, 8, 6);
+  } else if (stage === 3) {
+    stamp(g, LEAF, 0, 6);
+    stamp(g, LEAF, 11, 4);
+    stamp(g, LEAF, 5, 3);
+    ellipse(g, 8, 9.5, 4, 2.3, 'l', 'G', 'D', [0.5, 2.5]);
+  } else {
+    stamp(g, LEAF, 0, 2);
+    stamp(g, LEAF, 12, 1);
+    ellipse(g, 8, 8.5, 7, 4, 'G', 'g', 'K', [0.5, 2.5, 4.5]);
+    put(g, 8, 4, 'g'); put(g, 9, 3, 'g');
+    put(g, 4, 6, 'l'); put(g, 5, 6, 'l'); put(g, 3, 7, 'l');
+  }
+  return toMap(g);
+}
+
 const recolor = (map: Record<string, string>) => (m: PixelMap): PixelMap =>
   m.map(r => r.replace(/./g, ch => map[ch] ?? ch));
 /** Madura que lleva mucho esperando: las hojas amarillean y el trigo se oscurece; el fruto aún vale. */
@@ -410,7 +512,9 @@ const passing = recolor({ G: 'U', l: 'Y', g: 'G', Y: 'U', U: 'm' });
 /** Echada a perder: todo pasa a grises de moho y el fruto a marrón. */
 const rotten = recolor({ G: 'x', g: 'q', l: 'z', C: 'm', c: 'h', R: 'm', r: 'h', Y: 'z', U: 'x', T: 'x', W: 'z' });
 
-const RIPE_MAPS: Record<CropId, PixelMap> = { zanahoria: CARROT_RIPE, trigo: wheat(4), tomate: TOMATO_RIPE, calabaza: pumpkin(4) };
+const RIPE_MAPS: Record<CropId, PixelMap> = {
+  zanahoria: CARROT_RIPE, trigo: wheat(4), tomate: TOMATO_RIPE, calabaza: pumpkin(4), fresa: strawberry(4), melon: melon(4),
+};
 
 /** Fases por cultivo: semilla, brote, joven, creciendo, madura y echada a perder (índice ROTTEN). */
 export const PLANT_MAPS: Record<CropId, PixelMap[]> = {
@@ -418,12 +522,15 @@ export const PLANT_MAPS: Record<CropId, PixelMap[]> = {
   trigo: [SEED, SPROUT, wheat(2), wheat(3), RIPE_MAPS.trigo, rotten(RIPE_MAPS.trigo)],
   tomate: [SEED, SPROUT_STAKE, TOMATO_YOUNG, TOMATO_GREEN, RIPE_MAPS.tomate, rotten(RIPE_MAPS.tomate)],
   calabaza: [SEED, SPROUT, pumpkin(2), pumpkin(3), RIPE_MAPS.calabaza, rotten(RIPE_MAPS.calabaza)],
+  fresa: [SEED, SPROUT, strawberry(2), strawberry(3), RIPE_MAPS.fresa, rotten(RIPE_MAPS.fresa)],
+  melon: [SEED, SPROUT, melon(2), melon(3), RIPE_MAPS.melon, rotten(RIPE_MAPS.melon)],
 };
+
+const byCrop = <T>(f: (c: CropId) => T) => Object.fromEntries(CROP_IDS.map(c => [c, f(c)])) as Record<CropId, T>;
+const byJob = <T>(f: (j: JobId) => T) => Object.fromEntries(JOB_IDS.map(j => [j, f(j)])) as Record<JobId, T>;
+
 /** Aviso: la planta madura que está a punto de echarse a perder. */
-export const PASSING_MAPS: Record<CropId, PixelMap> = {
-  zanahoria: passing(RIPE_MAPS.zanahoria), trigo: passing(RIPE_MAPS.trigo),
-  tomate: passing(RIPE_MAPS.tomate), calabaza: passing(RIPE_MAPS.calabaza),
-};
+export const PASSING_MAPS = byCrop(c => passing(RIPE_MAPS[c]));
 
 // ---------- Atlas ----------
 export interface Atlas {
@@ -463,10 +570,9 @@ export interface Atlas {
   sparkle: Texture;
   crown: Texture;
   fly: Texture;
+  /** gota de agua para la salpicadura del riego */
+  drop: Texture;
 }
-
-const byCrop = <T>(f: (c: CropId) => T): Record<CropId, T> =>
-  ({ zanahoria: f('zanahoria'), trigo: f('trigo'), tomate: f('tomate'), calabaza: f('calabaza') });
 
 const basketPal = { ...PLANT_PAL, O: '#1a1c2c', P: '#c8925f', p: '#8b5a3c' };
 const pileRows = (level: number) => Array<string>(4 - BASKET_PILES[level].length).fill('............').concat(BASKET_PILES[level]);
@@ -521,19 +627,11 @@ export function buildAtlas(): Atlas {
   const sctx = shadow.getContext('2d')!;
   sctx.fillStyle = 'rgba(26,28,44,.28)';
   sctx.fillRect(0, 0, 10, 1);
-  const icons = BUBBLE_ICONS;
   const bubble = (icon: PixelMap) => Texture.from(bubbleCanvas(icon, BUBBLE_PAL));
+  const kinds = Object.keys(BUBBLE_ICONS) as Exclude<BubbleKind, 'crop'>[];
   return {
-    gnome: {
-      recolector: gnomeFrames(hatPal('recolector'), BODY),
-      sembrador: gnomeFrames(hatPal('sembrador'), BODY),
-      porteador: gnomeFrames(hatPal('porteador'), BODY),
-    },
-    legendary: {
-      recolector: gnomeFrames(legendPal('recolector'), LEGEND_BODY),
-      sembrador: gnomeFrames(legendPal('sembrador'), LEGEND_BODY),
-      porteador: gnomeFrames(legendPal('porteador'), LEGEND_BODY),
-    },
+    gnome: byJob(j => gnomeFrames(hatPal(j), BODY, j)),
+    legendary: byJob(j => gnomeFrames(legendPal(j), LEGEND_BODY, j)),
     plants: byCrop(c => PLANT_MAPS[c].map(m => tex(m, PLANT_PAL))),
     passing: byCrop(c => tex(PASSING_MAPS[c], PLANT_PAL)),
     items: byCrop(c => tex(ITEMS[c], itemPal)),
@@ -541,12 +639,7 @@ export function buildAtlas(): Atlas {
     rings: GROUP_PALETTE.map(color => tex(RING, { X: color })),
     hole: tex(['.hhhh.', 'hHHHHh', '.hhhh.'], { h: '#5c3a29', H: '#4a2c20' }),
     shadow: Texture.from(shadow),
-    bubbles: {
-      sack: bubble(icons.sack), basket: bubble(icons.basket), zz: bubble(icons.zz), alert: bubble(icons.alert),
-      think: bubble(icons.think), heart: bubble(icons.heart), angry: bubble(icons.angry), wave: bubble(icons.wave),
-      chat: bubble(icons.chat), cards: bubble(icons.cards), cheer: bubble(icons.cheer), yum: bubble(icons.yum),
-      note: bubble(icons.note),
-    },
+    bubbles: Object.fromEntries(kinds.map(k => [k, bubble(BUBBLE_ICONS[k])])) as Atlas['bubbles'],
     cropBubbles: byCrop(c => Texture.from(bubbleCanvas(ITEMS[c], itemPal))),
     sacks: SACKS.map(m => tex(m, BASE)),
     barrow: BARROW.map(m => tex(m, BARROW_PAL)),
@@ -554,6 +647,7 @@ export function buildAtlas(): Atlas {
     door: [Texture.from(doorCanvas(5)), Texture.from(doorCanvas(3))],
     arrow: tex(ARROW, { O: '#1a1c2c', Y: '#ffcd75' }),
     dust: tex(['ww', 'ww'], { w: '#e0d2b4' }),
+    drop: tex(['a', 'A'], BASE),
     heart: tex(['r.r', 'rrr', '.r.'], { r: '#e8687d' }),
     crowPeck: CROW_PECK.map(m => tex(m, CRITTER_PAL)),
     crowFly: CROW_FLY.map(m => tex(m, CRITTER_PAL)),
