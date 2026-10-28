@@ -10,7 +10,7 @@ import { createState, makeGnome, randomTrait } from './state';
 import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
 import type {
   BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, Plot, Pose,
-  Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran,
+  Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, Zone,
 } from './types';
 
 // ---------- Árbol de mejoras y sus efectos ----------
@@ -204,7 +204,7 @@ export function createGroup(s: GameState): GnomeGroup | null {
   const usedColors = new Set(s.groups.map(g => g.color));
   const color = GROUP_PALETTE.findIndex((_, i) => !usedColors.has(i));
   const group: GnomeGroup = {
-    id: s.nextGroupId++, name, color: color === -1 ? s.groups.length % GROUP_PALETTE.length : color, priority: 'cercano', seed: null,
+    id: s.nextGroupId++, name, color: color === -1 ? s.groups.length % GROUP_PALETTE.length : color, priority: 'cercano', seed: null, zone: null,
   };
   s.groups.push(group);
   log(s, LOG.grupoNuevo(name));
@@ -242,6 +242,32 @@ export function setGroupSeed(s: GameState, id: number, seed: CropId | null) {
 
 /** El cultivo que plantará un sembrador en esa parcela. */
 const seedFor = (s: GameState, g: Gnome, p: Plot): CropId => groupOf(s, g).seed ?? p.crop;
+
+/** La parcela cae dentro de la zona (sin zona, todo el bancal vale). */
+export const inZone = (z: Zone | null, p: Pick<Plot, 'col' | 'row'>) =>
+  !z || (p.col >= z.c0 && p.col <= z.c1 && p.row >= z.r0 && p.row <= z.r1);
+
+/**
+ * Zona del grupo (A5): dos esquinas cualesquiera del bancal, o null para todo el bancal.
+ * Los del grupo que iban hacia una parcela de fuera vuelven a decidir.
+ */
+export function setGroupZone(s: GameState, id: number, zone: Zone | null) {
+  const group = s.groups.find(g => g.id === id);
+  if (!group) return;
+  let next: Zone | null = null;
+  if (zone) {
+    const { c0, c1, r0, r1 } = zone;
+    if (![c0, c1, r0, r1].every(Number.isInteger)) return;
+    next = { c0: Math.min(c0, c1), c1: Math.max(c0, c1), r0: Math.min(r0, r1), r1: Math.max(r0, r1) };
+    if (next.c0 < 0 || next.r0 < 0 || next.c1 >= FIELD.maxCols || next.r1 >= FIELD.maxRows) return;
+  }
+  group.zone = next;
+  log(s, next ? LOG.zona(group.name, GRUPOS.zonaDesc(next.c0, next.c1, next.r0, next.r1)) : LOG.zonaTodo(group.name));
+  for (const g of s.gnomes) {
+    if (g.group !== id || g.state !== 'walk' || g.task?.plot === undefined) continue;
+    if (!inZone(next, s.plots[g.task.plot])) releaseTask(s, g);
+  }
+}
 
 /** Borra un grupo; sus gnomos pasan al primer grupo que quede. Siempre queda al menos uno. */
 export function deleteGroup(s: GameState, id: number): boolean {
@@ -543,16 +569,18 @@ function releaseTask(s: GameState, g: Gnome) {
  *   a perder antes de llegar queda al final (por distancia). Para los sembradores, la más cerca.
  * - solo_X: la más cerca de ese cultivo.
  * El regador mira su propia reserva (wres) y, salvo en «valioso», riega antes lo que tiene sed.
+ * Solo mira las parcelas de la zona del grupo (A5).
  */
 function pickPlot(s: GameState, g: Gnome, filter: (p: Plot) => boolean): Plot | null {
-  const prio = groupOf(s, g).priority;
+  const group = groupOf(s, g);
+  const prio = group.priority;
   const only = prio.startsWith('solo_') ? prio.slice('solo_'.length) : null;
   const speed = gnomeWalkSpeed(s, g);
   const waters = g.job === 'regador';
   let best: Plot | null = null;
   let bestScore = Infinity;
   for (const p of s.plots) {
-    if ((waters ? p.wres : p.res) !== null || !isOpen(s, p) || !filter(p)) continue;
+    if ((waters ? p.wres : p.res) !== null || !inZone(group.zone, p) || !isOpen(s, p) || !filter(p)) continue;
     if (only && p.crop !== only) continue;
     const st = plotStand(p);
     const dist = Math.hypot(st.x - g.x, st.y - g.y);

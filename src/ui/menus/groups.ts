@@ -1,7 +1,7 @@
-// Tablón de anuncios: crear, renombrar, colorear y borrar grupos, elegir su prioridad y lo que siembran, y repartir gnomos.
+// Tablón de anuncios: crear, renombrar, colorear y borrar grupos, elegir su prioridad, lo que siembran y su zona, y repartir gnomos.
 import { CROP_IDS, GROUP_NAME_MAX, GROUP_PALETTE, MAX_GROUPS, PRIORITIES } from '../../sim/config';
-import { cropUnlocked } from '../../sim/sim';
-import type { CropId, GameState, Priority } from '../../sim/types';
+import { cropUnlocked, fieldSize, inZone } from '../../sim/sim';
+import type { CropId, GameState, GnomeGroup, Priority } from '../../sim/types';
 import { jobIcons, traitIcons } from '../../render/icons';
 import { CULTIVOS, FICHA, GRUPOS, OFICIOS, prioridad, RASGOS } from '../../textos';
 import { esc, html, pixelImg, type GameActions } from '../dom';
@@ -12,14 +12,39 @@ export function createGroupsMenu(actions: GameActions): Menu {
   let paletteFor: number | null = null;
   let armedDelete: number | null = null;
   let armTimer = 0;
+  /** primera esquina pulsada de la zona de un grupo, a la espera de la segunda */
+  let corner: { group: number; c: number; r: number } | null = null;
   let sig = '';
 
   const el = html(`
     <div class="groups">
-      <p class="muted">${GRUPOS.ayuda} ${FICHA.ayudaTablon}</p>
+      <p class="muted">${GRUPOS.ayuda} ${GRUPOS.zonaAyuda} ${FICHA.ayudaTablon}</p>
       <div class="group-list"></div>
     </div>`);
   const list = el.querySelector<HTMLElement>('.group-list')!;
+
+  function zonePicker(s: GameState, g: GnomeGroup): string {
+    const f = fieldSize(s);
+    const z = g.zone;
+    const cells: string[] = [];
+    for (let r = 0; r < f.rows; r++) {
+      for (let c = 0; c < f.cols; c++) {
+        const isCorner = corner?.group === g.id && corner.c === c && corner.r === r;
+        cells.push(`<button type="button" class="zone-cell ${inZone(z, { col: c, row: r }) ? 'in' : ''} ${isCorner ? 'corner' : ''}"
+          data-zone-cell="${g.id}:${c}:${r}" aria-label="${GRUPOS.zonaCelda(c, r)}" aria-pressed="${isCorner}"></button>`);
+      }
+    }
+    const desc = z ? GRUPOS.zonaDesc(z.c0, z.c1, z.r0, z.r1) : GRUPOS.zonaTodo;
+    return `
+      <div class="zone">
+        <span class="zone-label">${GRUPOS.zona}</span>
+        <div class="zone-grid" style="--cols:${f.cols}" role="group" aria-label="${GRUPOS.zona}">${cells.join('')}</div>
+        <div class="zone-info">
+          <span>${corner?.group === g.id ? GRUPOS.zonaEsquina : desc}</span>
+          ${z ? `<button type="button" class="link" data-zone-all="${g.id}">${GRUPOS.zonaTodo}</button>` : ''}
+        </div>
+      </div>`;
+  }
 
   function render(s: GameState) {
     const unlocked = (p: Priority) => !p.startsWith('solo_') || cropUnlocked(s, p.slice('solo_'.length) as CropId);
@@ -53,6 +78,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
               ${CROP_IDS.map(c => `<option value="${c}" ${c === g.seed ? 'selected' : ''} ${cropUnlocked(s, c) ? '' : 'disabled'}>${CULTIVOS[c].nombre}${cropUnlocked(s, c) ? '' : ` (${GRUPOS.bloqueado})`}</option>`).join('')}
             </select>
           </label>
+          ${zonePicker(s, g)}
           <div class="chips" data-drop="${g.id}">
             ${members.length
               ? members.map(gn => `
@@ -111,6 +137,17 @@ export function createGroupsMenu(actions: GameActions): Menu {
       }
     } else if (d.newGroup !== undefined) {
       actions.createGroup();
+    } else if (d.zoneCell) {
+      const [id, c, r] = d.zoneCell.split(':').map(Number);
+      if (corner?.group === id) {
+        actions.setGroupZone(id, { c0: corner.c, r0: corner.r, c1: c, r1: r });
+        corner = null;
+      } else {
+        corner = { group: id, c, r };
+      }
+    } else if (d.zoneAll) {
+      actions.setGroupZone(Number(d.zoneAll), null);
+      corner = null;
     }
     sig = '';
   });
@@ -168,6 +205,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
     onOpen() {
       selectedGnome = null;
       paletteFor = null;
+      corner = null;
       sig = '';
     },
     update(s) {
@@ -177,7 +215,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
         s.groups,
         s.gnomes.map(g => [g.id, g.group, g.job, g.name]),
         Object.values(s.tree),
-        selectedGnome, paletteFor, armedDelete,
+        selectedGnome, paletteFor, armedDelete, corner,
       ]);
       if (next === sig) return;
       sig = next;

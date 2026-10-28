@@ -130,7 +130,7 @@ export const CASA = {
 export const GRUPOS = {
   primero: 'Los de siempre',
   sugerencias: ['Los Madrugadores', 'La Brigada del Surco', 'Los Sin Prisa', 'Comando Zanahoria', 'Los del Fondo', 'La Peña del Rastrillo', 'Los Barbas', 'Los Siesteros', 'Escuadrón Tomate', 'Los Que Llegan Tarde'],
-  ayuda: 'Cada grupo sigue su prioridad y siembra lo que le digas. En el huerto, el aro bajo cada gnomo y la marca en la parcela a la que va tienen el color de su grupo. Arrastra un gnomo a otro grupo, o pulsa en él y luego en «Mover aquí».',
+  ayuda: 'Cada grupo sigue su prioridad, siembra lo que le digas y trabaja en su zona del bancal. En el huerto, el aro bajo cada gnomo, la marca en la parcela a la que va y el borde de su zona tienen el color de su grupo. Arrastra un gnomo a otro grupo, o pulsa en él y luego en «Mover aquí».',
   nuevo: 'Nuevo grupo',
   nombre: 'Nombre del grupo',
   color: 'Color',
@@ -145,6 +145,13 @@ export const GRUPOS = {
   maximo: 'No caben más grupos',
   miembros: (n: number) => (n === 1 ? '1 gnomo' : `${n} gnomos`),
   bloqueado: 'sin desbloquear',
+  zona: 'Zona',
+  zonaTodo: 'Todo el bancal',
+  zonaAyuda: 'Pulsa dos parcelas para marcar las esquinas de la zona. Recolectores, sembradores y regadores del grupo solo trabajan dentro; porteadores y guardianes van a todas partes.',
+  zonaEsquina: 'Ahora pulsa la otra esquina',
+  zonaDesc: (c0: number, c1: number, r0: number, r1: number) =>
+    `${c0 === c1 ? `Columna ${c0 + 1}` : `Columnas ${c0 + 1}–${c1 + 1}`} · ${r0 === r1 ? `fila ${r0 + 1}` : `filas ${r0 + 1}–${r1 + 1}`}`,
+  zonaCelda: (c: number, r: number) => `Parcela de la columna ${c + 1}, fila ${r + 1}`,
 };
 
 /** Ventana del ranking. Cada categoría muestra el podio de los gnomos actuales. */
@@ -186,6 +193,8 @@ export const LOG = {
   cambioGrupo: (n: string, grupo: string) => `${n} se cambia a «${grupo}». Se despide de los demás con mucho drama.`,
   grupoNuevo: (g: string) => `Se funda «${g}». Nadie sabe muy bien para qué.`,
   grupoRenombrado: (a: string, b: string) => `«${a}» ahora se llama «${b}». Lo han votado a mano alzada.`,
+  zona: (g: string, donde: string) => `«${g}» se queda con su trozo de bancal (${donde.toLowerCase()}). Han clavado un palito en cada esquina.`,
+  zonaTodo: (g: string) => `«${g}» vuelve a trabajar en todo el bancal. Han arrancado los palitos.`,
   grupoBorrado: (a: string, b: string) => `«${a}» se disuelve. Sus miembros vuelven a «${b}» con la cabeza gacha.`,
   podrido: (uno: string) => `Se ha echado a perder ${uno}. Huele a reproche.`,
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,

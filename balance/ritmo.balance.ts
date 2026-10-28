@@ -5,9 +5,9 @@ import {
   JOB_NODE, NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_IDS, TREE, WATER, WELL,
 } from '../src/sim/config';
 import {
-  buyHouse, buyNode, buyTalent, canEndSeason, capacity, clickPlot, cropsEaten, cropUnlocked, cropValue, endSeason, hasPorters, hire,
-  hireCost, houseCapacity, houseCost, houseMaxed, isOpen, jobUnlocked, nodeCost, nodeMaxed, nodeReachable, plotStand,
-  porterCapacity, seasonSeeds, setGroupSeed, setPriority, stageTime, startEvent, talentCost, talentMaxed, talentReachable, tick,
+  buyHouse, buyNode, buyTalent, canEndSeason, capacity, clickPlot, createGroup, cropsEaten, cropUnlocked, cropValue, endSeason, hasPorters, hire,
+  hireCost, houseCapacity, houseCost, houseMaxed, isOpen, jobUnlocked, moveGnome, nodeCost, nodeMaxed, nodeReachable, plotStand,
+  porterCapacity, seasonSeeds, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentMaxed, talentReachable, tick,
   walkSpeed, waterTime, waterWork, workMult,
 } from '../src/sim/sim';
 import { createState } from '../src/sim/state';
@@ -772,6 +772,52 @@ test('i) Temporadas', () => {
     ),
     '', `### Semillas si se acaba la temporada 1 en el minuto… (se puede desde el min ${minOr(long.canEndStep)}; árbol completo en el ${minOr(long.treeStep)})`, '',
     table(['min', 'ganado', 'semillas'], SEED_MARKS_MIN.map(m => [m, Math.round(long.byMinute[m].earned), long.byMinute[m].seeds])),
+  ];
+  console.log(`\n${out.join('\n')}\n`);
+});
+
+// ---------- j) Zonas ----------
+
+const ZONE_MIN = 10;
+/** columnas de calabaza a la izquierda; el resto, zanahoria */
+const ZONE_SPLIT = 4;
+const zoneCrops = (col: number): CropId => (col < ZONE_SPLIT ? 'calabaza' : 'zanahoria');
+
+test('j) Zonas', () => {
+  const rows: (string | number)[][] = [];
+  for (const st of [{ rec: 6, sem: 4 }, { rec: 12, sem: 8 }]) {
+    const setups: { name: string; setup: (s: GameState) => void }[] = [
+      { name: 'un grupo, «cercano»', setup: () => undefined },
+      { name: 'un grupo, «valioso»', setup: s => setPriority(s, s.groups[0].id, 'valioso') },
+      {
+        // ¼ de la plantilla a la calabaza (lenta y cómoda), el resto a la zanahoria; cada grupo con su semilla
+        name: 'dos zonas (¼ calabaza, ¾ zanahoria)',
+        setup: s => {
+          const left = s.groups[0];
+          const right = createGroup(s)!;
+          setGroupZone(s, left.id, { c0: 0, r0: 0, c1: ZONE_SPLIT - 1, r1: FIELD.maxRows - 1 });
+          setGroupZone(s, right.id, { c0: ZONE_SPLIT, r0: 0, c1: FIELD.maxCols - 1, r1: FIELD.maxRows - 1 });
+          setGroupSeed(s, left.id, 'calabaza');
+          setGroupSeed(s, right.id, 'zanahoria');
+          for (const job of ['recolector', 'sembrador'] as const) {
+            const crew = s.gnomes.filter(g => g.job === job);
+            crew.slice(Math.round(crew.length / 4)).forEach(g => moveGnome(s, g.id, right.id));
+          }
+        },
+      },
+    ];
+    for (const { name, setup } of setups) {
+      const rng = mulberry32(SEED);
+      const s = fullField(rng, st.rec, st.sem, zoneCrops);
+      setup(s);
+      for (let n = 0; n < ZONE_MIN * STEPS_PER_MIN; n++) step(s, rng);
+      const walked = s.gnomes.reduce((a, g) => a + g.stats.walked, 0) / s.gnomes.length;
+      rows.push([`${st.rec} rec + ${st.sem} sem`, name, f2(s.totalEarned / (ZONE_MIN * 60)), s.rotted, Math.round(walked)]);
+    }
+  }
+  const out = [
+    `## j) Zonas (bancal al máximo: ${ZONE_SPLIT} columnas de calabaza a la izquierda y zanahoria el resto, ${ZONE_MIN} min, sin clics)`, '',
+    table(['Plantilla', 'Organización', 'monedas/s', 'echados a perder', 'pasos por gnomo'], rows),
   ];
   console.log(`\n${out.join('\n')}\n`);
 });

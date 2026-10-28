@@ -799,10 +799,33 @@ export class SceneView {
     }
   }
 
-  /** Esquinas del color del grupo en la parcela a la que va cada gnomo: así se ve la prioridad en acción. */
+  /**
+   * Borde punteado del color del grupo alrededor de cada zona (A5) y esquinas en la parcela a la que va cada gnomo:
+   * así se ven la zona y la prioridad en acción.
+   */
   private syncMarks(s: GameState) {
     const m = this.marks;
     m.clear();
+    const f = fieldSize(s);
+    s.groups.forEach((gr, i) => {
+      const z = gr.zone;
+      if (!z || z.c0 >= f.cols || z.r0 >= f.rows) return;
+      // las zonas que se tocan no se pisan el borde: cada grupo un poco más adentro
+      const inset = 1 + (i % 3);
+      const x0 = FIELD.x + z.c0 * FIELD.cell + inset, y0 = FIELD.y + z.r0 * FIELD.cell + inset;
+      const x1 = FIELD.x + (Math.min(z.c1, f.cols - 1) + 1) * FIELD.cell - 1 - inset;
+      const y1 = FIELD.y + (Math.min(z.r1, f.rows - 1) + 1) * FIELD.cell - 1 - inset;
+      const DASH = 3, GAP = 2;
+      for (let x = x0; x <= x1; x += DASH + GAP) {
+        const w = Math.min(DASH, x1 - x + 1);
+        m.rect(x, y0, w, 1).rect(x, y1, w, 1);
+      }
+      for (let y = y0; y <= y1; y += DASH + GAP) {
+        const h = Math.min(DASH, y1 - y + 1);
+        m.rect(x0, y, 1, h).rect(x1, y, 1, h);
+      }
+      m.fill({ color: GROUP_PALETTE[gr.color], alpha: 0.8 });
+    });
     for (const g of s.gnomes) {
       if (g.task?.plot === undefined || (g.task.kind !== 'harvest' && g.task.kind !== 'plant')) continue;
       const o = plotOrigin(s.plots[g.task.plot]);

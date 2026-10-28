@@ -6,7 +6,7 @@ import {
 import {
   basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
   hire, hireCost, houseCapacity, isOpen, moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
-  seedsCoinsNeeded, setGroupColor, setGroupSeed, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, waterTime,
+  seedsCoinsNeeded, setGroupColor, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, waterTime,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
 import type { GameState, JobId, Rng, TraitId } from './types';
@@ -435,6 +435,57 @@ function releaseAndThink(s: GameState, g: GameState['gnomes'][number]) {
   g.task = null;
 }
 
+describe('zonas', () => {
+  it('el grupo solo trabaja dentro de su zona, aunque lo de fuera esté más cerca', () => {
+    const rng = seeded(6);
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    for (const p of s.plots) p.stage = 0;
+    const g = hireFree(s, 'recolector', rng);
+    const near = s.plots[plotId(0, 0)];
+    const far = s.plots[plotId(8, 5)];
+    near.stage = RIPE;
+    far.stage = RIPE;
+    const st = plotStand(near);
+    [g.x, g.y] = [st.x, st.y];
+    setGroupZone(s, s.groups[0].id, { c0: 5, r0: 3, c1: 8, r1: 5 });
+    tick(s, 1 / 30, rng);
+    expect(g.task?.plot).toBe(far.id);
+
+    // sin nada maduro dentro de la zona, no sale de ella
+    far.stage = 0;
+    releaseAndThink(s, g);
+    tick(s, 1 / 30, rng);
+    expect(g.task?.kind).not.toBe('harvest');
+  });
+
+  it('al cambiar la zona, quien iba hacia fuera vuelve a decidir; «todo el bancal» la quita', () => {
+    const rng = seeded(6);
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    for (const p of s.plots) p.stage = 0;
+    const g = hireFree(s, 'sembrador', rng);
+    const p = s.plots[plotId(0, 0)];
+    p.stage = -1;
+    tick(s, 1 / 30, rng);
+    expect(g.task).toMatchObject({ kind: 'plant', plot: p.id });
+    setGroupZone(s, s.groups[0].id, { c0: 4, r0: 0, c1: 8, r1: 5 });
+    expect(p.res).toBe(null);
+    expect(g.task?.kind).not.toBe('plant');
+    setGroupZone(s, s.groups[0].id, null);
+    expect(s.groups[0].zone).toBe(null);
+    tick(s, 1 / 30, rng);
+    expect(g.task).toMatchObject({ kind: 'plant', plot: p.id });
+  });
+
+  it('no acepta zonas fuera del bancal más grande', () => {
+    const s = createState(seeded(1));
+    setGroupZone(s, s.groups[0].id, { c0: 0, r0: 0, c1: FIELD.maxCols, r1: 0 });
+    setGroupZone(s, s.groups[0].id, { c0: -1, r0: 0, c1: 2, r1: 0 });
+    expect(s.groups[0].zone).toBe(null);
+  });
+});
+
 describe('ranking', () => {
   it('los gnomos apuntan lo que hacen', () => {
     const rng = seeded(4);
@@ -487,6 +538,7 @@ describe('guardado', () => {
     setGroupColor(s, b.id, 7);
     setPriority(s, b.id, 'solo_tomate');
     setGroupSeed(s, b.id, 'tomate');
+    setGroupZone(s, b.id, { c0: 2, r0: 1, c1: 0, r1: 0 });
     s.plots[4].stage = ROTTEN;
     s.rotted = 3;
     const g = hireFree(s, 'porteador', rng);
@@ -501,7 +553,9 @@ describe('guardado', () => {
     expect(loaded.basket).toEqual(['trigo', 'zanahoria']);
     expect(loaded.plots[3]).toMatchObject({ crop: 'tomate', stage: 2 });
     expect(loaded.plots[4].stage).toBe(ROTTEN);
-    expect(loaded.groups[1]).toEqual({ id: b.id, name: 'Los Valientes', color: 7, priority: 'solo_tomate', seed: 'tomate' });
+    expect(loaded.groups[1]).toEqual({
+      id: b.id, name: 'Los Valientes', color: 7, priority: 'solo_tomate', seed: 'tomate', zone: { c0: 0, c1: 2, r0: 0, r1: 1 },
+    });
     expect(loaded.gnomes[0]).toMatchObject({ name: g.name, job: 'porteador', group: b.id, state: 'think' });
     expect(loaded.gnomes[0].stats).toMatchObject({ tasks: 9, walked: 120 });
     expect(loaded).toMatchObject({ rotted: 3, crowns: { porteador: g.id, recolector: null } });

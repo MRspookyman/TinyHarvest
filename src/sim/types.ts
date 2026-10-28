@@ -62,6 +62,14 @@ export interface Plot {
   wres: number | null;
 }
 
+/** Rectángulo de parcelas del bancal, con los bordes incluidos (columnas c0..c1, filas r0..r1). */
+export interface Zone {
+  c0: number;
+  r0: number;
+  c1: number;
+  r1: number;
+}
+
 export interface GnomeGroup {
   id: number;
   name: string;
@@ -70,6 +78,8 @@ export interface GnomeGroup {
   priority: Priority;
   /** qué siembran sus sembradores; null = lo mismo que había en la parcela */
   seed: CropId | null;
+  /** parcelas en las que trabajan recolectores, sembradores y regadores del grupo; null = todo el bancal */
+  zone: Zone | null;
 }
 
 /**

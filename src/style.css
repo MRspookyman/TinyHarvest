@@ -223,6 +223,14 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .prio { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--ink-soft); }
 .prio > span { min-width: 64px; }
 .prio select { flex: 1; min-width: 0; font: inherit; font-size: 0.9rem; color: var(--ink); padding: 3px 6px; background: #fff8e6; border: 2px solid var(--ink-soft); border-radius: 0; }
+/* zona: el bancal en miniatura; lo de dentro, del color del grupo */
+.zone { display: grid; grid-template-columns: 64px auto minmax(0, 1fr); align-items: start; gap: 8px; font-size: 0.85rem; color: var(--ink-soft); }
+.zone-grid { display: grid; grid-template-columns: repeat(var(--cols), 14px); gap: 2px; padding: 3px; background: var(--wood-dark); }
+.zone-cell { width: 14px; height: 14px; padding: 0; border: 0; background: #8b5a3c; cursor: pointer; }
+.zone-cell.in { background: var(--group); box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.25); }
+.zone-cell:hover { outline: 2px solid var(--paper); outline-offset: -2px; }
+.zone-cell.corner { outline: 2px solid var(--gold); outline-offset: -2px; }
+.zone-info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; color: var(--ink); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; padding: 6px; background: var(--paper-dark); }
 .chips .empty { font-size: 0.85rem; align-self: center; }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 4px; background: var(--paper); border: 0; box-shadow: 0 0 0 2px var(--ink-soft); color: var(--ink); font: inherit; font-size: 0.85rem; cursor: grab; }

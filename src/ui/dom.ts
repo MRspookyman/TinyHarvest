@@ -1,5 +1,5 @@
 // Utilidades pequeñas para la interfaz HTML.
-import type { CropId, JobId, NodeId, Priority, TalentId } from '../sim/types';
+import type { CropId, JobId, NodeId, Priority, TalentId, Zone } from '../sim/types';
 
 /** Lo que la interfaz puede pedirle al juego. main.ts lo conecta con la simulación. */
 export interface GameActions {
@@ -11,6 +11,8 @@ export interface GameActions {
   setGroupColor(id: number, color: number): void;
   setPriority(id: number, p: Priority): void;
   setGroupSeed(id: number, seed: CropId | null): void;
+  /** zona del bancal en la que trabaja el grupo; null = todo */
+  setGroupZone(id: number, zone: Zone | null): void;
   deleteGroup(id: number): void;
   moveGnome(gnomeId: number, groupId: number): void;
   selectSeed(crop: CropId): void;

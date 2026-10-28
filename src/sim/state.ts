@@ -5,7 +5,7 @@ import {
 import { GRUPOS, LOG } from '../textos';
 import type {
   CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Prestige, Priority, Rng, SeasonRecord, TalentId,
-  TraitId, Veteran,
+  TraitId, Veteran, Zone,
 } from './types';
 
 const STAT_KEYS: (keyof GnomeStats)[] = ['tasks', 'harvests', 'value', 'plants', 'delivered', 'walked', 'naps', 'complaints'];
@@ -54,7 +54,7 @@ export function createState(rng: Rng): GameState {
     basket: [],
     gnomes: [],
     hired: Object.fromEntries(JOB_IDS.map(j => [j, 0])) as Record<JobId, number>,
-    groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano', seed: null }],
+    groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano', seed: null, zone: null }],
     nextGroupId: 2,
     nextId: 1,
     manualHarvests: 0,
@@ -141,6 +141,17 @@ const isCrop = (v: unknown): v is CropId => CROP_IDS.includes(v as CropId);
 const isJob = (v: unknown): v is JobId => JOB_IDS.includes(v as JobId);
 const isTrait = (v: unknown): v is TraitId => TRAIT_IDS.includes(v as TraitId);
 
+/** zona de un grupo guardado: un rectángulo dentro del bancal más grande, o null (partidas de antes de A5 o datos raros) */
+function loadZone(z: unknown): Zone | null {
+  if (!z || typeof z !== 'object') return null;
+  const { c0, c1, r0, r1 } = z as Record<string, unknown>;
+  const col = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) < FIELD.maxCols;
+  const row = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) < FIELD.maxRows;
+  if (!col(c0) || !col(c1) || !row(r0) || !row(r1)) return null;
+  const [a, b, c, d] = [c0, c1, r0, r1] as number[];
+  return { c0: Math.min(a, b), c1: Math.max(a, b), r0: Math.min(c, d), r1: Math.max(c, d) };
+}
+
 type RawSave = Record<string, unknown> & { v: number };
 /**
  * Pasos de migración en orden: MIGRATIONS[i] convierte una partida de la versión OLDEST_VERSION + i a la siguiente.
@@ -195,6 +206,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
         color: int(g.color, 0, 0, GROUP_PALETTE.length - 1),
         priority: PRIORITIES.includes(g.priority) ? g.priority : ('cercano' as Priority),
         seed: isCrop(g.seed) ? g.seed : null,
+        zone: loadZone(g.zone),
       }));
     if (groups.length) s.groups = groups;
   }

@@ -5,7 +5,7 @@ import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
   buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, endSeason, hire, hireCost,
-  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
+  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, renameGroup, setGroupColor, setGroupSeed, setGroupZone, setPriority, tick,
 } from './sim/sim';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
@@ -100,6 +100,7 @@ async function start() {
     setGroupColor: (id, color) => setGroupColor(state, id, color),
     setPriority: (id, p) => setPriority(state, id, p),
     setGroupSeed: (id, crop) => setGroupSeed(state, id, crop),
+    setGroupZone: (id, zone) => setGroupZone(state, id, zone),
     deleteGroup: id => deleteGroup(state, id),
     moveGnome: (gnome, group) => moveGnome(state, gnome, group),
     selectSeed: crop => {

@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.14 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.15 · **Última actualización:** 2026-10-28
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -524,6 +524,41 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 - **Rendimientos decrecientes:** terminar la primera en el min 30 da 5 semillas, en el 45 da 8, en el 65 da 12 y en el 90 da 16. Exprimir de más compensa poco y empezar de nuevo, sí.
 - **La meseta del final desaparece:** el tramo sin nada que comprar (7 min antes del último nodo) coincide con el momento en que ya conviene terminar la temporada.
 
+### Iteración 9: zonas y robustez (hecha y probada)
+
+| Cambio | Detalle |
+|---|---|
+| **Zonas por grupo** (A5) | En el tablón, cada grupo tiene un bancal en miniatura: se pulsan dos parcelas (dos esquinas) y el grupo queda limitado a ese rectángulo; «Todo el bancal» lo quita. Recolectores, sembradores y regadores del grupo solo eligen parcelas de su zona; porteadores y guardianes siguen yendo a todas partes. En el huerto, cada zona lleva un borde punteado del color del grupo (un poco más adentro en cada grupo para que las zonas vecinas no se pisen). Al cambiar la zona, los que iban hacia fuera vuelven a decidir. El diario lo cuenta. Las zonas se pueden solapar. |
+| **Partida ilegible a salvo** | Si la partida guardada está dañada o es de una versión desconocida, se aparta una copia (`tiny-harvest:partida:rota:<hora>`) antes de empezar un huerto nuevo, y un aviso deja descargarla. Si no hay sitio ni para la copia, no se guarda nada encima hasta que el jugador la descargue o acepte sustituirla. |
+| **Aviso de «sin guardar»** | Si el navegador no deja guardar (modo privado, sin sitio), sale un aviso fijo que se quita solo cuando un guardado vuelve a funcionar. |
+| **Parada segura ante errores** | Un error a mitad de fotograma detiene el huerto, no guarda encima de la última copia buena y ofrece recargar. Si el juego no arranca, también se avisa en la página. |
+| **Bot de equilibrio** | Nueva sección j) *Zonas*. |
+
+Las partidas anteriores siguen valiendo: los grupos sin zona trabajan en todo el bancal (no hace falta subir la versión de la partida).
+
+**Prueba (2026-10-28):** `tsc`, los 62 tests (10 nuevos: zonas y guardado) y `npm run build` pasan. En Chrome a 1280×800, sin errores en la consola:
+- Dos grupos con zonas izquierda y derecha marcadas desde el tablón; bordes punteados azul y rosa en el bancal.
+- Partida dañada inyectada antes de cargar: aviso, copia apartada y autoguardado del huerto nuevo sin tocar la copia.
+- Error provocado en la simulación: el huerto se para, aparece «Recargar» y la partida guardada no cambia.
+- Guardado bloqueado: aparece el aviso de «sin guardar».
+
+**Rendimiento con el juego lleno** (40 gnomos, bancal al máximo, servidor de desarrollo sin minificar, Chromium sin pantalla): unos 1,6 ms de CPU por fotograma con el huerto solo, ~3,5 ms con el ranking abierto y ~1,7 ms con el tablón abierto, a 60 fps (el presupuesto es 16,7 ms). No hace falta optimizar; las mejoras posibles (no redibujar cada fotograma la tierra y las marcas, el ranking a menos ritmo) quedan anotadas por si un equipo lento lo pide.
+
+**Resultados del bot (`npm run balance`, sección j)**: bancal al máximo, 4 columnas de calabaza a la izquierda y zanahoria el resto, 10 min.
+
+| Plantilla | Organización | Monedas/s | Echados a perder | Pasos por gnomo |
+|---|---|---|---|---|
+| 6 rec + 4 sem | un grupo, «cercano» | 4,89 | 343 | 9.639 |
+| 6 rec + 4 sem | un grupo, «valioso» | 5,04 | 326 | 9.748 |
+| 6 rec + 4 sem | dos zonas (¼ calabaza, ¾ zanahoria) | 3,58 | 350 | 8.088 |
+| 12 rec + 8 sem | un grupo, «cercano» | 7,72 | 236 | 10.175 |
+| 12 rec + 8 sem | un grupo, «valioso» | 7,74 | 234 | 10.204 |
+| 12 rec + 8 sem | dos zonas (¼ calabaza, ¾ zanahoria) | 5,89 | 272 | 8.800 |
+
+- **Las zonas ahorran paseo (un 14–17 % menos de pasos), pero no dan más monedas.** Partir la plantilla quita flexibilidad: con un solo grupo, los que no tienen calabazas que recoger ayudan con las zanahorias. En pruebas aparte (fresa con zanahoria; melón o tomate con los regadores en su zona; calabaza con solo ⅙ de la plantilla) pasó lo mismo: un grupo «valioso» gana entre un 3 % y un 43 % más.
+- **Para qué sirven ahora:** para controlar el huerto. Con la semilla por grupo, sin zonas un grupo acaba plantando su semilla en todo el bancal; con zonas, se puede mantener un bancal mezclado (calabaza a un lado, zanahoria al otro) sin clics.
+- **Pendiente de decidir** (pregunta abierta): si las zonas deben dar alguna ventaja propia para que organizar por zonas también compense en monedas.
+
 ---
 
 ## 9. 🗺️ Backlog y hoja de ruta
@@ -541,7 +576,7 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 | A2 | **Podredumbre:** lo maduro se estropea si nadie lo recoge a tiempo, y se ve (planta mustia) | M | Alto | — | ✅ It4 |
 | A3 | **«Valioso» que tenga en cuenta la distancia**, no solo el valor | S | Medio | — | ✅ It4 |
 | A4 | **Reserva de la cesta** para que no vayan todos los porteadores a por un solo cultivo | S | Bajo | — | ✅ It4 |
-| A5 | **Zonas:** asignar a un grupo unas columnas o filas del bancal | M–L | Alto | A1 | Más adelante |
+| A5 | **Zonas:** asignar a un grupo un rectángulo del bancal | M–L | Alto | A1 | ✅ It9 |
 
 **B. Economía y ritmo**
 
@@ -599,6 +634,7 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 | F4 | **Sonido** | M | Medio | — | Más adelante |
 | F5 | **Pequeño tutorial** al empezar (seis pistas que avanzan al hacer la cosa) | S–M | Medio | — | ✅ It8 |
 | F6 | **Táctil y móvil** | M | Bajo por ahora | — | Más adelante |
+| F7 | **Robustez:** copia de partidas ilegibles, aviso de «sin guardar», parada segura ante errores | S | Alto (seguridad) | — | ✅ It9 |
 
 ### 9.2 Hoja de ruta (opción A: mecánica antes que números)
 
@@ -608,7 +644,8 @@ flowchart LR
   I5 --> I6["It6 · Vida en el huerto<br/>D6 D7 D8 D9 D10 D1 D2 D3 D4 F2"]
   I6 --> I7["It7 · Contenido<br/>C1 C2 C3 B6"]
   I7 --> I8["It8 · Prestigio<br/>E1 F5"]
-  I8 --> L["Después<br/>A5 C4 C5 E2 F4 F6"]
+  I8 --> I9["It9 · Zonas y robustez<br/>A5 F7"]
+  I9 --> L["Después<br/>F4 D11 C5 E2 C4 F6"]
 ```
 
 | Iteración | Objetivo | Se da por buena cuando… |
@@ -618,6 +655,7 @@ flowchart LR
 | **6 · Vida en el huerto** | Que sea entretenido dejarlo un minuto y solo mirar | Algo distinto pasa en pantalla cada 10–20 s (medido con `npm run balance`); los bocadillos dicen qué va a hacer cada gnomo; al hacer clic en un gnomo la cámara lo sigue y sale su ficha; los rasgos se notan sin abrir menús |
 | **7 · Contenido** | Un oficio nuevo, una amenaza y más cultivos | Regador y guardián con un papel claro; fresa y melón tienen sus propias ventajas y costes |
 | **8 · Prestigio** | Que la partida tenga un final y vuelva a empezar | Reiniciar tras 1–2 h da semillas doradas que se notan en la siguiente temporada |
+| **9 · Zonas y robustez** | Organizar también por sitio, y no perder partidas | Un grupo con zona no sale de ella; las zonas se ven en el huerto; una partida dañada no se pierde nunca sin avisar |
 
 **Por qué este orden:**
 - **Mecánica antes que números.** Ajustar el ritmo antes de tener podredumbre y ventajas por cultivo obliga a ajustarlo dos veces.
@@ -630,7 +668,8 @@ flowchart LR
 ## ❓ Preguntas abiertas
 
 - [ ] Cuando el autor pueda jugar: ¿es entretenido dejarlo un minuto y solo mirar? (último criterio de la demo)
-- [ ] ¿Qué viene después de la iteración 8? Lo que queda en el backlog es «más adelante»: zonas por grupo (A5), calabaza 2×2 (C4), molino y mercado (C5), día y noche (D11), biomas (E2), sonido (F4), táctil y móvil (F6). Falta decidir el orden, y si antes se publica la demo en itch.io.
+- [ ] ¿Deben las zonas dar alguna ventaja propia? Según el bot (sección j), ahorran un 14–17 % de pasos pero rinden menos que un solo grupo «valioso». Una opción: un pequeño extra de trabajo para los gnomos que trabajan dentro de su zona («se conocen el terreno»).
+- [ ] ¿Qué viene después de la iteración 9? Orden propuesto: sonido (F4), día y noche (D11), molino y mercado (C5), biomas (E2), calabaza 2×2 (C4) y táctil y móvil (F6). Antes conviene publicar la demo en itch.io y que alguien la juegue.
 
 ---
 
@@ -658,11 +697,14 @@ flowchart LR
 | 18 | Podredumbre | Aguantes sin cambios (20–90 s). Aviso con sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder) |
 | 19 | Corona | Una por oficio, solo fama, sin premio: un premio hace que el coronado no la pierda nunca |
 | 20 | Duración sin prestigio | ~1 h (árbol completo en 45–60 min); 1–2 h cuando exista el prestigio. Punto de partida: ×1,30 por gnomo y árbol ×3 |
+| 21 | Zonas | Un rectángulo por grupo (dos esquinas en el tablón), solo para recolectores, sembradores y regadores; sin zona = todo el bancal. Sin ventaja propia de momento |
+| 22 | Partidas ilegibles | Nunca se sobrescriben sin copia: se apartan en otra clave y se avisa; sin sitio para la copia, no se guarda hasta que el jugador decida |
 
 ---
 
 ## 📝 Historial de cambios
 
+- **v0.15 (2026-10-28):** iteración 9, «zonas y robustez». Zonas por grupo marcadas en el tablón y visibles en el bancal, copia de las partidas ilegibles, aviso de «sin guardar» y parada segura ante errores. Medido el rendimiento con 40 gnomos (≤ 3,5 ms por fotograma) y añadida la sección j) del bot: las zonas ahorran paseo pero de momento no dan más monedas.
 - **2026-10-28 · Pulido visual:** terreno menos ruidoso, camino irregular y sombras de contacto; volumen en granero, casas, tablón, árbol y pedestales sin cambiar tamaños ni mejoras. Barra y ventanas más claras, árbol con marcas de estado y etiquetas accesibles, y distribución adaptable a pantallas estrechas. Corregido el desajuste del lienzo cuando la barra superior cambia de altura. Sin cambios de mecánicas, equilibrio ni guardados.
 - **2026-10-28 · F3:** redibujadas las cinco fases de los seis cultivos con semillas propias, hojas sombreadas, frutos y espigas. Se conservan los avisos de deterioro y los iconos heredan el nuevo arte. Balanceo ocasional de 1 px mediante texturas precalculadas, con base fija y sin animar semillas ni plantas echadas a perder. Sin cambios de equilibrio, simulación ni partidas guardadas.
 - **v0.14 (2026-10-27):** iteración 8, «prestigio». Estatua del Gnomo Dorado (brilla cuando se puede terminar), fin de temporada con semillas doradas y resumen con confeti, árbol dorado de 10 talentos (cada uno deja huella en el huerto), salón de la fama con los coronados y veteranos que vuelven, semillas y temporada en la barra, y tutorial de seis pistas. Temporadas de 64 → 48 → 39 min según el bot. Con esto se completa la hoja de ruta de la sección 9.2.
