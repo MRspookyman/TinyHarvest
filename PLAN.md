@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.13 · **Última actualización:** 2026-10-27
+> **Estado:** borrador v0.14 · **Última actualización:** 2026-10-27
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -85,9 +85,9 @@
 **Ciclo medio (minutos), el núcleo activo:**
 > Contratar gnomos → **organizarlos** en grupos con prioridades → detectar cuellos de botella → mejorar → desbloquear cultivos y parcelas
 
-**Ciclo largo (1–2 h por temporada), el prestigio:**
-> "Fin de temporada": reinicias el huerto y ganas **semillas doradas** según lo producido. Se gastan en un árbol de talentos permanente.
-> La primera temporada debería durar **1–2 horas** de juego activo.
+**Ciclo largo (temporadas), el prestigio ✅ (iteración 8):**
+> «Fin de temporada» en la Estatua del Gnomo Dorado: reinicias el huerto y ganas **semillas doradas** según lo ganado (cada vez cuesta más sacar una). Se gastan en el **árbol dorado** de talentos permanentes.
+> La primera temporada dura **~1 h**; las siguientes, menos (48 y 39 min según el bot), así que en 1–2 h de juego se nota el ciclo.
 
 **Sin progreso offline ✅:** con el juego cerrado no se avanza nada. Al volver, la partida continúa justo donde quedó. Si la pestaña pasa a segundo plano, la simulación se pausa (sin recuperar el tiempo perdido) y se reanuda al volver.
 
@@ -489,6 +489,37 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 - **Ritmo:** árbol completo en 64 min (activo) y 70 min (tranquilo). El hueco más largo sin nada que comprar sube a 7 min, entre el melón y el último nodo.
 - **Vida en el huerto:** los objetivos de la iteración 6 se siguen cumpliendo (hueco medio de 5,5 s al principio, máximo 21,9 s).
 
+### Iteración 8: prestigio (hecha y probada)
+
+| Cambio | Detalle |
+|---|---|
+| **Estatua del Gnomo Dorado** (E1) | Está a la derecha del bancal y crece con las temporadas: pedestal, placa, laurel y halo. **Brilla y suelta chispas cuando ya se puede terminar la temporada.** Se pulsa (o el botón *Estatua* de la barra) para abrir la ventana *Temporada*. |
+| **Fin de temporada** | Muestra la temporada, el tiempo jugado, lo ganado y las semillas que darías ahora (`floor((ganado / 850) ^ 0,5)`; hacen falta 6, hacia el minuto 31). Dice qué se queda y qué se pierde, y se confirma con dos pulsaciones. Después sale un resumen (semillas, quién entra en el salón de la fama, qué veteranos vuelven) y caen confeti y hojas doradas sobre el huerto. |
+| **Árbol dorado** | 10 talentos permanentes. *Abono dorado*: crece más rápido. *Mercado dorado*: se vende más caro. *Herencia*: empiezas con monedas. *Gnomos con experiencia*: empiezas con un recolector y un sembrador gratis por nivel. *Contrato fijo*: contratar encarece menos. *Bancal heredado* y *Casa heredada*: empiezan ampliados. *Semillas conocidas*: cultivos ya desbloqueados. *Veteranos*: los coronados vuelven con su nombre y rasgo. *Suerte*: más legendarios. Cada talento deja su huella en el huerto: motas doradas en la tierra, cofre de monedas, contrato en la puerta del granero, medalla en el pecho de los veteranos, tréboles… |
+| **Salón de la fama** | Por temporada, los coronados (el mejor de cada oficio) con sus tareas, más lo ganado, la duración y las semillas. Arriba, los veteranos y cuántas temporadas llevan. Se llega desde la estatua, desde el resumen y desde el ranking. |
+| **Barra de arriba** | Semillas doradas y «Temporada N» a partir de la segunda temporada. |
+| **Tutorial** (F5) | Seis pistas, una cada vez, en un bocadillo que señala el botón: plantar y recoger, contratar, el árbol, el tablón, la ficha de un gnomo y, al final, la estatua. Avanzan al hacer la cosa, se pueden saltar o apagar, y se guardan aparte de la partida. Sustituyen a la pista de inicio. |
+| **Partida** | Versión 6, con migración desde la 5. Lo permanente (semillas, talentos, salón, veteranos) se guarda y se valida al cargar. |
+
+**Prueba (2026-10-27):** `tsc`, los 52 tests (6 nuevos) y `npm run build` pasan. En Chrome, por el camino real de la interfaz, se ha comprobado lo siguiente sin errores en la consola:
+- Una temporada terminada desde la estatua: 90 000 monedas → 10 semillas, resumen y confeti.
+- Talentos comprados en el árbol dorado.
+- Una segunda temporada terminada: empieza con 200 monedas, 4 gnomos gratis y trigo desbloqueado, y vuelve el veterano con su nombre.
+- El salón de la fama con la temporada y el veterano.
+- El tutorial en un perfil nuevo; según UiPrestigio, también a 1024×600.
+
+**Resultados del bot (`npm run balance`, sección i): tres temporadas seguidas, jugador activo**
+
+| Temporada | Árbol completo | Se puede terminar desde | Semillas | Talentos al empezar |
+|---|---|---|---|---|
+| 1 | 64 min | min 31 | 12 | — |
+| 2 | **48 min** | min 24 | 12 | abono dorado 2, semillas conocidas 1, bancal heredado 1, herencia 2, mercado dorado 1 |
+| 3 | **39 min** | min 19 | 12 | lo anterior + experiencia, contrato, suerte… |
+
+- **Se cumplen los objetivos:** primera temporada de ~1 h con 10–15 semillas, y cada temporada siguiente más corta.
+- **Rendimientos decrecientes:** terminar la primera en el min 30 da 5 semillas, en el 45 da 8, en el 65 da 12 y en el 90 da 16. Exprimir de más compensa poco y empezar de nuevo, sí.
+- **La meseta del final desaparece:** el tramo sin nada que comprar (7 min antes del último nodo) coincide con el momento en que ya conviene terminar la temporada.
+
 ---
 
 ## 9. 🗺️ Backlog y hoja de ruta
@@ -551,7 +582,7 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
-| E1 | **Prestigio con semillas doradas** | L | Muy alto | B (economía estable) | It8 |
+| E1 | **Prestigio con semillas doradas** (estatua, árbol dorado, salón de la fama, veteranos) | L | Muy alto | B (economía estable) | ✅ It8 |
 | E2 | **Biomas** (pantano, montaña, huerto nocturno) | L | Alto | E1 | Más adelante |
 
 **F. Técnica y pulido**
@@ -562,7 +593,7 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 | F2 | **Migrar partidas guardadas** (lista de migraciones desde la versión 3) | S | Medio | — | ✅ It6 |
 | F3 | **Plantas más detalladas** (pendiente desde la sección 3) | M | Medio | — | Más adelante |
 | F4 | **Sonido** | M | Medio | — | Más adelante |
-| F5 | **Pequeño tutorial** al empezar | S–M | Medio | — | It8 |
+| F5 | **Pequeño tutorial** al empezar (seis pistas que avanzan al hacer la cosa) | S–M | Medio | — | ✅ It8 |
 | F6 | **Táctil y móvil** | M | Bajo por ahora | — | Más adelante |
 
 ### 9.2 Hoja de ruta (opción A: mecánica antes que números)
@@ -595,6 +626,7 @@ flowchart LR
 ## ❓ Preguntas abiertas
 
 - [ ] Cuando el autor pueda jugar: ¿es entretenido dejarlo un minuto y solo mirar? (último criterio de la demo)
+- [ ] ¿Qué viene después de la iteración 8? Lo que queda en el backlog es «más adelante»: zonas por grupo (A5), calabaza 2×2 (C4), molino y mercado (C5), día y noche (D11), biomas (E2), plantas más detalladas (F3), sonido (F4), táctil y móvil (F6). Falta decidir el orden, y si antes se publica la demo en itch.io.
 
 ---
 
@@ -627,6 +659,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.14 (2026-10-27):** iteración 8, «prestigio». Estatua del Gnomo Dorado (brilla cuando se puede terminar), fin de temporada con semillas doradas y resumen con confeti, árbol dorado de 10 talentos (cada uno deja huella en el huerto), salón de la fama con los coronados y veteranos que vuelven, semillas y temporada en la barra, y tutorial de seis pistas. Temporadas de 64 → 48 → 39 min según el bot. Con esto se completa la hoja de ruta de la sección 9.2.
 - **v0.13 (2026-10-27):** iteración 7, «contenido». Regador con pozo y riego (tomate y melón con sed), guardián con atalaya contra cuervos y topos, fresa y melón, multiplicador de organización hasta ×1,30 con desplegable en la barra, ficha plegable y cámara que respeta la barra y la ficha. Seis cultivos, cada uno el mejor para alguna plantilla; árbol completo en 64–70 min.
 - **v0.12 (2026-10-27):** iteración 6, «vida en el huerto». Rasgos y legendarios, bocadillos de intención, reacciones entre gnomos, ociosos con gracia, más vida en la cosecha, bichos y sucesos (cuervo, caracol, topo, ranas, sindicato, espantapájaros), ficha del gnomo con cámara que lo sigue, cada mejora visible en el huerto (D12, pedido del autor), medida de la vida en el bot y migración de partidas. Pasa algo distinto cada 0,5–5 s de media y el árbol se completa en 60–68 min.
 - **v0.11 (2026-10-27):** iteración 5, «economía y ritmo». Cada cultivo tiene su ventaja (rápido y laborioso frente a lento y cómodo) y es el mejor para alguna plantilla. Gnomos un 30 % más caros, árbol ×3, casa de gnomos (primer edificio, de 8 a 40 camas) y tres nodos nuevos (carretilla, cestos con paja, mercado). Árbol completo en 59–65 min según el bot. Bloque «vida en el huerto» añadido al backlog para la iteración 6 (D6–D11).

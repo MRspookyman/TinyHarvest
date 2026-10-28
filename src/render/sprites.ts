@@ -128,6 +128,12 @@ function gnomeCanvas(pal: Palette, body: PixelMap, feet: PixelMap, dy: number, p
 /** Gnomo quieto, para los iconos de los menús (con su herramienta, para distinguir oficios del mismo tono). */
 export const gnomeIcon = (job: JobId) => gnomeCanvas(hatPal(job), BODY, FEET.n, 0, TOOLS[job]);
 
+/** Estatua del Gnomo Dorado: un gnomo de oro saludando con el brazo en alto (16 × 17), luz a la izquierda. */
+export const statueCanvas = () => gnomeCanvas(
+  { O: '#1a1c2c', H: '#ffcd75', h: '#c28a3a', S: '#c28a3a', N: '#a8723f', W: '#f4b41b', w: '#c28a3a', B: '#a8723f', K: '#a8723f' },
+  BODY, FEET.n, 0, ARM_A,
+);
+
 /** Lo que cada oficio lleva siempre en la mano al andar y trabajar. */
 const TOOLS: Record<JobId, readonly Px[]> = { recolector: [], sembrador: [], porteador: [], regador: CAN, guardian: STAFF };
 
@@ -572,6 +578,10 @@ export interface Atlas {
   fly: Texture;
   /** gota de agua para la salpicadura del riego */
   drop: Texture;
+  /** medalla de los veteranos (en el pecho) */
+  medal: Texture;
+  /** confeti y hojas doradas de la fiesta de la temporada nueva */
+  confetti: Texture[];
 }
 
 const basketPal = { ...PLANT_PAL, O: '#1a1c2c', P: '#c8925f', p: '#8b5a3c' };
@@ -658,6 +668,12 @@ export function buildAtlas(): Atlas {
     sparkle: tex(SPARKLE, { W: '#f4f4f4', Y: '#ffcd75' }),
     crown: tex(CROWN, CROWN_PAL),
     fly: tex(FLY, { w: '#94b0c2', K: '#1a1c2c' }),
+    medal: tex(['RB', 'YY', 'yy'], { R: '#b13e53', B: '#3b5dc9', Y: '#ffcd75', y: '#c28a3a' }),
+    confetti: [
+      tex(['YY'], { Y: '#ffcd75' }), tex(['R', 'R'], { R: '#e8687d' }), tex(['BB'], { B: '#41a6f6' }), tex(['G', 'G'], { G: '#a7f070' }),
+      // hoja dorada
+      tex(['.Y', 'Yy'], { Y: '#ffcd75', y: '#f4b41b' }), tex(['Yy.', '.yY'], { Y: '#ffcd75', y: '#c28a3a' }),
+    ],
   };
 }
 

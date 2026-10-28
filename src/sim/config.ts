@@ -1,4 +1,4 @@
-import type { Branch, CritterKind, CropId, JobId, NodeId, Priority, TraitId } from './types';
+import type { Branch, CritterKind, CropId, JobId, NodeId, Priority, TalentId, TraitId } from './types';
 
 // Coordenadas en píxeles lógicos del mundo (rejilla de 16 px por sprite).
 export const WORLD = { w: 300, h: 200 } as const;
@@ -182,6 +182,48 @@ export const ORG = {
 } as const;
 export const NODE_IDS = Object.keys(TREE) as NodeId[];
 export const TREE_ROOT = { x: 50, y: 90 } as const;
+
+// ---------- Prestigio (iteración 8) ----------
+
+/**
+ * Semillas doradas al acabar la temporada: floor((ganado / seedUnit) ** seedPow). Crece menos que lo ganado:
+ * alargar la temporada cunde cada vez menos. Por debajo de minSeeds no se puede acabar (ajustado con `npm run balance`, i).
+ */
+export const PRESTIGE = { seedUnit: 850, seedPow: 0.5, minSeeds: 6, historyMax: 20 } as const;
+
+/** Talento del árbol dorado: mismo esquema que NodeDef, sin rama. El coste va en semillas doradas. */
+export interface TalentDef {
+  base: number;
+  mult: number;
+  max: number;
+  parent: TalentId | null;
+  x: number;
+  y: number;
+}
+// Tres ramas desde la raíz: crecer (izquierda), heredar (centro) y negociar (derecha). (x, y) en % como en TREE.
+export const TALENTS: Record<TalentId, TalentDef> = {
+  abonoDorado: { base: 1, mult: 2, max: 5, parent: null, x: 22, y: 64 },
+  semillasConocidas: { base: 2, mult: 1.6, max: 5, parent: 'abonoDorado', x: 10, y: 37 },
+  bancalHeredado: { base: 2, mult: 1.8, max: 4, parent: 'abonoDorado', x: 32, y: 37 },
+  herencia: { base: 1, mult: 2, max: 5, parent: null, x: 50, y: 64 },
+  experiencia: { base: 2, mult: 2, max: 3, parent: 'herencia', x: 50, y: 37 },
+  casaHeredada: { base: 3, mult: 2, max: 3, parent: 'experiencia', x: 40, y: 10 },
+  veterano: { base: 3, mult: 2, max: 3, parent: 'experiencia', x: 60, y: 10 },
+  mercadoDorado: { base: 1, mult: 2, max: 5, parent: null, x: 78, y: 64 },
+  contrato: { base: 2, mult: 2, max: 4, parent: 'mercadoDorado', x: 68, y: 37 },
+  suerte: { base: 2, mult: 2, max: 3, parent: 'mercadoDorado', x: 90, y: 37 },
+};
+export const TALENT_IDS = Object.keys(TALENTS) as TalentId[];
+export const TALENT_ROOT = { x: 50, y: 92 } as const;
+/**
+ * Efecto de cada nivel: abonoDorado y mercadoDorado son fracciones (+15 % de velocidad de crecimiento / de precio),
+ * herencia son monedas, contrato lo que baja COST_GROWTH, suerte lo que sube la probabilidad de legendario;
+ * el resto cuenta cosas (gnomos de cada oficio, niveles del bancal o de la casa, cultivos, veteranos).
+ */
+export const TALENT_EFFECT: Record<TalentId, number> = {
+  abonoDorado: 0.15, mercadoDorado: 0.15, herencia: 200, experiencia: 1, contrato: 0.03,
+  bancalHeredado: 1, casaHeredada: 1, semillasConocidas: 1, veterano: 1, suerte: 0.03,
+};
 
 export const BASE_SPEED = 22;
 export const HARVEST_TIME = 0.8;

@@ -2,7 +2,7 @@
 import { JOB_IDS } from '../../sim/config';
 import type { GameState, Gnome } from '../../sim/types';
 import { crownIcon, jobIcons, traitIcons } from '../../render/icons';
-import { FICHA, RANKING, RASGOS } from '../../textos';
+import { FICHA, RANKING, RASGOS, TEMPORADA } from '../../textos';
 import { esc, html, pixelImg, type GameActions } from '../dom';
 import type { Menu } from '../windows';
 
@@ -34,6 +34,7 @@ export function createRankingMenu(actions: GameActions): Menu {
       <p class="muted">${RANKING.ayuda}</p>
       <p class="ranking-summary" data-summary></p>
       <div class="ranking-grid" data-grid></div>
+      <footer><button type="button" class="link" data-fame>${TEMPORADA.verFama}</button></footer>
     </div>`);
   const summary = el.querySelector<HTMLElement>('[data-summary]')!;
   const grid = el.querySelector<HTMLElement>('[data-grid]')!;
@@ -46,6 +47,7 @@ export function createRankingMenu(actions: GameActions): Menu {
   };
   el.addEventListener('pointerdown', e => e.button === 0 && show(e));
   el.addEventListener('click', e => e.detail === 0 && show(e));
+  el.querySelector('[data-fame]')!.addEventListener('click', () => actions.showHallOfFame());
 
   return {
     el,

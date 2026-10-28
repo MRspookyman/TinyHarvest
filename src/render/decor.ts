@@ -2,7 +2,7 @@
 // Los edificios pulsables (granero, tablón, árbol viejo, casa) se dibujan en landmarks.ts; aquí va lo demás.
 // Cada objeto es un sprite suelto en la capa de entidades, ordenado por su base como los gnomos.
 import { Sprite, Texture, type Container } from 'pixi.js';
-import { BARN, BASKET, CROP_IDS, DOOR, FIELD, HOUSE, TREE, WELL } from '../sim/config';
+import { BARN, BASKET, CROP_IDS, DOOR, FIELD, HOUSE, STATUE, TALENTS, TREE, WELL } from '../sim/config';
 import { hasPorters } from '../sim/sim';
 import type { CropId, GameState, NodeId } from '../sim/types';
 import { blit, makeCanvas, type PixelMap } from './pixelart';
@@ -220,10 +220,14 @@ const CROP_ICONS: Record<CropId, PixelMap> = {
   melon: ['GdG', 'GdG', '.G.'],
 };
 const ICON_PAL = { g: '#38b764', o: '#ef7d57', O: '#b86f50', y: '#ffcd75', r: '#b13e53', G: '#38b764', d: '#257179' };
-/** Poste indicador del bancal: una tabla pintada por cultivo conocido (mask = bits de CROP_IDS conocidos). */
+/**
+ * Poste indicador del bancal: una tabla pintada por cultivo conocido (mask = bits de CROP_IDS conocidos).
+ * Con el bit SIGN_PACKET (talento «semillas conocidas») cuelga del poste un sobre de semillas dorado.
+ */
 function drawSignpost(mask: number): HTMLCanvasElement {
   const known = CROP_IDS.filter((_, i) => mask & (1 << i));
-  const w = 14, h = 6 + 4 * known.length;
+  const packet = (mask & SIGN_PACKET) !== 0;
+  const w = 14, h = 6 + 4 * known.length + (packet ? 7 : 0);
   const c = makeCanvas(w, h);
   const ctx = c.getContext('2d')!;
   rect(ctx, 1, 0, 4, h, O);
@@ -239,6 +243,14 @@ function drawSignpost(mask: number): HTMLCanvasElement {
     rect(ctx, len - 1, y + 1, 1, 2, '#c8925f');
     blit(ctx, CROP_ICONS[crop], 6, y, ICON_PAL);
   });
+  if (packet) {
+    const y = h - 8;
+    rect(ctx, 4, y + 1, 1, 1, '#5a3a2a');
+    rect(ctx, 4, y + 2, 6, 6, O);
+    rect(ctx, 5, y + 3, 4, 4, '#ffcd75');
+    rect(ctx, 5, y + 3, 4, 1, '#f4b41b');
+    rect(ctx, 6, y + 4, 2, 2, '#38b764');
+  }
   return c;
 }
 
@@ -379,12 +391,14 @@ function drawBasketBands(level: number): HTMLCanvasElement {
  * Esquina de la cerca del bancal: tramo horizontal arriba o abajo y postes bajando o subiendo por el lateral.
  * Se dibuja para el lado izquierdo; la derecha es la misma en espejo.
  */
-function drawFenceCorner(bottom: boolean, right: boolean): HTMLCanvasElement {
+function drawFenceCorner(bottom: boolean, right: boolean, golden = false): HTMLCanvasElement {
   const c = makeCanvas(16, 16);
   const ctx = c.getContext('2d')!;
   const post = (x: number, y: number) => {
     rect(ctx, x, y, 3, 6, O);
     rect(ctx, x + 1, y + 1, 1, 4, '#c8925f');
+    // con «bancal heredado», remates de oro
+    if (golden) rect(ctx, x, y, 3, 2, '#ffcd75');
   };
   const ry = bottom ? 10 : 0;
   // lateral: un listón que baja (o sube) entre postes
@@ -424,6 +438,73 @@ function drawGatePost(withDoor: boolean): HTMLCanvasElement {
   return c;
 }
 
+/** bit del poste indicador para el sobre de semillas dorado (por encima de los de CROP_IDS) */
+const SIGN_PACKET = 1 << 6;
+
+/** Estaca de agrimensor con remate de oro en la esquina del bancal (talento «bancal heredado»). */
+function drawGoldenStake(): HTMLCanvasElement {
+  const c = makeCanvas(7, 12);
+  const ctx = c.getContext('2d')!;
+  rect(ctx, 1, 2, 3, 10, O);
+  rect(ctx, 2, 3, 1, 9, '#c8925f');
+  rect(ctx, 0, 0, 5, 4, O);
+  rect(ctx, 1, 1, 3, 2, '#ffcd75');
+  rect(ctx, 3, 2, 1, 1, '#c28a3a');
+  // banderín dorado
+  rect(ctx, 4, 4, 3, 3, O);
+  rect(ctx, 4, 5, 2, 1, '#f4b41b');
+  return c;
+}
+
+/** Cofre de la herencia junto a la estatua (1–5): cerrado, entreabierto con monedas y por fin rebosando. */
+function drawCoinChest(level: number): HTMLCanvasElement {
+  const c = makeCanvas(12, 9);
+  const ctx = c.getContext('2d')!;
+  const open = level >= 3;
+  // caja
+  rect(ctx, 1, 3, 10, 6, O);
+  rect(ctx, 2, 4, 8, 4, '#8b5a3c');
+  rect(ctx, 2, 5, 8, 1, '#c28a3a');
+  rect(ctx, 5, 4, 2, 2, '#ffcd75');
+  if (!open) {
+    // tapa cerrada
+    rect(ctx, 1, 1, 10, 3, O);
+    rect(ctx, 2, 2, 8, 1, '#a8723f');
+  } else {
+    // tapa echada hacia atrás y monedas asomando
+    rect(ctx, 2, 0, 8, 2, O);
+    rect(ctx, 3, 0, 6, 1, '#a8723f');
+    rect(ctx, 2, 2, 8, 1, '#ffcd75');
+    rect(ctx, 4, 2, 1, 1, '#f4f4f4');
+  }
+  // monedas por el suelo
+  if (level >= 2) rect(ctx, 11, 7, 1, 1, '#ffcd75');
+  if (level >= 4) rect(ctx, 0, 7, 1, 2, '#ffcd75');
+  if (level >= 5) {
+    rect(ctx, 3, 1, 6, 1, '#ffcd75');
+    rect(ctx, 6, 1, 1, 1, '#f4f4f4');
+  }
+  return c;
+}
+
+/** Matas de trébol al pie de la estatua (talento «suerte», 1–3): una más por nivel; la primera es de cuatro hojas. */
+function drawClovers(level: number): HTMLCanvasElement {
+  const c = makeCanvas(13, 6);
+  const ctx = c.getContext('2d')!;
+  for (let i = 0; i < level; i++) {
+    const x = 1 + i * 4, y = i % 2;
+    // hojas claras con sombra oscura debajo, para que no se pierdan en la hierba; los de tres hojas no tienen la de abajo a la izquierda
+    rect(ctx, x + 1, y + 1, 1, 5 - y, '#257179');
+    for (const [dx, dy] of [[0, 0], [2, 0], [0, 2], [2, 2]]) {
+      if (i > 0 && dx === 0 && dy === 2) continue;
+      rect(ctx, x + dx, y + dy + 1, 1, 1, '#257179');
+      rect(ctx, x + dx, y + dy, 1, 1, '#a7f070');
+    }
+    rect(ctx, x + 1, y + 1, 1, 1, i === 0 ? '#ffcd75' : '#a7f070');
+  }
+  return c;
+}
+
 // ---------- vista ----------
 
 /** Cultivos que conoce el huerto como bits de CROP_IDS: los que no tienen nodo en el árbol se conocen desde el principio. */
@@ -444,6 +525,9 @@ export class DecorView {
   private gate: Prop[];
   private well: Prop;
   private tower: Prop;
+  private stake: Prop;
+  private chest: Prop;
+  private clovers: Prop;
 
   /** Los sprites van directos a `parent` (la capa de entidades) para ordenarse con los gnomos. */
   constructor(parent: Container) {
@@ -456,10 +540,14 @@ export class DecorView {
     this.compost = new Prop(parent, drawCompost);
     this.sign = new Prop(parent, drawSignpost);
     this.bands = new Prop(parent, drawBasketBands);
-    this.fence = [false, true].flatMap(bottom => [false, true].map(right => new Prop(parent, () => drawFenceCorner(bottom, right))));
+    // nivel 1 cerca normal, 2 con remates de oro
+    this.fence = [false, true].flatMap(bottom => [false, true].map(right => new Prop(parent, level => drawFenceCorner(bottom, right, level === 2))));
     this.gate = [true, false].map(door => new Prop(parent, () => drawGatePost(door)));
     this.well = new Prop(parent, drawWell);
     this.tower = new Prop(parent, drawTower);
+    this.stake = new Prop(parent, drawGoldenStake);
+    this.chest = new Prop(parent, drawCoinChest);
+    this.clovers = new Prop(parent, drawClovers);
   }
 
   sync(s: GameState) {
@@ -478,7 +566,8 @@ export class DecorView {
     this.steam.show(puff ? 1 + (Math.floor(performance.now() / 400) % 2) : 0, HOUSE.x + HOUSE.w + 4, houseBottom - 1 - 11 + (t.cafe >= 4 ? 0 : 1), houseBottom);
     // sobre el bancal, en la hierba de arriba, donde no pasa nadie
     this.compost.show(t.abono, FIELD.x + 12, FIELD.y - 3);
-    this.sign.show(knownCrops(s), FIELD.x + 44, FIELD.y - 2);
+    const talents = s.prestige.talents;
+    this.sign.show(knownCrops(s) | (talents.semillasConocidas > 0 ? SIGN_PACKET : 0), FIELD.x + 44, FIELD.y - 2);
     // pozo del regador y atalaya del guardián: aparecen con su oficio y se adornan con su mejora
     this.well.show(t.regadores > 0 ? 1 + t.regadera : 0, WELL.x - 2, WELL.y + WELL.h);
     this.tower.show(t.guardianes > 0 ? 1 + t.silbato : 0, TOWER.x, TOWER.y + TOWER.h);
@@ -489,12 +578,19 @@ export class DecorView {
     const full = t.bancal >= TREE.bancal.max ? 1 : 0;
     const L = FIELD.x - 2, R = FIELD.x + FIELD.maxCols * FIELD.cell + 2;
     const T = FIELD.y - 2, B = FIELD.y + FIELD.maxRows * FIELD.cell + 2;
+    // «bancal heredado»: estaca dorada en la esquina del bancal, o remates de oro en la cerca si ya está
+    const inherited = talents.bancalHeredado > 0;
     this.fence.forEach((p, i) => {
       const bottom = i >= 2, right = i % 2 === 1;
-      p.show(full, right ? R - 11 : L - 5, bottom ? B + 6 : T + 10, bottom ? B + 6 : T);
+      p.show(full && inherited ? 2 : full, right ? R - 11 : L - 5, bottom ? B + 6 : T + 10, bottom ? B + 6 : T);
     });
+    this.stake.show(inherited && !full ? 1 : 0, FIELD.x - 8, FIELD.y + 6);
     // cancela a ambos lados del camino que entra en el bancal (el camino va de DOOR.y - 6 a DOOR.y + 3)
     this.gate[0].show(full, L - 13, DOOR.y - 7);
     this.gate[1].show(full, L - 13, DOOR.y + 14);
+    // al pie de la estatua: cofre de la herencia a la derecha y tréboles de la suerte a la izquierda
+    const statueBottom = STATUE.y + STATUE.h;
+    this.chest.show(Math.min(talents.herencia, TALENTS.herencia.max), STATUE.x + 8, statueBottom + 8);
+    this.clovers.show(Math.min(talents.suerte, 3), STATUE.x - 5, statueBottom + 7);
   }
 }

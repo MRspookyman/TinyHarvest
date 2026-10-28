@@ -1,5 +1,5 @@
 // Utilidades pequeñas para la interfaz HTML.
-import type { CropId, JobId, NodeId, Priority } from '../sim/types';
+import type { CropId, JobId, NodeId, Priority, TalentId } from '../sim/types';
 
 /** Lo que la interfaz puede pedirle al juego. main.ts lo conecta con la simulación. */
 export interface GameActions {
@@ -17,6 +17,11 @@ export interface GameActions {
   /** abre la ficha de un gnomo (y cierra la ventana que haya, para verlo en el huerto) */
   showGnome(id: number): void;
   reset(): void;
+  buyTalent(id: TalentId): void;
+  /** termina la temporada: huerto nuevo, semillas doradas y resumen */
+  endSeason(): void;
+  /** abre la estatua en el salón de la fama (desde el ranking y el resumen) */
+  showHallOfFame(): void;
 }
 
 export const esc = (t: string) =>

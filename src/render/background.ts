@@ -1,6 +1,6 @@
 // Fondo del mundo: hierba y camino (fijos) y el bancal (se redibuja al ampliarlo).
 // El granero, la casa de gnomos, el tablón y el árbol viejo son sprites aparte (landmarks.ts) porque se pueden pulsar.
-import { DOOR, FIELD, HOUSE, OLD_TREE, WORLD } from '../sim/config';
+import { DOOR, FIELD, HOUSE, OLD_TREE, STATUE, WORLD } from '../sim/config';
 import { makeCanvas, rng } from './pixelart';
 
 function paintGrass(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number) {
@@ -66,6 +66,8 @@ export function drawBackground(): HTMLCanvasElement {
     if (x < FIELD.x && y < DOOR.y + 10) continue;
     if (x >= OLD_TREE.x - 2 && x <= OLD_TREE.x + OLD_TREE.w + 2 && y >= OLD_TREE.y - 2 && y <= OLD_TREE.y + OLD_TREE.h + 2) continue;
     if (x >= HOUSE.x - 2 && x <= HOUSE.x + HOUSE.w + 2 && y >= HOUSE.y - 2 && y <= HOUSE.y + HOUSE.h + 2) continue;
+    // la estatua y lo que crece a su pie (cofre, tréboles)
+    if (x >= STATUE.x - 8 && y >= STATUE.y - 2 && y <= STATUE.y + STATUE.h + 10) continue;
     rect(x - 1, y, 1, 1, petal);
     rect(x + 1, y, 1, 1, petal);
     rect(x, y - 1, 1, 1, petal);
@@ -86,8 +88,9 @@ function darken(hex: string, k: number): string {
 /**
  * Bancal continuo de cols × rows con surcos de lado a lado. Se coloca en (FIELD.x - 2, FIELD.y - 2).
  * abono (0–5): cada nivel oscurece un poco la tierra y le echa más grumos de mantillo.
+ * golden (talento «abono dorado», 0–5): motas de oro entre la tierra, más por nivel.
  */
-export function drawField(cols: number, rows: number, abono = 0): HTMLCanvasElement {
+export function drawField(cols: number, rows: number, abono = 0, golden = 0): HTMLCanvasElement {
   const fw = cols * FIELD.cell, fh = rows * FIELD.cell;
   const c = makeCanvas(fw + 4, fh + 4);
   const ctx = c.getContext('2d')!;
@@ -112,6 +115,12 @@ export function drawField(cols: number, rows: number, abono = 0): HTMLCanvasElem
   }
   // grumos de mantillo
   for (let i = 0; i < ((fw * fh) / 220) * abono; i++) rect(Math.floor(sr() * fw), Math.floor(sr() * fh), 1, 1, '#3e2519');
+  // motas de oro (sin oscurecer: brillan igual con mucho abono)
+  const gr = rng(31);
+  for (let i = 0; i < ((fw * fh) / 400) * golden; i++) {
+    ctx.fillStyle = gr() < 0.7 ? '#ffcd75' : '#f4b41b';
+    ctx.fillRect(2 + Math.floor(gr() * fw), 2 + Math.floor(gr() * fh), 1, 1);
+  }
   // la hierba se come el borde del bancal (la hierba no se abona: sin oscurecer)
   const er = rng(23);
   const tuft = (x: number, y: number) => {

@@ -71,16 +71,14 @@ img.px { image-rendering: pixelated; display: block; }
 #stage { position: relative; min-height: 0; overflow: hidden; }
 #stage canvas { display: block; image-rendering: pixelated; }
 
-.hint, .ticker {
+.ticker {
   position: absolute; left: 50%; transform: translateX(-50%); max-width: min(640px, calc(100% - 32px));
   padding: 8px 14px; background: rgba(26, 28, 44, 0.85); color: var(--fg);
   font-family: var(--font-display); font-size: 0.95rem; text-align: center; pointer-events: none;
   box-shadow: 0 0 0 var(--px) var(--outline);
 }
-/* el aviso sale arriba: abajo taparía la última fila del bancal grande, que llega justo hasta la barra.
-   La pista (solo al empezar, con el bancal pequeño) va abajo, sobre la barra */
+/* el aviso sale arriba: abajo taparía la última fila del bancal grande, que llega justo hasta la barra */
 .ticker { top: 14px; opacity: 0; }
-.hint { bottom: 100px; }
 .ticker.show { animation: ticker 5s ease forwards; }
 @keyframes ticker { 0% { opacity: 0; transform: translate(-50%, -6px); } 8%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
 
@@ -291,10 +289,100 @@ img.legend-icon { width: 18px; height: 18px; }
 .card-quote span { display: block; font-style: normal; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
 .card-move { flex: none; }
 
+/* ---------- estatua: temporada, árbol dorado y salón de la fama ---------- */
+img.seed-icon { display: inline-block; width: 14px; height: 18px; }
+.stat[data-prestige] { color: var(--gold); }
+.gold-balance { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12px 0 auto; padding: 2px 10px; background: var(--outline); color: var(--gold); font-family: var(--font-display); font-size: 1.2rem; }
+.gold-balance b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.win-temporada { width: min(900px, 100%); }
+.season { display: flex; flex-direction: column; gap: 12px; }
+.tabs { display: flex; gap: 6px; border-bottom: var(--px) solid var(--paper-dark); }
+.tab { padding: 6px 12px; border: 0; background: var(--paper-dark); color: var(--ink-soft); font-family: var(--font-display); font-size: 1rem; cursor: pointer; box-shadow: inset 0 0 0 2px var(--ink-soft); }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected='true'] { background: var(--gold); color: var(--ink); box-shadow: inset 0 0 0 2px var(--outline); }
+.season section { display: flex; flex-direction: column; gap: 10px; }
+.season-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.season-facts div { padding: 8px 10px; background: var(--paper-dark); box-shadow: inset 0 0 0 2px var(--ink-soft); }
+.season-facts dt { font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+.season-facts dd { margin: 0; font-family: var(--font-display); font-size: 1.15rem; }
+.season-facts .season-seeds { background: var(--gold); box-shadow: inset 0 0 0 2px var(--outline); }
+.season-seeds dd { display: flex; align-items: center; gap: 6px; }
+.season-seeds b { font-weight: 600; }
+.season-end > p { font-size: 0.85rem; }
+.season-keep { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.season-keep > div { padding: 8px 12px; background: #fff4d6; box-shadow: inset 0 0 0 2px var(--green-dark); }
+.season-keep > div.lost { background: var(--paper-dark); box-shadow: inset 0 0 0 2px var(--red); }
+.season-keep h3 { font-size: 0.95rem; }
+.season-keep ul { margin: 2px 0 0; padding-left: 18px; font-size: 0.85rem; line-height: 1.35; }
+.btn.gold { filter: sepia(1) saturate(3) hue-rotate(-5deg) brightness(1.15); }
+.btn.gold:hover:not(:disabled) { filter: sepia(1) saturate(3) hue-rotate(-5deg) brightness(1.25); }
+.btn.gold:disabled { filter: grayscale(1) opacity(0.55); }
+.btn.big { align-self: center; font-family: var(--font-display); font-size: 1.3rem; padding: 4px 20px; }
+.season-end .lock-note { text-align: center; font-size: 0.9rem; }
+.season-end .lock-note:empty { display: none; }
+/* árbol dorado: el mismo árbol, bañado en oro */
+/* más apaisado que el árbol viejo (tiene menos pisos) y a la medida de la pantalla, para que quepa en las bajas */
+.golden-tree .tree-canvas {
+  aspect-ratio: auto; min-height: 0; height: clamp(262px, 100vh - 330px, 400px);
+  background: linear-gradient(#e0b860 0 0) bottom / 100% 8% no-repeat, #f7e3a8; box-shadow: inset 0 0 0 2px var(--gold-dark);
+}
+.golden-tree .tree-inner { inset: 28px 32px 24px; }
+.golden-tree .node { width: 40px; height: 40px; }
+.golden-tree .node img { width: 26px; height: 26px; }
+.tree-detail p.detail-help { font-size: 0.8rem; }
+.golden-tree .tree-lines polyline { stroke: #d9b878; }
+.golden-tree .tree-lines polyline.lit { stroke: var(--gold-dark); }
+.golden-tree .node.root { background: var(--gold); }
+.golden-tree .node.affordable { box-shadow: 0 0 0 var(--px) var(--outline), 0 0 0 calc(2 * var(--px)) var(--gold-dark); }
+.golden-tree .node.owned { background: #ffe9a8; }
+.golden-tree .node.maxed { background: var(--gold-dark); }
+.golden-tree .tree-detail { background: #f7e3a8; box-shadow: inset 0 0 0 2px var(--gold-dark); }
+.fame .ranking-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.fame-season, .fame-vets { background: #fff4d6; }
+.fame-vets { box-shadow: inset 0 0 0 2px var(--gold-dark); }
+.fame-name { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
+img.fame-star { display: inline-block; width: 12px; height: 12px; flex: none; }
+.fame-empty { padding: 24px; text-align: center; font-family: var(--font-display); color: var(--ink-soft); background: var(--paper-dark); }
+.ranking > footer { margin-top: 4px; }
+/* resumen al terminar: encima de todo lo demás */
+.summary-layer { z-index: 3; }
+.win.summary { width: min(460px, 100%); }
+.summary-body { display: flex; flex-direction: column; gap: 8px; }
+.summary-seeds { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--gold); font-family: var(--font-display); font-size: 1.2rem; box-shadow: inset 0 0 0 2px var(--outline); }
+.summary-seeds img.seed-icon { width: 21px; height: 27px; }
+.summary-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.summary-list li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 4px; background: var(--paper-dark); font-size: 0.88rem; }
+.summary-body footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+
+/* ---------- tutorial: bocadillo de pergamino sobre la barra ---------- */
+.tutorial {
+  position: absolute; z-index: 1; transform: translateX(-50%); width: min(340px, calc(100% - 16px));
+  padding: 10px 30px 8px 12px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 0 0 var(--px) var(--outline), 0 6px 0 rgba(26, 28, 44, 0.35);
+  font-size: 0.9rem; display: flex; flex-direction: column; gap: 4px;
+}
+/* el pico apunta al botón de la barra (--tip: su x dentro del bocadillo) */
+.tutorial::after {
+  content: ''; position: absolute; top: 100%; left: var(--tip, 50%); width: 0; height: 0; margin-left: -9px;
+  border: 9px solid transparent; border-top-color: var(--outline); border-bottom: 0;
+}
+.tutorial.no-tip::after { display: none; }
+.tutorial .link { align-self: flex-end; font-size: 0.78rem; }
+.tutorial-close { position: absolute; top: 2px; right: 4px; border: 0; background: none; padding: 2px 6px; color: var(--ink-soft); font-family: var(--font-display); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.tutorial-close:hover { color: var(--red); }
+
 @media (max-width: 760px) {
   .tree-wrap { grid-template-columns: minmax(0, 1fr); }
   .job { grid-template-columns: 48px minmax(0, 1fr); }
   .job .btn { grid-column: 1 / -1; justify-self: start; }
   .tool span { display: none; }
   .tool { min-width: 0; }
+  .season-facts { grid-template-columns: 1fr 1fr; }
+  .season-keep { grid-template-columns: minmax(0, 1fr); }
+}
+/* pantallas bajas (1024 × 600): las ventanas pierden el subtítulo para que quepa el contenido */
+@media (max-height: 640px) {
+  .win:not(.summary) .win-head p { display: none; }
+  .win-head { padding-bottom: 6px; margin-bottom: 8px; }
+  .tree-detail p.detail-help { display: none; }
 }

@@ -2,15 +2,16 @@
 import { test } from 'vitest';
 import {
   BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROP_IDS, CROPS, DOOR, FIELD, HARVEST_TIME, HOUSE, IDLE_AREA, MAX_GNOMES,
-  JOB_NODE, NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TREE, WATER, WELL,
+  JOB_NODE, NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_IDS, TREE, WATER, WELL,
 } from '../src/sim/config';
 import {
-  buyHouse, buyNode, capacity, clickPlot, cropsEaten, cropUnlocked, cropValue, hasPorters, hire, hireCost, houseCapacity,
-  houseCost, houseMaxed, isOpen, jobUnlocked, nodeCost, nodeMaxed, nodeReachable, plotStand, porterCapacity, setGroupSeed,
-  setPriority, stageTime, startEvent, tick, walkSpeed, waterTime, waterWork, workMult,
+  buyHouse, buyNode, buyTalent, canEndSeason, capacity, clickPlot, cropsEaten, cropUnlocked, cropValue, endSeason, hasPorters, hire,
+  hireCost, houseCapacity, houseCost, houseMaxed, isOpen, jobUnlocked, nodeCost, nodeMaxed, nodeReachable, plotStand,
+  porterCapacity, seasonSeeds, setGroupSeed, setPriority, stageTime, startEvent, talentCost, talentMaxed, talentReachable, tick,
+  walkSpeed, waterTime, waterWork, workMult,
 } from '../src/sim/sim';
 import { createState } from '../src/sim/state';
-import type { CropId, GameState, JobId, MomentKind, NodeId, Priority, Rng } from '../src/sim/types';
+import type { CropId, GameState, JobId, MomentKind, NodeId, Priority, Rng, TalentId } from '../src/sim/types';
 
 const SEED = 12345;
 const DT = 0.1;
@@ -41,6 +42,9 @@ function step(s: GameState, rng: Rng) {
   tick(s, DT, rng);
   s.events.length = 0;
 }
+
+/** gnomos de un oficio; con talentos no coincide con `hired` (los gratis no cuentan para el precio) */
+const staff = (s: GameState, j: JobId) => s.gnomes.filter(g => g.job === j).length;
 
 // ---------- Elección de cultivo ----------
 
@@ -75,17 +79,17 @@ function chooseCrop(s: GameState, clicksPerSec: number): CropId {
   const cap = capacity(s);
   const trip = (2 * meanDist(drop.x, drop.y)) / speed + REST_TIME + cap * HARVEST_TIME * wm + ((cap - 1) * HOP_PX) / speed;
   const player = clicksPerSec / 2;
-  let harvest = (s.hired.recolector * cap) / trip + player;
+  let harvest = (staff(s, 'recolector') * cap) / trip + player;
   if (hasPorters(s)) {
     const porterTrip = (2 * Math.hypot(BASKET.x - DOOR.x, BASKET.y - DOOR.y)) / speed + PICKUP_TIME * wm + REST_TIME;
-    harvest = Math.min(harvest, (s.hired.porteador * porterCapacity(s)) / porterTrip + player);
+    harvest = Math.min(harvest, (staff(s, 'porteador') * porterCapacity(s)) / porterTrip + player);
   }
-  const plant = s.hired.sembrador / (PLANT_TIME * wm + (1.5 * meanDist(centre.x, centre.y)) / speed) + player;
+  const plant = staff(s, 'sembrador') / (PLANT_TIME * wm + (1.5 * meanDist(centre.x, centre.y)) / speed) + player;
   // riegos por segundo de los regadores: ir de una parcela a otra y regar, más el viaje al pozo cada WATER.can riegos
   const well = { x: WELL.x + WELL.w / 2, y: WELL.y + WELL.h + 2 };
   const waterHop = (1.5 * meanDist(centre.x, centre.y)) / speed + waterWork(s) * wm;
   const refill = ((2 * meanDist(well.x, well.y)) / speed + WATER.refill * wm) / WATER.can;
-  const waterings = s.hired.regador / (waterHop + refill);
+  const waterings = staff(s, 'regador') / (waterHop + refill);
   let best: CropId = 'zanahoria';
   let bestRate = -1;
   for (const c of CROP_IDS) {
@@ -118,14 +122,15 @@ function purchaseOptions(s: GameState, rng: Rng): Purchase[] {
   const opts: Purchase[] = [];
   const job = (j: JobId) => opts.push({ cost: hireCost(s, j), buy: () => hire(s, j, rng) });
   if (s.gnomes.length < houseCapacity(s)) {
+    const rec = staff(s, 'recolector');
     job('recolector');
-    if (s.hired.sembrador < Math.ceil(s.hired.recolector / 1.5)) job('sembrador');
-    if (jobUnlocked(s, 'porteador') && s.hired.porteador < Math.floor(s.hired.recolector / 3)) job('porteador');
+    if (staff(s, 'sembrador') < Math.ceil(rec / 1.5)) job('sembrador');
+    if (jobUnlocked(s, 'porteador') && staff(s, 'porteador') < Math.floor(rec / 3)) job('porteador');
     // un regador por cada 5 recolectores en cuanto hay algún cultivo con sed que sembrar
     const thirsty = CROP_IDS.some(c => CROPS[c].thirsty && cropUnlocked(s, c));
-    if (jobUnlocked(s, 'regador') && thirsty && s.hired.regador < Math.floor(s.hired.recolector / 5)) job('regador');
+    if (jobUnlocked(s, 'regador') && thirsty && staff(s, 'regador') < Math.floor(rec / 5)) job('regador');
     // un guardián en cuanto se puede (dos con el huerto grande)
-    if (jobUnlocked(s, 'guardian') && s.hired.guardian < (s.hired.recolector >= 20 ? 2 : 1)) job('guardian');
+    if (jobUnlocked(s, 'guardian') && staff(s, 'guardian') < (rec >= 20 ? 2 : 1)) job('guardian');
   } else if (!houseMaxed(s)) {
     opts.push({ cost: houseCost(s), buy: () => buyHouse(s) });
   }
@@ -665,6 +670,108 @@ test('h) Organización', () => {
     'Objetivo: que se separen a simple vista (bien llevado ≥ ×1,20; mal llevado ≤ ×1,08). La peor parte pesa la mitad,',
     'así que un solo cuello de botella baja el multiplicador aunque el resto vaya bien.', '',
     table(['Huerto', 'multiplicador', 'cosecha', 'cesta', 'siembra', 'riego', 'monedas/s'], rows),
+  ];
+  console.log(`\n${out.join('\n')}\n`);
+});
+
+// ---------- i) Temporadas ----------
+
+const SEASONS = 3;
+/** el bot acaba la temporada al completar el árbol, o aquí si no llega */
+const SEASON_CAP_MIN = 90;
+/** semillas que daría acabar la primera temporada en estos minutos */
+const SEED_MARKS_MIN = [30, 45, 65, 90];
+
+interface SeasonRun {
+  treeStep: number | null;
+  endStep: number;
+  /** primer paso en que se puede acabar la temporada */
+  canEndStep: number | null;
+  /** ganado en la temporada y semillas que daría, al final de cada minuto */
+  byMinute: { earned: number; seeds: number }[];
+}
+
+/** Juega una temporada como el bot de a) (clics, cultivo y compras); con `stopAtTree` para al completar el árbol. */
+function playSeason(s: GameState, rng: Rng, profile: Profile, capMin: number, stopAtTree: boolean): SeasonRun {
+  const clicksPerStep = profile.clicksPerSec * DT;
+  const run: SeasonRun = { treeStep: null, endStep: 0, canEndStep: null, byMinute: [{ earned: 0, seeds: 0 }] };
+  let budget = 0;
+  let crop: CropId = 'zanahoria';
+  for (let n = 0; n < capMin * STEPS_PER_MIN; n++) {
+    if (n % CHOOSE_STEPS === 0) {
+      const next = chooseCrop(s, profile.clicksPerSec);
+      if (next !== crop || n === 0) setGroupSeed(s, s.groups[0].id, next);
+      crop = next;
+    }
+    budget = Math.min(budget + clicksPerStep, Math.max(1, clicksPerStep));
+    while (budget >= 1) {
+      if (!playerClick(s, crop)) break;
+      budget -= 1;
+    }
+    shop(s, rng);
+    step(s, rng);
+    run.endStep = n + 1;
+    if (run.canEndStep === null && canEndSeason(s)) run.canEndStep = n + 1;
+    if ((n + 1) % STEPS_PER_MIN === 0) run.byMinute.push({ earned: s.totalEarned, seeds: seasonSeeds(s) });
+    if (run.treeStep === null && NODE_IDS.every(id => nodeMaxed(s, id))) {
+      run.treeStep = n + 1;
+      if (stopAtTree) break;
+    }
+  }
+  return run;
+}
+
+/** Gasta las semillas en el talento más barato que pueda pagar (a igual precio, el primero de TALENT_IDS), una y otra vez. */
+function spendSeeds(s: GameState): TalentId[] {
+  const bought: TalentId[] = [];
+  for (;;) {
+    const opts = TALENT_IDS.filter(id => talentReachable(s, id) && !talentMaxed(s, id) && talentCost(s, id) <= s.prestige.goldenSeeds);
+    if (!opts.length) return bought;
+    opts.sort((a, b) => talentCost(s, a) - talentCost(s, b));
+    buyTalent(s, opts[0]);
+    bought.push(opts[0]);
+  }
+}
+
+const talentList = (levels: Partial<Record<TalentId, number>>) =>
+  TALENT_IDS.filter(id => levels[id]).map(id => `${id} ${levels[id]}`).join(' · ') || '—';
+
+test('i) Temporadas', () => {
+  const profile = PROFILES[0];
+  // la primera temporada, alargada, para ver lo que cunde esperar
+  const rngA = mulberry32(SEED);
+  const long = playSeason(createState(rngA), rngA, profile, Math.max(...SEED_MARKS_MIN), false);
+
+  const rng = mulberry32(SEED);
+  let s = createState(rng);
+  const rows: (string | number)[][] = [];
+  for (let k = 1; k <= SEASONS; k++) {
+    const start = talentList(s.prestige.talents);
+    const r = playSeason(s, rng, profile, SEASON_CAP_MIN, true);
+    const seeds = seasonSeeds(s);
+    const earned = s.totalEarned;
+    s = endSeason(s, rng);
+    const bought = spendSeeds(s);
+    const counts: Partial<Record<TalentId, number>> = {};
+    for (const id of bought) counts[id] = (counts[id] ?? 0) + 1;
+    rows.push([
+      k, start, minOr(r.treeStep), f1(r.endStep / STEPS_PER_MIN), minOr(r.canEndStep), Math.round(earned), `**${seeds}**`,
+      talentList(counts), s.prestige.goldenSeeds,
+    ]);
+  }
+  const out = [
+    `## i) Temporadas (${profile.name}, ${SEASONS} temporadas seguidas)`, '',
+    `El bot juega como en a) hasta completar el árbol (como mucho ${SEASON_CAP_MIN} min), acaba la temporada y gasta las`,
+    'semillas en el talento más barato que pueda pagar, una y otra vez.',
+    `Semillas = floor((ganado / ${PRESTIGE.seedUnit}) ^ ${PRESTIGE.seedPow}); para acabar hacen falta ${PRESTIGE.minSeeds}.`,
+    'Objetivo: temporada 1 con el árbol en 60–75 min y 10–15 semillas; la 2 en ≤ 45–50 min; la 3, más rápida aún;',
+    'se puede acabar la primera hacia el min 30–40.', '',
+    table(
+      ['temporada', 'talentos al empezar', 'árbol completo (min)', 'fin (min)', 'se puede acabar desde (min)', 'ganado', 'semillas', 'compra al acabar', 'semillas sobrantes'],
+      rows,
+    ),
+    '', `### Semillas si se acaba la temporada 1 en el minuto… (se puede desde el min ${minOr(long.canEndStep)}; árbol completo en el ${minOr(long.treeStep)})`, '',
+    table(['min', 'ganado', 'semillas'], SEED_MARKS_MIN.map(m => [m, Math.round(long.byMinute[m].earned), long.byMinute[m].seeds])),
   ];
   console.log(`\n${out.join('\n')}\n`);
 });

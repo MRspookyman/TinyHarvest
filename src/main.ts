@@ -4,8 +4,8 @@ import { SceneView } from './render/scene';
 import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
-  buyHouse, buyNode, clickPlot, createGroup, cropUnlocked, deleteGroup, hire, hireCost, houseCapacity, houseCost, houseMaxed,
-  moveGnome, nodeCost, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
+  buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, endSeason, hire, hireCost,
+  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, renameGroup, setGroupColor, setGroupSeed, setPriority, tick,
 } from './sim/sim';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
@@ -16,7 +16,9 @@ import { createDiaryMenu } from './ui/menus/diary';
 import { createGroupsMenu } from './ui/menus/groups';
 import { createHireMenu } from './ui/menus/hire';
 import { createRankingMenu } from './ui/menus/ranking';
+import { createSeasonMenu, createSeasonSummary } from './ui/menus/season';
 import { createTreeMenu } from './ui/menus/tree';
+import { createTutorial } from './ui/tutorial';
 import { createWindows } from './ui/windows';
 
 const rng = Math.random;
@@ -69,23 +71,42 @@ async function start() {
       windows.close();
       card.close();
     },
+    buyTalent: id => buyTalent(state, id),
+    endSeason: () => {
+      if (!canEndSeason(state)) return;
+      state = endSeason(state, rng);
+      seed = 'zanahoria';
+      scene.reset();
+      windows.close();
+      card.close();
+      saveGame(state);
+      summary.show(state);
+    },
+    showHallOfFame: () => {
+      seasonMenu.tab('fama');
+      windows.open('temporada');
+    },
   };
 
+  const seasonMenu = createSeasonMenu(actions);
   const windows = createWindows(stageEl, {
     contratar: createHireMenu(actions),
     grupos: createGroupsMenu(actions),
     arbol: createTreeMenu(actions),
     diario: createDiaryMenu(actions),
     ranking: createRankingMenu(actions),
+    temporada: seasonMenu,
   });
   const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m));
-  // después de las ventanas: su Esc va primero
+  const summary = createSeasonSummary(stageEl, actions);
+  // después de las ventanas y del resumen: su Esc va primero
   const card = createGnomeCard(stageEl, actions, id => scene.follow(id));
 
   scene.onPlotClick = id => clickPlot(state, id, seed);
   scene.onOpenMenu = m => windows.open(m);
   scene.onGnomeClick = id => card.open(id);
   const toolbar = stageEl.querySelector<HTMLElement>('.toolbar')!;
+  const tutorial = createTutorial(stageEl, toolbar, !devParams || new URLSearchParams(location.search).get('tutorial') === '1');
 
   let sinceSave = 0;
   app.ticker.add(ticker => {
@@ -96,6 +117,7 @@ async function start() {
     hud.update(state, seed, windows.current);
     windows.update(state);
     card.update(state);
+    tutorial.update(state, { menu: windows.current, card: card.current });
     // la cámara encuadra el huerto en lo que no tapan la barra de abajo ni la ficha (D13); se aplica al siguiente fotograma
     scene.setInsets({
       right: card.el.hidden ? 0 : stageEl.clientWidth - card.el.offsetLeft,
@@ -116,9 +138,10 @@ async function start() {
 
 /**
  * Solo en desarrollo, para revisar sin jugar desde cero:
- * ?monedas=500&recolectores=3&sembradores=1&porteadores=1&regadores=1&guardianes=1&bancal=4&casa=2
+ * ?monedas=500&recolectores=3&sembradores=1&porteadores=1&regadores=1&guardianes=1&bancal=4&casa=2&semillas=20&temporada=3
  * (porteadores, regadores, guardianes y bancal compran también lo necesario en el árbol; casa amplía la casa de
- * gnomos N niveles, y si los gnomos pedidos no caben, se amplía lo que haga falta)
+ * gnomos N niveles, y si los gnomos pedidos no caben, se amplía lo que haga falta; semillas da semillas doradas
+ * para el árbol dorado y temporada pone el número de temporada, sin historial)
  */
 function applyDevParams(state: GameState) {
   const q = new URLSearchParams(location.search);
@@ -156,6 +179,8 @@ function applyDevParams(state: GameState) {
     }
   }
   state.coins += n('monedas');
+  state.prestige.goldenSeeds += n('semillas');
+  if (n('temporada')) state.prestige.season = n('temporada');
 }
 
 start();

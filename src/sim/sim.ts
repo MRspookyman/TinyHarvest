@@ -2,15 +2,15 @@
 import {
   BASE_SPEED, BASKET, BUBBLE_TIME, CARRETILLA_PER_LEVEL, CLEAR_TIME, CONSERVAS_PER_LEVEL, COST_GROWTH, CRITTER_SPEED, CROP_IDS, CROPS,
   CROW_EAT, CROW_NOTICE, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, GUARD, HAPPENING_EVERY, HAPPENING_TIME,
-  HARVEST_TIME, HOUSE, IDLE_AREA, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
-  MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, RIPE, ROTTEN, TRAIT_WALK, TRAIT_WORK, TREE,
-  VALUE_DISTANCE_BIAS, WATER, WELL, WORLD,
+  HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
+  MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
+  TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD,
 } from './config';
-import { makeGnome, randomTrait } from './state';
-import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS } from '../textos';
+import { createState, makeGnome, randomTrait } from './state';
+import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
 import type {
   BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, Plot, Pose,
-  Priority, Rng, Task, TaskKind,
+  Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran,
 } from './types';
 
 // ---------- Árbol de mejoras y sus efectos ----------
@@ -66,8 +66,9 @@ export const gnomeWorkMult = (s: GameState, g: Gnome) =>
   (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1);
 export const capacity = (s: GameState) => 1 + s.tree.saco;
 export const basketMax = (s: GameState) => BASKET.base + BASKET.perLevel * s.tree.cesta;
-/** segundos por fase con el abono, a velocidad normal (ver growRate) */
-export const stageTime = (s: GameState, crop: CropId) => (CROPS[crop].grow * 0.85 ** s.tree.abono) / RIPE;
+/** segundos por fase con el abono (y el abono dorado), a velocidad normal (ver growRate) */
+export const stageTime = (s: GameState, crop: CropId) =>
+  (CROPS[crop].grow * 0.85 ** s.tree.abono) / (1 + TALENT_EFFECT.abonoDorado * s.prestige.talents.abonoDorado) / RIPE;
 /** a qué velocidad crece ahora la parcela: más rápido regada, muy despacio si tiene sed y está seca */
 export const growRate = (p: Plot) => (p.wet > 0 ? WATER.boost : CROPS[p.crop].thirsty ? WATER.dry : 1);
 /** segundos que dura un riego, con la regadera */
@@ -77,9 +78,10 @@ export const waterWork = (s: GameState) => WATER.work * (1 - WATER.regaderaWork 
 /** hasta dónde ve el guardián (px del mundo), con el silbato */
 export const guardRange = (s: GameState) => GUARD.sight + GUARD.silbatoSight * s.tree.silbato;
 export const hasPorters = (s: GameState) => s.gnomes.some(g => g.job === 'porteador');
-/** monedas que da un cultivo al venderse, con el mercado y el multiplicador de organización */
+/** monedas que da un cultivo al venderse, con el mercado, el mercado dorado y el multiplicador de organización */
 export const cropValue = (s: GameState, crop: CropId) =>
-  CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado) * s.org.mult;
+  CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado)
+  * (1 + TALENT_EFFECT.mercadoDorado * s.prestige.talents.mercadoDorado) * s.org.mult;
 /** segundos que aguanta madura, con las conservas */
 export const keepTime = (s: GameState, crop: CropId) => CROPS[crop].keep * (1 + CONSERVAS_PER_LEVEL * s.tree.conservas);
 /** cultivos que se lleva un porteador de la cesta en cada viaje, con la carretilla */
@@ -157,8 +159,13 @@ function makeName(s: GameState, rng: Rng): string {
   return `${pick(rng, NOMBRES)} ${s.nextId}`;
 }
 
+/** cuánto sube el precio de cada contratación del mismo oficio, con el talento «contrato» */
+export const costGrowth = (s: GameState) => COST_GROWTH - TALENT_EFFECT.contrato * s.prestige.talents.contrato;
+/** probabilidad de que un gnomo nuevo sea legendario, con el talento «suerte» */
+export const legendaryChance = (s: GameState) => LEGENDARY.chance + TALENT_EFFECT.suerte * s.prestige.talents.suerte;
+
 export function hireCost(s: GameState, job: JobId): number {
-  return Math.floor(JOBS[job].base * COST_GROWTH ** s.hired[job]);
+  return Math.floor(JOBS[job].base * costGrowth(s) ** s.hired[job]);
 }
 
 export function hire(s: GameState, job: JobId, rng: Rng): boolean {
@@ -166,19 +173,24 @@ export function hire(s: GameState, job: JobId, rng: Rng): boolean {
   if (!jobUnlocked(s, job) || s.coins < cost || s.gnomes.length >= houseCapacity(s)) return false;
   s.coins -= cost;
   s.hired[job]++;
-  const name = makeName(s, rng);
+  const g = addGnome(s, job, rng);
+  log(s, LOG.contratado(g.name, OFICIOS[job].nombre));
+  if (g.legendary) log(s, LOG.legendario(g.name));
+  return true;
+}
+
+/** Un gnomo llega por la puerta del granero. Sin `who` es uno nuevo (nombre, rasgo y quizá legendario, al azar). */
+function addGnome(s: GameState, job: JobId, rng: Rng, who?: Pick<Veteran, 'name' | 'trait' | 'legendary'>): Gnome {
+  // mismo orden de tiradas que antes de la iteración 8: las partidas con semilla fija salen igual
+  const name = who?.name ?? makeName(s, rng);
   const x = DOOR.x + rng() * 8 - 4;
-  const trait = randomTrait(rng);
-  const legendary = rng() < LEGENDARY.chance;
-  const full = legendary ? `${name} ${pick(rng, LEGENDARIO.titulos)}` : name;
+  const trait = who?.trait ?? randomTrait(rng);
+  const legendary = who ? who.legendary : rng() < legendaryChance(s);
+  const full = !who && legendary ? `${name} ${pick(rng, LEGENDARIO.titulos)}` : name;
   const g = makeGnome(s.nextId++, full, job, s.groups[0].id, x, DOOR.y + 2, trait, legendary);
   s.gnomes.push(g);
-  log(s, LOG.contratado(g.name, OFICIOS[job].nombre));
-  if (legendary) {
-    log(s, LOG.legendario(g.name));
-    moment(s, 'legendario', g.x, g.y);
-  }
-  return true;
+  if (legendary) moment(s, 'legendario', g.x, g.y);
+  return g;
 }
 
 // ---------- Grupos ----------
@@ -290,6 +302,7 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
 
 export function tick(s: GameState, dt: number, rng: Rng) {
   const org = orgOf(s);
+  s.seasonTime += dt;
   orgDecay(org, dt);
   for (const p of s.plots) {
     if (!isOpen(s, p)) continue;
@@ -1244,4 +1257,98 @@ export function startEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
   moment(s, 'espantapajaros', g.x, g.y);
   log(s, LOG.espantapajaros(g.name));
   return true;
+}
+
+// ---------- Temporadas y árbol dorado (iteración 8) ----------
+
+/** Semillas doradas que daría acabar la temporada ahora: crecen con lo ganado, pero cada vez más despacio. */
+export const seasonSeeds = (s: GameState) => Math.floor((s.totalEarned / PRESTIGE.seedUnit) ** PRESTIGE.seedPow);
+/** monedas que hay que ganar en una temporada para llevarse n semillas (lo contrario de seasonSeeds) */
+export const seedsCoinsNeeded = (n: number) => Math.ceil(PRESTIGE.seedUnit * n ** (1 / PRESTIGE.seedPow));
+export const canEndSeason = (s: GameState) => seasonSeeds(s) >= PRESTIGE.minSeeds;
+
+export function talentCost(s: GameState, id: TalentId): number {
+  const t = TALENTS[id];
+  return Math.floor(t.base * t.mult ** s.prestige.talents[id]);
+}
+
+/** El talento se ve y se puede comprar: su padre ya está comprado. */
+export const talentReachable = (s: GameState, id: TalentId) => {
+  const parent = TALENTS[id].parent;
+  return parent === null || s.prestige.talents[parent] > 0;
+};
+export const talentMaxed = (s: GameState, id: TalentId) => s.prestige.talents[id] >= TALENTS[id].max;
+
+/** Los talentos de cada temporada (crecer, vender, contratar, suerte) se notan ya; los de herencia, en la siguiente. */
+export function buyTalent(s: GameState, id: TalentId): boolean {
+  if (talentMaxed(s, id) || !talentReachable(s, id)) return false;
+  const cost = talentCost(s, id);
+  if (s.prestige.goldenSeeds < cost) return false;
+  s.prestige.goldenSeeds -= cost;
+  s.prestige.talents[id]++;
+  log(s, LOG.talento(TALENTOS[id].nombre));
+  return true;
+}
+
+/**
+ * Acaba la temporada: devuelve un huerto nuevo (monedas, árbol, casa y gnomos desde cero) que conserva lo
+ * permanente, con las semillas ganadas, la temporada en el salón de la fama y los talentos de herencia aplicados.
+ * No comprueba canEndSeason: eso lo decide quien llama.
+ */
+export function endSeason(s: GameState, rng: Rng): GameState {
+  const old = s.prestige;
+  const seeds = seasonSeeds(s);
+  const kings = JOB_IDS.map(j => s.gnomes.find(g => g.id === s.crowns[j] && g.job === j)).filter((g): g is Gnome => !!g);
+  const record: SeasonRecord = {
+    season: old.season,
+    earned: s.totalEarned,
+    seconds: s.seasonTime,
+    seeds,
+    crowned: kings.map(g => ({ job: g.job, name: g.name, tasks: g.stats.tasks, legendary: g.legendary })),
+  };
+  // vuelven los coronados que más han trabajado; el que ya era veterano suma una temporada más
+  const veterans: Veteran[] = [];
+  for (const g of [...kings].sort((a, b) => b.stats.tasks - a.stats.tasks)) {
+    if (veterans.length >= TALENT_EFFECT.veterano * old.talents.veterano) break;
+    if (veterans.some(v => v.name === g.name)) continue;
+    const seasons = (old.veterans.find(v => v.name === g.name)?.seasons ?? 0) + 1;
+    veterans.push({ name: g.name, job: g.job, trait: g.trait, legendary: g.legendary, seasons });
+  }
+
+  const n = createState(rng);
+  n.prestige = {
+    season: old.season + 1,
+    goldenSeeds: old.goldenSeeds + seeds,
+    talents: { ...old.talents },
+    history: [record, ...old.history].slice(0, PRESTIGE.historyMax),
+    veterans,
+    lifetimeEarned: old.lifetimeEarned + s.totalEarned,
+  };
+  const t = n.prestige.talents;
+  n.log = [];
+  log(n, LOG.temporada(n.prestige.season, seeds));
+  n.coins = TALENT_EFFECT.herencia * t.herencia;
+  n.tree.bancal = Math.min(TREE.bancal.max, TALENT_EFFECT.bancalHeredado * t.bancalHeredado);
+  n.house = Math.min(HOUSE.max, TALENT_EFFECT.casaHeredada * t.casaHeredada);
+  for (const c of CROP_IDS.slice(1, 1 + TALENT_EFFECT.semillasConocidas * t.semillasConocidas)) n.tree[c as NodeId] = 1;
+  // gratis y sin contar en `hired`: el primero que se contrate sigue costando lo de siempre
+  for (const v of veterans) {
+    if (n.gnomes.length >= houseCapacity(n)) break;
+    // si su gremio aún no ha abierto (el árbol empieza de cero), echa una mano recogiendo hasta que abra
+    const g = addGnome(n, jobUnlocked(n, v.job) ? v.job : 'recolector', rng, v);
+    log(n, LOG.veterano(g.name, v.seasons));
+  }
+  const free = TALENT_EFFECT.experiencia * t.experiencia;
+  let arrived = 0;
+  for (let i = 0; i < free; i++) {
+    for (const job of ['recolector', 'sembrador'] as const) {
+      if (n.gnomes.length >= houseCapacity(n)) break;
+      const g = addGnome(n, job, rng);
+      if (g.legendary) log(n, LOG.legendario(g.name));
+      arrived++;
+    }
+  }
+  if (arrived) log(n, LOG.experiencia(arrived));
+  n.events.push({ type: 'season', season: n.prestige.season });
+  return n;
 }

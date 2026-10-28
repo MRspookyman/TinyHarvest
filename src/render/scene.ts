@@ -1,12 +1,12 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, WELL, WILT_WARNING, WORLD } from '../sim/config';
-import { basketMax, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, waterTime } from '../sim/sim';
-import type { Critter, GameState, Gnome } from '../sim/types';
+import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, STATUE, WELL, WILT_WARNING, WORLD } from '../sim/config';
+import { basketMax, canEndSeason, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, waterTime } from '../sim/sim';
+import type { Critter, GameState, Gnome, Pose } from '../sim/types';
 import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
 import { DecorView, TOWER, WELL_DRAW_H } from './decor';
-import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, oldTreeStage, outlined } from './landmarks';
+import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, drawStatue, oldTreeStage, outlined, silhouette, STATUE_DRAW_W, statueTier } from './landmarks';
 import { frameIndex, type Atlas } from './sprites';
 
 const FONT = ['Pixelify Sans', 'monospace'];
@@ -18,6 +18,20 @@ const DOOR_RECT = { x: DOOR.x - 8, y: BARN.y + 28 } as const;
 const DOOR_OPEN = 0.6;
 /** lo que tarda un cultivo en volar de la planta a la mano */
 const FLIGHT_TIME = 0.35;
+/** fiesta de temporada nueva: lo que dura el confeti y el destello de la estatua */
+const PARTY_TIME = 3;
+const FLASH_TIME = 0.8;
+/** sitios de la estatua (desde su esquina de arriba a la izquierda, sin contar los rayos) donde brilla cuando se puede acabar la temporada */
+const GLINTS: [number, number][] = [[10, 2], [16, 8], [5, 9], [12, 13], [8, 6]];
+
+/** Cuánto sube o baja el pecho del gnomo en cada fotograma respecto al de pie (para la medalla del veterano). */
+function chestDy(pose: Pose, idx: number): number {
+  switch (pose) {
+    case 'walk': case 'carry': case 'complain': case 'scare': case 'watch': return idx % 2 === 1 ? -1 : 0;
+    case 'sit': case 'fall': return 1;
+    default: return 0;
+  }
+}
 
 /** Elemento del huerto que abre un menú al pulsarlo. */
 interface Landmark {
@@ -43,6 +57,8 @@ interface GnomeView {
   sparkle: Sprite;
   bubble: Sprite;
   crown: Sprite;
+  /** medalla de veterano en el pecho */
+  medal: Sprite;
   /** qué bocadillo se dibujó por última vez, para el «pop» al cambiar */
   bubbleKey: string;
   pop: number;
@@ -83,6 +99,8 @@ interface Particle {
   g: number;
   t: number;
   life: number;
+  /** confeti: se mece de lado a lado (vx es la amplitud) y solo se desvanece al final */
+  flutter?: number;
 }
 
 export class SceneView {
@@ -115,13 +133,22 @@ export class SceneView {
   private pileCount = 0;
   private house: Landmark;
   private houseCount: Text;
-  /** texturas de la casa por nivel, normal y resaltada */
-  private houseTextures = new Map<number, { normal: Texture; hover: Texture; w: number; h: number }>();
-  private houseLevel = -1;
-  /** granero, tablón y árbol viejo cambian de dibujo con las mejoras (syncLandmarks) */
+  /** texturas de la casa por nivel (y pomo dorado), normal y resaltada */
+  private houseTextures = new Map<string, { normal: Texture; hover: Texture; w: number; h: number }>();
+  private houseKey = '0|false';
+  /** granero, tablón, árbol viejo y estatua cambian de dibujo con las mejoras y los talentos (syncLandmarks) */
   private barn: Landmark;
   private board: Landmark;
   private tree: Landmark;
+  private statue: Landmark;
+  /** halo dorado detrás de la estatua (desde la 4.ª temporada y cuando se puede acabar la temporada) */
+  private statueGlow = new Graphics();
+  private statueGlowTier = -1;
+  /** destellos sobre la estatua cuando se puede acabar la temporada */
+  private glints: Sprite[] = [];
+  /** silueta dorada de la estatua al empezar temporada, y lo que le queda */
+  private statueFlash = new Sprite();
+  private flashT = 0;
   /** nivel dibujado y texturas ya hechas de cada elemento que cambia */
   private landmarkLevels = new Map<Landmark, { key: string; cache: Map<string, { normal: Texture; hover: Texture; w: number; h: number }> }>();
   /** atrezo que cambia con las mejoras (decor.ts) */
@@ -183,10 +210,23 @@ export class SceneView {
     this.barn = addLandmark('contratar', drawBarn(), BARN.x - 1, BARN.y);
     this.board = addLandmark('grupos', drawBoard(), BOARD.x, BOARD.y);
     this.tree = addLandmark('arbol', drawOldTree(), OLD_TREE.x, OLD_TREE.y);
+    // la estatua se centra en su caja y se apoya en su base; crece con las temporadas
+    const statue0 = drawStatue(0);
+    this.statue = addLandmark('temporada', statue0, STATUE.x + (STATUE.w - STATUE_DRAW_W) / 2, STATUE.y + STATUE.h - statue0.height);
+    this.statueGlow.zIndex = STATUE.y + STATUE.h - 0.5;
+    this.entities.addChild(this.statueGlow);
+    for (let i = 0; i < 2; i++) {
+      const glint = new Sprite(atlas.sparkle);
+      glint.anchor.set(0.5);
+      glint.visible = false;
+      this.glints.push(glint);
+    }
+    this.statueFlash.visible = false;
+    this.fx.addChild(this.statueFlash, ...this.glints);
     // la casa se apoya en la base de su caja; syncHouse cambia el dibujo cuando se amplía
     const house0 = drawHouse(0);
     this.house = addLandmark('contratar', house0, HOUSE.x, HOUSE.y + HOUSE.h - house0.height, { lugar: CASA.nombre, sub: MENUS.contratar.sub });
-    this.houseTextures.set(0, { normal: this.house.normal, hover: this.house.hover, w: house0.width, h: house0.height });
+    this.houseTextures.set(this.houseKey, { normal: this.house.normal, hover: this.house.hover, w: house0.width, h: house0.height });
 
     this.basket = new Sprite(atlas.basket[0]);
     this.basket.position.set(BASKET.x - BASKET_SPRITE_W / 2, BASKET.y - 4 - BASKET_SPRITE_H);
@@ -264,6 +304,7 @@ export class SceneView {
     this.particles = [];
     this.pileCount = 0;
     this.doorT = 0;
+    this.flashT = 0;
     this.follow(null);
   }
 
@@ -277,6 +318,7 @@ export class SceneView {
     this.syncBasket(s);
     this.syncHouse(s);
     this.syncLandmarks(s);
+    this.syncStatue(s, dt);
     this.decor.sync(s);
     this.syncGnomes(s, dt);
     this.syncCritters(s, dt);
@@ -290,24 +332,26 @@ export class SceneView {
 
   private syncField(s: GameState) {
     const f = fieldSize(s);
-    const key = `${f.cols}x${f.rows}|${s.tree.abono}`;
+    const key = `${f.cols}x${f.rows}|${s.tree.abono}|${s.prestige.talents.abonoDorado}`;
     if (key === this.fieldKey) return;
     this.fieldKey = key;
     const old = this.field.texture;
-    this.field.texture = Texture.from(drawField(f.cols, f.rows, s.tree.abono));
+    this.field.texture = Texture.from(drawField(f.cols, f.rows, s.tree.abono, s.prestige.talents.abonoDorado));
     if (old !== Texture.EMPTY) old.destroy(true);
   }
 
-  /** Dibujo de la casa según su nivel (cada nivel se dibuja una vez) y cartel de camas ocupadas. */
+  /** Dibujo de la casa según su nivel y el pomo dorado (cada uno se dibuja una vez) y cartel de camas ocupadas. */
   private syncHouse(s: GameState) {
     const lm = this.house;
-    if (s.house !== this.houseLevel) {
-      this.houseLevel = s.house;
-      let tex = this.houseTextures.get(s.house);
+    const golden = s.prestige.talents.casaHeredada > 0;
+    const key = `${s.house}|${golden}`;
+    if (key !== this.houseKey) {
+      this.houseKey = key;
+      let tex = this.houseTextures.get(key);
       if (!tex) {
-        const canvas = drawHouse(s.house);
+        const canvas = drawHouse(s.house, golden);
         tex = { normal: Texture.from(canvas), hover: Texture.from(outlined(canvas)), w: canvas.width, h: canvas.height };
-        this.houseTextures.set(s.house, tex);
+        this.houseTextures.set(key, tex);
       }
       lm.normal = tex.normal;
       lm.hover = tex.hover;
@@ -326,14 +370,66 @@ export class SceneView {
     this.houseCount.position.set(p.x, p.y);
   }
 
-  /** Granero (mercado y gremio), tablón (grupos) y árbol viejo (mejoras compradas) según el progreso. */
+  /** Granero (mercado y gremio), tablón (grupos), árbol viejo (mejoras compradas) y estatua (temporada) según el progreso; los talentos dejan su marca. */
   private syncLandmarks(s: GameState) {
-    const t = s.tree;
-    this.redrawLandmark(this.barn, `${t.mercado}|${t.porteadores}`, () => drawBarn(t.mercado, t.porteadores > 0), BARN.y + 46);
+    const t = s.tree, tal = s.prestige.talents;
+    const gilded = tal.mercadoDorado > 0, contract = tal.contrato > 0;
+    this.redrawLandmark(this.barn, `${t.mercado}|${t.porteadores > 0}|${gilded}|${contract}`, () => drawBarn(t.mercado, t.porteadores > 0, gilded, contract), BARN.y + 46);
     const notes = Math.min(s.groups.length, BOARD_ROOF_GROUPS);
-    this.redrawLandmark(this.board, `${notes}`, () => drawBoard(notes), BOARD.y + BOARD.h);
+    const photo = tal.experiencia > 0;
+    this.redrawLandmark(this.board, `${notes}|${photo}`, () => drawBoard(notes, photo), BOARD.y + BOARD.h);
     const stage = oldTreeStage(s);
     this.redrawLandmark(this.tree, `${stage}`, () => drawOldTree(stage), OLD_TREE.y + OLD_TREE.h);
+    const tier = statueTier(s.prestige.season);
+    this.redrawLandmark(this.statue, `${tier}`, () => drawStatue(tier), STATUE.y + STATUE.h);
+  }
+
+  /**
+   * La estatua cobra vida: halo dorado que respira desde la 4.ª temporada, halo más fuerte y destellos
+   * cuando ya se puede acabar la temporada, y el destello dorado al empezar una nueva.
+   */
+  private syncStatue(s: GameState, dt: number) {
+    const lm = this.statue;
+    const tier = statueTier(s.prestige.season);
+    const cx = lm.x + STATUE_DRAW_W / 2, headY = lm.y + lm.h - (tier === 0 ? 5 : 9) - 12;
+    if (tier !== this.statueGlowTier) {
+      this.statueGlowTier = tier;
+      this.statueGlow.clear().circle(cx, headY, 10).fill({ color: 0xffcd75 }).circle(cx, headY, 6).fill({ color: 0xffcd75 });
+    }
+    const ready = canEndSeason(s);
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 3);
+    this.statueGlow.alpha = (ready ? 0.12 + 0.14 * pulse : 0) + (tier === 2 ? 0.08 + 0.04 * pulse : 0);
+    this.statueGlow.visible = this.statueGlow.alpha > 0;
+    // dos destellos que van saltando de sitio, a destiempo
+    const top = lm.y + lm.h - (tier === 0 ? 5 : 9) - 17;
+    this.glints.forEach((glint, i) => {
+      const phase = this.time * 1.4 + i * 0.5;
+      const [gx, gy] = GLINTS[(Math.floor(phase) * 3 + i * 2) % GLINTS.length];
+      const k = phase % 1;
+      glint.visible = ready && k < 0.45;
+      glint.position.set(lm.x + gx, top + gy);
+      glint.scale.set(k < 0.1 || k > 0.35 ? 0.6 : 1);
+    });
+    this.flashT = Math.max(0, this.flashT - dt);
+    this.statueFlash.visible = this.flashT > 0;
+    if (this.statueFlash.visible) {
+      this.statueFlash.position.set(lm.x, lm.y);
+      this.statueFlash.alpha = this.flashT / FLASH_TIME;
+    }
+  }
+
+  /** Fiesta de temporada nueva: confeti y hojas doradas cayendo sobre el huerto y destello en la estatua. */
+  private celebrate() {
+    for (let i = 0; i < 70; i++) {
+      const tex = this.atlas.confetti[i % this.atlas.confetti.length];
+      const x = Math.random() * WORLD.w, y = -4 - Math.random() * 70;
+      this.addParticle(tex, x, y, 4 + Math.random() * 8, 35 + Math.random() * 25, 0, PARTY_TIME + Math.random() * 0.8, Math.random() * 6);
+    }
+    const canvas = drawStatue(statueTier(this.state?.prestige.season ?? 1));
+    const old = this.statueFlash.texture;
+    this.statueFlash.texture = Texture.from(silhouette(canvas, '#fff4c2'));
+    if (old !== Texture.EMPTY) old.destroy(true);
+    this.flashT = FLASH_TIME;
   }
 
   /** Cambia el dibujo de un elemento pulsable si cambia su nivel (cada nivel se dibuja una vez); se apoya en `bottom`. */
@@ -374,7 +470,7 @@ export class SceneView {
     return best;
   }
 
-  /** El encuadre normal enseña el granero y el bancal abierto con la mayor escala entera que quepa. */
+  /** El encuadre normal enseña el granero, el bancal abierto y la estatua con la mayor escala entera que quepa. */
   private layout(s: GameState) {
     const { width: sw, height: sh } = this.app.screen;
     // el encuadre cabe en lo que no tapa la interfaz
@@ -389,7 +485,8 @@ export class SceneView {
     const well = s.tree.regadores > 0, tower = s.tree.guardianes > 0;
     const x0 = OLD_TREE.x - 4;
     const y0 = Math.min(BARN.y - 12, well ? WELL.y + WELL.h - WELL_DRAW_H - 2 : Infinity, tower ? TOWER.y - 2 : Infinity);
-    const x1 = Math.max(FIELD.x + f.cols * FIELD.cell + 12, tower ? TOWER.x + TOWER.w + 4 : 0);
+    // la estatua siempre se ve (con el cofre de la herencia a su pie, que llega casi al borde del mundo)
+    const x1 = Math.max(FIELD.x + f.cols * FIELD.cell + 12, tower ? TOWER.x + TOWER.w + 4 : 0, STATUE.x + STATUE.w + 4);
     const y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 14, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4);
     const bw = x1 - x0, bh = y1 - y0;
     this.baseScale = Math.max(1, Math.floor(Math.min(w / bw, h / bh)));
@@ -523,9 +620,11 @@ export class SceneView {
     const bubble = new Sprite();
     bubble.anchor.set(0, 1);
     const crown = new Sprite(this.atlas.crown);
-    root.addChild(shadow, ring, barrow, body, sack, item, sparkle, bubble, crown);
+    const medal = new Sprite(this.atlas.medal);
+    medal.visible = false;
+    root.addChild(shadow, ring, barrow, body, medal, sack, item, sparkle, bubble, crown);
     this.entities.addChild(root);
-    return { root, ring, barrow, body, sack, item, sparkle, bubble, crown, bubbleKey: '', pop: 0 };
+    return { root, ring, barrow, body, sack, item, sparkle, bubble, crown, medal, bubbleKey: '', pop: 0 };
   }
 
   private syncGnomes(s: GameState, dt: number) {
@@ -607,6 +706,9 @@ export class SceneView {
     // la corona flota sobre el gorro; se aparta mientras hay bocadillo
     v.crown.visible = s.crowns[g.job] === g.id && !v.bubble.visible;
     if (v.crown.visible) v.crown.position.set(-3, -23 - (Math.floor(g.t * 2) % 2));
+    // el veterano (coronado en otra temporada que ha vuelto) lleva su medalla en el pecho, bajo la barba
+    v.medal.visible = s.prestige.veterans.some(vet => vet.name === g.name);
+    if (v.medal.visible) v.medal.position.set(g.flip ? -3 : 1, -5 + chestDy(g.pose, idx));
   }
 
   private syncCritters(s: GameState, dt: number) {
@@ -711,11 +813,11 @@ export class SceneView {
     }
   }
 
-  private addParticle(texture: Texture, x: number, y: number, vx: number, vy: number, g: number, life: number) {
+  private addParticle(texture: Texture, x: number, y: number, vx: number, vy: number, g: number, life: number, flutter?: number) {
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5);
     this.fx.addChild(sprite);
-    this.particles.push({ sprite, x, y, vx, vy, g, t: 0, life });
+    this.particles.push({ sprite, x, y, vx, vy, g, t: 0, life, flutter });
   }
 
   /** Atiende todos los eventos de la simulación (y los vacía) y anima lo que dejan en pantalla. */
@@ -758,6 +860,9 @@ export class SceneView {
           break;
         case 'crown':
           break;
+        case 'season':
+          this.celebrate();
+          break;
         case 'water': {
           // salpicadura: gotas que saltan de la planta y caen
           const o = plotOrigin(s.plots[e.plot]);
@@ -794,10 +899,17 @@ export class SceneView {
     for (const p of this.particles) {
       p.t += dt;
       p.vy += p.g * dt;
-      p.x += p.vx * dt;
+      if (p.flutter === undefined) {
+        p.x += p.vx * dt;
+        p.sprite.alpha = Math.max(0, 1 - p.t / p.life);
+      } else {
+        // el confeti se mece y da vueltas al caer
+        p.x += p.vx * Math.cos(p.t * 3 + p.flutter) * dt;
+        p.sprite.scale.x = Math.cos(p.t * 7 + p.flutter) > 0 ? 1 : -1;
+        p.sprite.alpha = Math.min(1, (p.life - p.t) / 0.6);
+      }
       p.y += p.vy * dt;
       p.sprite.position.set(Math.round(p.x), Math.round(p.y));
-      p.sprite.alpha = Math.max(0, 1 - p.t / p.life);
     }
     const gone = this.particles.filter(p => p.t >= p.life);
     for (const p of gone) p.sprite.destroy();

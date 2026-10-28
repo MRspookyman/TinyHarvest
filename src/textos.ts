@@ -1,8 +1,8 @@
 // Todos los textos del juego. Para retocar el tono, se cambia aquí.
 import {
-  BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, GUARD, MERCADO_PER_LEVEL, PORTER_CAPACITY, WATER,
+  BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, GUARD, MERCADO_PER_LEVEL, PORTER_CAPACITY, TALENT_EFFECT, WATER,
 } from './sim/config';
-import type { Branch, CropId, JobId, NodeId, OrgPart, Priority, TraitId } from './sim/types';
+import type { Branch, CropId, JobId, NodeId, OrgPart, Priority, TalentId, TraitId } from './sim/types';
 
 const pct = (f: number) => `${Math.round(f * 100)} %`;
 
@@ -33,7 +33,6 @@ export const UI = {
   ahora: 'Ahora',
   borrar: 'Borrar partida',
   borrarSeguro: '¿Seguro? Pulsa otra vez',
-  pista: 'Haz clic en la tierra para plantar y en lo maduro para recogerlo. Lo maduro no espera para siempre: si nadie lo recoge, se echa a perder. El granero, la casa de gnomos, el tablón y el árbol viejo abren los menús. Haz clic en un gnomo para ver su ficha y seguirlo.',
 };
 
 /** Menús y los elementos del huerto que los abren. */
@@ -43,6 +42,7 @@ export const MENUS = {
   arbol: { titulo: 'Árbol viejo', sub: 'Árbol de mejoras', lugar: 'Árbol viejo', boton: 'Árbol' },
   diario: { titulo: 'Diario del huerto', sub: 'Lo que ha pasado', lugar: 'Diario', boton: 'Diario' },
   ranking: { titulo: 'Gnomos del mes', sub: 'Quién destaca en el huerto', lugar: 'Ranking', boton: 'Ranking' },
+  temporada: { titulo: 'Estatua del Gnomo Dorado', sub: 'Temporada y talentos', lugar: 'Estatua del Gnomo Dorado', boton: 'Estatua' },
 } as const;
 export type MenuId = keyof typeof MENUS;
 
@@ -204,6 +204,28 @@ export const LOG = {
   regar: ['riega una tomatera y le dice que no tenga prisa.', 'ha regado una piedra. Por si acaso.', 'se ha regado los pies. Dice que también crecen.'],
   cuervoGuardian: (n: string) => `${n} ve venir al cuervo y lo echa antes de que pruebe bocado. Lo apunta en su cuaderno de guardia.`,
   topoGuardian: (n: string) => `${n} le pide educadamente al topo que se vaya. El topo se va, ofendidísimo.`,
+  // iteración 8
+  talento: (nombre: string) => `Has plantado «${nombre}» en el árbol dorado. Brilla un poco. Los gnomos hacen como que no lo ven.`,
+  temporada: (n: number, semillas: number) =>
+    `Empieza la temporada ${n}. Te llevas ${semillas === 1 ? '1 semilla dorada' : `${semillas} semillas doradas`} y un huerto recién barrido. La estatua del Gnomo Dorado parece más contenta.`,
+  veterano: (n: string, temporadas: number) => (temporadas === 1
+    ? `${n} vuelve del año pasado con la corona en la mochila. «¿Me habéis echado de menos?» Nadie contesta.`
+    : `${n} vuelve por ${temporadas}.ª temporada. Ya tiene taza con su nombre y opiniones sobre todo.`),
+  experiencia: (n: number) => `${n} gnomos con experiencia esperan en la puerta. No han cobrado nada: dicen que es por amor al surco.`,
+};
+
+/** Árbol dorado de talentos: se compra con semillas doradas y dura para siempre. */
+export const TALENTOS: Record<TalentId, { nombre: string; desc: string }> = {
+  abonoDorado: { nombre: 'Abono dorado', desc: `Los cultivos crecen un ${pct(TALENT_EFFECT.abonoDorado)} más rápido por nivel, y se suma al abono de siempre. Huele a gloria.` },
+  semillasConocidas: { nombre: 'Semillas de la abuela', desc: `Cada temporada empieza con un cultivo más ya desbloqueado por nivel: trigo, fresa, tomate, calabaza y melón, por ese orden. Estaban en un bote debajo de la cama.` },
+  bancalHeredado: { nombre: 'Tierra trabajada', desc: `Cada temporada empieza con el bancal ${TALENT_EFFECT.bancalHeredado === 1 ? 'una vez' : `${TALENT_EFFECT.bancalHeredado} veces`} más ampliado por nivel. Las lombrices se acuerdan del camino.` },
+  herencia: { nombre: 'Hucha bajo la baldosa', desc: `Cada temporada empieza con ${TALENT_EFFECT.herencia} monedas por nivel. Nadie sabe quién las mete ahí.` },
+  experiencia: { nombre: 'Gnomos con experiencia', desc: `Cada temporada llegan gratis ${TALENT_EFFECT.experiencia} recolector y ${TALENT_EFFECT.experiencia} sembrador por nivel. Ya saben dónde está el café.` },
+  casaHeredada: { nombre: 'Casa con solera', desc: `Cada temporada empieza con la casa de gnomos ${TALENT_EFFECT.casaHeredada === 1 ? 'un nivel' : `${TALENT_EFFECT.casaHeredada} niveles`} más grande por nivel. Las literas ya vienen montadas.` },
+  veterano: { nombre: 'Veteranos', desc: `Al acabar la temporada, ${TALENT_EFFECT.veterano === 1 ? 'el coronado que más ha trabajado vuelve' : `los ${TALENT_EFFECT.veterano} coronados que más han trabajado vuelven`} a la siguiente (uno más por nivel), con su nombre y su carácter. Y sus manías.` },
+  mercadoDorado: { nombre: 'Mercado dorado', desc: `Todo se vende un ${pct(TALENT_EFFECT.mercadoDorado)} más caro por nivel. Los compradores no entienden por qué, pero pagan.` },
+  contrato: { nombre: 'Contrato de por vida', desc: `Cada gnomo del mismo oficio encarece menos el siguiente: el precio sube ${Math.round(TALENT_EFFECT.contrato * 100)} puntos menos por nivel. La letra pequeña la escribió un gnomo.` },
+  suerte: { nombre: 'Trébol de cuatro hojas', desc: `Un ${pct(TALENT_EFFECT.suerte)} más de probabilidad por nivel de que un gnomo nuevo sea legendario. El trébol lo encontró uno que no lo es.` },
 };
 
 /** Rasgos de carácter: se ven en la ficha del gnomo. */
@@ -334,4 +356,80 @@ export const ORG = {
     riego: 'Los cultivos con sed crecen a duras penas: hacen falta regadores (o más).',
   } satisfies Record<OrgPart, string>,
   todoBien: 'Todo marcha como un reloj de cuco. Los gnomos no se lo creen ni ellos.',
+};
+
+const semillas = (n: number) => (n === 1 ? '1 semilla dorada' : `${n} semillas doradas`);
+const duracion = (seg: number) => {
+  const min = Math.floor(seg / 60);
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
+};
+
+/** Estatua del Gnomo Dorado: fin de temporada, árbol dorado de talentos y salón de la fama. */
+export const TEMPORADA = {
+  pestanas: { fin: 'Fin de temporada', arbol: 'Árbol dorado', fama: 'Salón de la fama' },
+  temporada: (n: number) => `Temporada ${n}`,
+  temporadaTitulo: 'Temporada',
+  saldo: 'Semillas doradas para gastar en el árbol dorado',
+  duracion,
+  // fin de temporada
+  jugado: 'Tiempo jugado',
+  ganado: 'Monedas ganadas',
+  tendrias: 'Semillas si terminas ya',
+  rendimiento: 'Las semillas salen de lo que ganas en la temporada, pero cada una cuesta más que la anterior: exprimir el huerto da cada vez menos. Suele compensar más volver a empezar.',
+  seQueda: 'Se queda',
+  quedan: ['Las semillas doradas y los talentos', 'El salón de la fama', 'Los veteranos que te ganes'],
+  sePierde: 'Se pierde',
+  pierden: ['Las monedas', 'Los gnomos (salvo los veteranos)', 'Las mejoras del árbol viejo y la casa', 'Los grupos y lo plantado'],
+  terminar: 'Terminar la temporada',
+  terminarSeguro: '¿Seguro? Pulsa otra vez',
+  noAun: (min: number, falta: number) =>
+    `Aún no: los gnomos no aceptan un fin de temporada por menos de ${min === 1 ? 'una semilla' : `${min} semillas`}. Faltan ${falta} monedas por ganar.`,
+  siguiente: (falta: number) => `La siguiente semilla, dentro de ${falta} monedas.`,
+  // árbol dorado
+  arbolAyuda: 'Los talentos duran para siempre. Se pagan con semillas doradas.',
+  raiz: 'Gnomo Dorado',
+  raizDesc: 'De aquí brotan los talentos. Dicen que la estatua guiña un ojo cuando nadie mira.',
+  comprar: (n: number) => `Comprar · ${n} ${n === 1 ? 'semilla' : 'semillas'}`,
+  /** «Ahora: …» de cada talento, con su nivel ya aplicado */
+  efecto: {
+    abonoDorado: (p: number) => `crece un ${p} % más rápido`,
+    mercadoDorado: (p: number) => `todo se vende un ${p} % más caro`,
+    herencia: (n: number) => `empiezas con ${n} monedas`,
+    experiencia: (n: number) => `empiezas con ${n} ${n === 1 ? 'recolector y 1 sembrador' : `recolectores y ${n} sembradores`}`,
+    contrato: (p: number) => `cada gnomo encarece el siguiente un ${p} %`,
+    bancalHeredado: (n: number) => `empiezas con el bancal ampliado ${n === 1 ? '1 vez' : `${n} veces`}`,
+    casaHeredada: (n: number) => `empiezas con la casa ampliada ${n === 1 ? '1 vez' : `${n} veces`}`,
+    semillasConocidas: (cultivos: string) => `empiezas sabiendo plantar ${cultivos}`,
+    veterano: (n: number) => (n === 1 ? 'vuelve 1 coronado' : `vuelven ${n} coronados`),
+    suerte: (p: number) => `un ${String(p).replace('.', ',')} % de legendarios`,
+  },
+  // salón de la fama
+  famaAyuda: 'Los coronados de cada temporada. La fama es para siempre; la barba, también.',
+  famaVacia: 'Todavía no ha terminado ninguna temporada. El pedestal espera, reluciente y vacío.',
+  sinCoronas: 'Nadie se ganó la corona. Fue una temporada tímida.',
+  fila: (earned: number, seg: number, seeds: number) => `${earned} monedas · ${duracion(seg)} · ${semillas(seeds)}`,
+  tareas: (n: number) => (n === 1 ? '1 tarea' : `${n} tareas`),
+  veteranos: 'Veteranos',
+  veteranosAyuda: 'Vuelven cada temporada con su nombre y sus manías.',
+  temporadas: (n: number) => (n === 1 ? '1 temporada' : `${n} temporadas`),
+  // resumen al terminar
+  resumenTitulo: (n: number) => `Fin de la temporada ${n}`,
+  resumenSemillas: (n: number) => `Has ganado ${semillas(n)}.`,
+  resumenFama: 'Entran en el salón de la fama:',
+  resumenVeteranos: 'Vuelven contigo:',
+  resumenSigue: (n: number) => `Empieza la temporada ${n}. El huerto huele a nuevo.`,
+  vamos: '¡A plantar!',
+  verFama: 'Ver salón de la fama',
+};
+
+/** Tutorial (F5): unas pistas cortas, de una en una, que avanzan cuando el jugador hace lo que dicen. */
+export const TUTORIAL = {
+  plantar: 'Haz clic en la tierra para plantar y en lo maduro para recogerlo. Lo maduro no espera para siempre: si nadie lo recoge, se echa a perder.',
+  contratar: 'Con unas monedas ya puedes contratar a tu primer gnomo en el granero. Cobra una vez y trabaja para siempre, aunque se queje.',
+  arbol: 'El árbol viejo vende mejoras: más bancal, cultivos nuevos, oficios. Compra la primera.',
+  grupos: 'En el tablón repartes a los gnomos en grupos, cada uno con su prioridad y la semilla que siembra.',
+  ficha: 'Haz clic en un gnomo para ver su ficha y seguirlo con la cámara. Todos tienen algo que contar.',
+  temporada: 'Ya puedes terminar la temporada en la estatua del Gnomo Dorado: semillas doradas a cambio de empezar de cero.',
+  cerrar: 'Cerrar esta pista',
+  noMas: 'No mostrar más',
 };

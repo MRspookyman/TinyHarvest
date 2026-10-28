@@ -7,6 +7,8 @@ import { html } from './dom';
 export interface Menu {
   el: HTMLElement;
   update(s: GameState): void;
+  /** algo más en la cabecera de la ventana, junto a la ×: un saldo, por ejemplo */
+  head?: HTMLElement;
   /** se llama al abrir la ventana */
   onOpen?(): void;
 }
@@ -41,6 +43,8 @@ export function createWindows(host: HTMLElement, menus: Record<MenuId, Menu>): W
         <div class="win-body"></div>
       </section>`);
     shell.querySelector('.win-body')!.append(menus[id].el);
+    const head = menus[id].head;
+    if (head) shell.querySelector('.win-close')!.before(head);
     shell.querySelector('.win-close')!.addEventListener('click', () => close());
     layer.append(shell);
     shells[id] = shell;

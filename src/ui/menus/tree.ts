@@ -11,7 +11,7 @@ import { PX_PER_STEP } from './ranking';
 type Selection = NodeId | 'root';
 
 /** Línea en codo (vertical, horizontal, vertical) del padre al hijo, como ramas de pixel art. */
-function elbow(x0: number, y0: number, x1: number, y1: number) {
+export function elbow(x0: number, y0: number, x1: number, y1: number) {
   const mid = (y0 + y1) / 2;
   return `${x0},${y0} ${x0},${mid} ${x1},${mid} ${x1},${y1}`;
 }

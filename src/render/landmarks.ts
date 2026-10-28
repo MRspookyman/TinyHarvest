@@ -1,9 +1,10 @@
 // Elementos del huerto que abren menús: granero (contratar), casa de gnomos (contratar y ampliar),
-// tablón (grupos) y árbol viejo (mejoras).
+// tablón (grupos), árbol viejo (mejoras) y estatua del Gnomo Dorado (temporada y talentos).
 // Cada uno tiene su versión con contorno claro para cuando el ratón pasa por encima.
 import { BOARD, HOUSE, NODE_IDS, OLD_TREE, TREE } from '../sim/config';
 import type { GameState } from '../sim/types';
 import { makeCanvas } from './pixelart';
+import { statueCanvas } from './sprites';
 
 type Ctx = CanvasRenderingContext2D;
 const rect = (ctx: Ctx, x: number, y: number, w: number, h: number, color: string) => {
@@ -20,8 +21,10 @@ const GOODS = ['#ef7d57', '#ffcd75', '#e8687d', '#a7f070'] as const;
  * Granero de 54 × 46 (54 × 54 con la bandera del mercado al máximo). Se apoya con la base en BARN.y + 46.
  * market (0–5): toldo del mercado a la izquierda de la puerta, con cajas, estante y por fin bandera.
  * guild: estandarte del gremio de porteadores a la derecha de la puerta.
+ * gilded (talento «mercado dorado»): marco de oro en el ventanuco del pajar y ribete de oro en el toldo.
+ * contract (talento «contrato»): un contrato con sello clavado en la puerta.
  */
-export function drawBarn(market = 0, guild = false): HTMLCanvasElement {
+export function drawBarn(market = 0, guild = false, gilded = false, contract = false): HTMLCanvasElement {
   const top = market >= 5 ? BARN_FLAG : 0;
   const c = makeCanvas(54, 46 + top);
   const ctx = c.getContext('2d')!;
@@ -43,9 +46,11 @@ export function drawBarn(market = 0, guild = false): HTMLCanvasElement {
   rect(ctx, bx + 1, by + 13, 1, 32, '#1a1c2c');
   rect(ctx, bx + 50, by + 13, 1, 32, '#1a1c2c');
   rect(ctx, bx + 1, by + 45, 50, 1, '#1a1c2c');
-  rect(ctx, bx + 22, by + 15, 8, 6, '#1a1c2c');
+  rect(ctx, bx + 22, by + 15, 8, 6, gilded ? '#c28a3a' : '#1a1c2c');
+  if (gilded) rect(ctx, bx + 22, by + 15, 8, 1, '#ffcd75');
   rect(ctx, bx + 23, by + 19, 6, 2, '#ffcd75');
   rect(ctx, bx + 25, by + 18, 2, 1, '#ffcd75');
+  if (gilded) rect(ctx, bx + 23, by + 16, 6, 2, '#1a1c2c');
   rect(ctx, bx + 17, by + 27, 18, 18, '#1a1c2c');
   rect(ctx, bx + 18, by + 28, 16, 17, '#5d275d');
   for (let i = 0; i < 16; i++) {
@@ -53,12 +58,20 @@ export function drawBarn(market = 0, guild = false): HTMLCanvasElement {
     rect(ctx, bx + 18 + i, y, 1, 1, '#f4f4f4');
     rect(ctx, bx + 33 - i, y, 1, 1, '#f4f4f4');
   }
+  // el contrato, clavado con una chincheta dorada sobre el aspa de la puerta
+  if (contract) {
+    rect(ctx, bx + 23, by + 30, 6, 8, '#1a1c2c');
+    rect(ctx, bx + 24, by + 31, 4, 6, '#f4f4f4');
+    for (const y of [32, 34]) rect(ctx, bx + 24, by + y, 3, 1, '#94b0c2');
+    rect(ctx, bx + 26, by + 36, 2, 1, '#b13e53');
+    rect(ctx, bx + 25, by + 30, 2, 1, '#ffcd75');
+  }
 
   // mercado: toldo a rayas sobre la pared izquierda; cada nivel añade algo a la tienda
   if (market >= 1) {
     const ax0 = bx + (market >= 2 ? 2 : 5), ax1 = bx + (market >= 2 ? 15 : 14);
     const stripe = (x: number) => (Math.floor((x - ax0) / 2) % 2 === 0 ? '#f4f4f4' : market >= 3 ? '#41a6f6' : '#ffcd75');
-    rect(ctx, ax0, by + 22, ax1 - ax0 + 1, 1, '#1a1c2c');
+    rect(ctx, ax0, by + 22, ax1 - ax0 + 1, 1, gilded ? '#ffcd75' : '#1a1c2c');
     for (let x = ax0; x <= ax1; x++) {
       rect(ctx, x, by + 23, 1, 3, stripe(x));
       const tip = (x - ax0) % 3 !== 2;
@@ -131,8 +144,9 @@ const BOARD_ROOF = 6;
 /**
  * Tablón de anuncios con una hoja clavada por grupo (hasta 5) y tejadillo desde BOARD_ROOF_GROUPS grupos.
  * Con tejadillo es más alto: se apoya con la base en BOARD.y + BOARD.h.
+ * photo (talento «experiencia»): foto enmarcada en oro de dos veteranos, abajo a la derecha.
  */
-export function drawBoard(groups = 1): HTMLCanvasElement {
+export function drawBoard(groups = 1, photo = false): HTMLCanvasElement {
   const { w } = BOARD;
   const top = groups >= BOARD_ROOF_GROUPS ? BOARD_ROOF : 0;
   const h = BOARD.h + top;
@@ -166,6 +180,17 @@ export function drawBoard(groups = 1): HTMLCanvasElement {
     rect(ctx, x, top + y, sw, sh, '#f4f4f4');
     for (let ly = y + 2; ly < y + sh - 1; ly += 2) rect(ctx, x + 1, top + ly, sw - 2, 1, '#94b0c2');
     rect(ctx, x + Math.floor(sw / 2), top + y, 1, 1, pin);
+  }
+  if (photo) {
+    rect(ctx, 16, top + 8, 5, 6, '#c28a3a');
+    rect(ctx, 16, top + 8, 5, 1, '#ffcd75');
+    rect(ctx, 17, top + 9, 1, 1, '#b13e53');
+    rect(ctx, 19, top + 9, 1, 1, '#38b764');
+    rect(ctx, 17, top + 10, 1, 1, '#f2b98c');
+    rect(ctx, 19, top + 10, 1, 1, '#f2b98c');
+    rect(ctx, 17, top + 11, 1, 2, '#f4f4f4');
+    rect(ctx, 19, top + 11, 1, 2, '#f4f4f4');
+    rect(ctx, 18, top + 9, 1, 4, '#41a6f6');
   }
   return c;
 }
@@ -281,9 +306,10 @@ const CAP_SPOTS: [number, number][] = [[-6, 3], [4, 2], [-1, 5], [8, 5], [-10, 6
  * Casa de gnomos con forma de seta, HOUSE.w de ancho y como mucho HOUSE.h de alto.
  * Niveles 0–2: choza; 3–5: más grande, con chimenea y ventana; 6–8: dos pisos y banderín.
  * Dentro de cada etapa, cada nivel añade una mota al sombrero y una flor junto a la puerta.
+ * golden (talento «casa heredada»): pomo de oro grande y escalón dorado.
  * Se recorta por arriba: se coloca con la base en HOUSE.y + HOUSE.h.
  */
-export function drawHouse(level: number): HTMLCanvasElement {
+export function drawHouse(level: number, golden = false): HTMLCanvasElement {
   const { w, h } = HOUSE;
   const tier = level >= 6 ? 2 : level >= 3 ? 1 : 0;
   const { wallW, wallH, capW, capH } = HOUSE_TIERS[tier];
@@ -325,7 +351,11 @@ export function drawHouse(level: number): HTMLCanvasElement {
   rect(ctx, dx + 1, dy + 1, 4, doorH - 1, '#8b5a3c');
   rect(ctx, dx + 3, dy + 1, 2, doorH - 1, '#5a3a2a');
   rect(ctx, dx + 3, dy + Math.floor(doorH / 2) + 1, 1, 1, '#ffcd75');
-  rect(ctx, dx - 1, h - 1, 8, 1, '#94b0c2');
+  if (golden) {
+    rect(ctx, dx + 3, dy + Math.floor(doorH / 2), 2, 2, '#ffcd75');
+    rect(ctx, dx + 4, dy + Math.floor(doorH / 2) + 1, 1, 1, '#c28a3a');
+  }
+  rect(ctx, dx - 1, h - 1, 8, 1, golden ? '#f4b41b' : '#94b0c2');
   // flores junto a la puerta: una por nivel dentro de la etapa
   const flowers = level % 3;
   for (let i = 0; i < flowers; i++) {
@@ -374,6 +404,67 @@ export function drawHouse(level: number): HTMLCanvasElement {
   const top = tier === 2 ? 0 : Math.max(0, tier === 1 ? capTop - 5 : capTop);
   const c = makeCanvas(w, h - top);
   c.getContext('2d')!.drawImage(full, 0, -top);
+  return c;
+}
+
+/** ancho del dibujo de la estatua; se centra en STATUE */
+export const STATUE_DRAW_W = 20;
+
+/** Etapa de la estatua según la temporada: 0 la primera, 1 la 2.ª y 3.ª, 2 de la 4.ª en adelante. */
+export const statueTier = (season: number) => (season >= 4 ? 2 : season >= 2 ? 1 : 0);
+
+/**
+ * Estatua del Gnomo Dorado, STATUE_DRAW_W de ancho, apoyada con la base en STATUE.y + STATUE.h.
+ * tier 0: pedestal bajo; 1: pedestal alto con cornisa y placa; 2: además laurel junto a la placa y rayos de oro.
+ */
+export function drawStatue(tier: number): HTMLCanvasElement {
+  const w = STATUE_DRAW_W;
+  const pedH = tier === 0 ? 5 : 9;
+  const rays = tier === 2 ? 2 : 0;
+  const h = rays + 17 + pedH;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d')!;
+  const top = h - pedH;
+  // bloque de piedra con contorno, luz arriba y sombra a la derecha
+  const block = (x: number, y: number, bw: number, bh: number) => {
+    rect(ctx, x, y, bw, bh, '#1a1c2c');
+    rect(ctx, x + 1, y + 1, bw - 2, bh - 2, '#94b0c2');
+    rect(ctx, x + bw - 2, y + 1, 1, bh - 2, '#566c86');
+    if (bh > 3) rect(ctx, x + 1, y + 1, bw - 3, 1, '#f4f4f4');
+  };
+  if (tier === 0) {
+    block(2, top + 2, 16, 3);
+    block(3, top, 14, 3);
+  } else {
+    block(1, top + 6, 18, 3);
+    block(3, top + 2, 14, 5);
+    block(1, top, 18, 3);
+    // placa de oro con dos renglones grabados
+    const px = tier === 2 ? 7 : 6, pw = tier === 2 ? 6 : 8;
+    rect(ctx, px, top + 3, pw, 3, '#f4b41b');
+    rect(ctx, px, top + 3, pw, 1, '#ffcd75');
+    rect(ctx, px + 1, top + 4, pw - 3, 1, '#c28a3a');
+    if (tier === 2) {
+      // ramas de laurel a los lados de la placa
+      for (const [x, y, color] of [
+        [4, top + 5, '#257179'], [4, top + 4, '#38b764'], [5, top + 3, '#38b764'], [5, top + 5, '#38b764'],
+        [15, top + 5, '#257179'], [15, top + 4, '#38b764'], [14, top + 3, '#38b764'], [14, top + 5, '#38b764'],
+      ] as const) rect(ctx, x, y, 1, 1, color);
+    }
+  }
+  ctx.drawImage(statueCanvas(), 2, top - 17);
+  // rayos de oro alrededor de la cabeza
+  if (rays) for (const [x, y] of [[9, 0], [10, 0], [3, 3], [16, 2], [1, 8]]) rect(ctx, x, y, 1, 1, '#ffcd75');
+  return c;
+}
+
+/** Silueta de un color de lo opaco: el destello dorado de la estatua al empezar temporada. */
+export function silhouette(src: HTMLCanvasElement, color: string): HTMLCanvasElement {
+  const c = makeCanvas(src.width, src.height);
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(src, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  rect(ctx, 0, 0, c.width, c.height, color);
   return c;
 }
 

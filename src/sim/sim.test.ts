@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, MAX_GNOMES, MAX_GROUPS, MERCADO_PER_LEVEL,
-  MOLE_TIME, ORG, RIPE, ROTTEN, TREE, WATER,
+  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS,
+  MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER,
 } from './config';
 import {
-  basketMax, buyHouse, buyNode, clickPlot, createGroup, deleteGroup, fieldSize, hire, hireCost, houseCapacity, isOpen,
-  moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, setGroupColor, setGroupSeed, setPriority, stageTime,
-  startEvent, tick, waterTime,
+  basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
+  hire, hireCost, houseCapacity, isOpen, moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
+  seedsCoinsNeeded, setGroupColor, setGroupSeed, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, waterTime,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
 import type { GameState, JobId, Rng, TraitId } from './types';
@@ -745,5 +745,149 @@ describe('guardado v5', () => {
     expect(loaded.crowns).toMatchObject({ regador: null, guardian: null });
     expect(loaded.gnomes[0].name).toBe(g.name);
     expect(serialize(loaded).v).toBe(SAVE_VERSION);
+  });
+});
+
+/** un huerto a media temporada con un rey en cada oficio que se pide (el recolector, glotón) */
+function midSeason(rng: Rng, kings: Partial<Record<JobId, number>>) {
+  const s = createState(rng);
+  for (const [job, tasks] of Object.entries(kings) as [JobId, number][]) {
+    const g = hireFree(s, job, rng, job === 'recolector' ? 'gloton' : 'currante');
+    g.stats.tasks = tasks;
+    s.crowns[job] = g.id;
+  }
+  s.coins = 777;
+  s.totalEarned = seedsCoinsNeeded(9);
+  s.seasonTime = 3600;
+  s.house = 2;
+  s.tree.bancal = 3;
+  s.tree.botas = 2;
+  return s;
+}
+
+describe('temporadas', () => {
+  it('las semillas crecen con lo ganado, cada vez más despacio, y por debajo del mínimo no se puede acabar', () => {
+    const s = createState(seeded(30));
+    s.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds) - 1;
+    expect(seasonSeeds(s)).toBe(PRESTIGE.minSeeds - 1);
+    expect(canEndSeason(s)).toBe(false);
+    s.totalEarned += 1;
+    expect(seasonSeeds(s)).toBe(PRESTIGE.minSeeds);
+    expect(canEndSeason(s)).toBe(true);
+    const few = seasonSeeds(s);
+    s.totalEarned *= 4;
+    expect(seasonSeeds(s)).toBeGreaterThan(few);
+    expect(seasonSeeds(s)).toBeLessThan(few * 4);
+  });
+
+  it('acabar la temporada empieza de cero pero guarda lo permanente, las semillas y el salón de la fama', () => {
+    const rng = seeded(31);
+    const s = midSeason(rng, { recolector: 50, sembrador: 30 });
+    s.prestige.goldenSeeds = 4;
+    s.prestige.lifetimeEarned = 1000;
+    const rec = s.gnomes.find(g => g.job === 'recolector')!;
+    const n = endSeason(s, rng);
+    expect(n.coins).toBe(0);
+    expect(n.totalEarned).toBe(0);
+    expect(n.seasonTime).toBe(0);
+    expect(n.gnomes).toEqual([]);
+    expect(n.house).toBe(0);
+    expect(NODE_IDS.every(id => n.tree[id] === 0)).toBe(true);
+    expect(n.prestige.season).toBe(2);
+    expect(n.prestige.goldenSeeds).toBe(4 + 9);
+    expect(n.prestige.lifetimeEarned).toBe(1000 + s.totalEarned);
+    expect(n.prestige.history[0]).toMatchObject({ season: 1, earned: s.totalEarned, seconds: 3600, seeds: 9 });
+    expect(n.prestige.history[0].crowned).toContainEqual({ job: 'recolector', name: rec.name, tasks: 50, legendary: false });
+    expect(n.prestige.veterans).toEqual([]);
+    expect(n.events).toContainEqual({ type: 'season', season: 2 });
+    // el huerto viejo no se toca
+    expect(s.coins).toBe(777);
+  });
+
+  it('los talentos de herencia se aplican al empezar y los veteranos vuelven con su nombre y su carácter', () => {
+    const rng = seeded(32);
+    const s = midSeason(rng, { recolector: 50, sembrador: 30 });
+    Object.assign(s.prestige.talents, { herencia: 2, experiencia: 1, semillasConocidas: 2, bancalHeredado: 1, casaHeredada: 1, veterano: 1 });
+    const king = s.gnomes.find(g => g.job === 'recolector')!;
+    const n = endSeason(s, rng);
+    expect(n.coins).toBe(2 * TALENT_EFFECT.herencia);
+    expect(n.tree).toMatchObject({ trigo: 1, fresa: 1, tomate: 0, bancal: 1 });
+    expect(n.house).toBe(1);
+    // el veterano llega el primero; luego los gnomos con experiencia, gratis y sin encarecer el siguiente
+    expect(n.gnomes.map(g => g.job)).toEqual(['recolector', 'recolector', 'sembrador']);
+    expect(n.gnomes[0]).toMatchObject({ name: king.name, trait: 'gloton', legendary: false });
+    expect(n.prestige.veterans).toEqual([{ name: king.name, job: 'recolector', trait: 'gloton', legendary: false, seasons: 1 }]);
+    expect(hireCost(n, 'recolector')).toBe(JOBS.recolector.base);
+
+    // si vuelve a coronarse, suma otra temporada
+    n.gnomes[0].stats.tasks = 99;
+    n.crowns.recolector = n.gnomes[0].id;
+    n.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds);
+    const third = endSeason(n, rng);
+    expect(third.prestige.veterans).toMatchObject([{ name: king.name, seasons: 2 }]);
+    expect(third.gnomes[0].name).toBe(king.name);
+  });
+
+  it('los talentos cuestan semillas, piden a su padre y algunos se notan en el acto', () => {
+    const s = createState(seeded(33));
+    expect(buyTalent(s, 'herencia')).toBe(false);
+    s.prestige.goldenSeeds = 100;
+    expect(talentReachable(s, 'experiencia')).toBe(false);
+    expect(buyTalent(s, 'experiencia')).toBe(false);
+    const cost = talentCost(s, 'herencia');
+    expect(cost).toBe(TALENTS.herencia.base);
+    expect(buyTalent(s, 'herencia')).toBe(true);
+    expect(s.prestige.goldenSeeds).toBe(100 - cost);
+    expect(talentCost(s, 'herencia')).toBe(Math.floor(TALENTS.herencia.base * TALENTS.herencia.mult));
+    expect(buyTalent(s, 'experiencia')).toBe(true);
+    for (let i = 0; i < 10; i++) buyTalent(s, 'experiencia');
+    expect(s.prestige.talents.experiencia).toBe(TALENTS.experiencia.max);
+
+    const value = cropValue(s, 'zanahoria');
+    const hired = { ...s, hired: { ...s.hired, recolector: 5 } };
+    const before = hireCost(hired, 'recolector');
+    buyTalent(s, 'mercadoDorado');
+    buyTalent(s, 'contrato');
+    expect(cropValue(s, 'zanahoria')).toBeCloseTo(value * (1 + TALENT_EFFECT.mercadoDorado));
+    expect(hireCost(hired, 'recolector')).toBeLessThan(before);
+    expect(hireCost(hired, 'recolector')).toBe(Math.floor(JOBS.recolector.base * (COST_GROWTH - TALENT_EFFECT.contrato) ** 5));
+  });
+});
+
+describe('guardado v6', () => {
+  it('una partida v5 carga como la primera temporada', () => {
+    const rng = seeded(34);
+    const s = createState(rng);
+    hireFree(s, 'recolector', rng);
+    s.coins = 321;
+    const old = JSON.parse(JSON.stringify(serialize(s)));
+    old.v = 5;
+    delete old.seasonTime;
+    delete old.prestige;
+    const loaded = deserialize(old, rng)!;
+    expect(loaded.coins).toBe(321);
+    expect(loaded.seasonTime).toBe(0);
+    expect(loaded.prestige).toMatchObject({ season: 1, goldenSeeds: 0, history: [], veterans: [], lifetimeEarned: 0 });
+    expect(Object.values(loaded.prestige.talents).every(l => l === 0)).toBe(true);
+  });
+
+  it('lo permanente se guarda y una partida rota no regala nada', () => {
+    const rng = seeded(35);
+    const s = midSeason(rng, { recolector: 50 });
+    s.prestige.talents.veterano = 1;
+    const n = endSeason(s, rng);
+    n.seasonTime = 42;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(n))), rng)!;
+    expect(loaded.prestige).toEqual(n.prestige);
+    expect(loaded.seasonTime).toBe(42);
+
+    const bad = JSON.parse(JSON.stringify(serialize(n)));
+    bad.prestige.talents.veterano = 99;
+    bad.prestige.goldenSeeds = 'muchas';
+    bad.prestige.history = Array.from({ length: 30 }, () => n.prestige.history[0]);
+    const fixed = deserialize(bad, rng)!;
+    expect(fixed.prestige.talents.veterano).toBe(TALENTS.veterano.max);
+    expect(fixed.prestige.goldenSeeds).toBe(0);
+    expect(fixed.prestige.history).toHaveLength(PRESTIGE.historyMax);
   });
 });

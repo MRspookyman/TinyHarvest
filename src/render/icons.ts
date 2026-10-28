@@ -1,7 +1,7 @@
 // Iconos pixel art para la interfaz HTML (barra, ventanas y árbol de mejoras).
 // Se dibujan en canvas y se pasan a la interfaz como data URL.
 import { CROP_IDS, JOB_IDS } from '../sim/config';
-import type { CropId, JobId, NodeId, TraitId } from '../sim/types';
+import type { CropId, JobId, NodeId, TalentId, TraitId } from '../sim/types';
 import { makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
 import { BASE, basketCanvas, crownCanvas, gnomeIcon, PLANT_MAPS, PLANT_PAL, SACK } from './sprites';
 import type { MenuId } from '../textos';
@@ -238,6 +238,129 @@ const WHISTLE: PixelMap = [
   '..OOO.......',
 ];
 
+// ---------- Prestigio: todo en oro ----------
+/** oro claro, medio y oscuro, y piel para las fotos */
+const GOLD: Palette = { ...P, Y: '#ffcd75', y: '#f4b41b', d: '#c28a3a', S: '#f2b98c' };
+
+/** Estatua del Gnomo Dorado sobre su pedestal con placa. */
+const STATUE_ICON: PixelMap = [
+  '.......OO.......',
+  '......OYYO......',
+  '......OYyO......',
+  '.....OYYYyO.....',
+  '.....OYWYyO.....',
+  '....OYYYYYyO....',
+  '...OYYYYYYYyO...',
+  '...OOddddddOO...',
+  '....OYyYYyYO....',
+  '....OYYyyYYO....',
+  '.....OYYYYO.....',
+  '..OOOOOOOOOOOO..',
+  '...OssssssssO...',
+  '...OsKyyyyKsO...',
+  '...OssssssssO...',
+  '..OOOOOOOOOOOO..',
+];
+/** Semilla dorada: la moneda del prestigio. */
+const GOLDEN_SEED: PixelMap = [
+  '...OO...',
+  '..OYYO..',
+  '.OYWYyO.',
+  '.OYYYyO.',
+  'OYYYYyyO',
+  'OYYYyyyO',
+  'OyYyyydO',
+  '.OyyddO.',
+  '..OddO..',
+  '...OO...',
+];
+/** Cofre abierto rebosando monedas (herencia). */
+const COIN_CHEST: PixelMap = [
+  '...Y..Y.W.....',
+  '..YYYYYYYYYY..',
+  '.OYyYYyYYyYYO.',
+  'OOOOOOOOOOOOOO',
+  'OTTTTyOOyTTTTO',
+  'OTTTTyYYyTTTTO',
+  'OyyyyyOOyyyyyO',
+  'OTTTTTTTTTTTTO',
+  'OTTTTTTTTTTTTO',
+  'OOOOOOOOOOOOOO',
+];
+/** Foto enmarcada en oro de dos gnomos veteranos (experiencia). */
+const VETERAN_PHOTO: PixelMap = [
+  '.....OO.....',
+  '....O..O....',
+  '.OOOOOOOOOO.',
+  'OyyyyyyyyyyO',
+  'OyBBBBBBBByO',
+  'OyBRBBBBGByO',
+  'OyRRRBBGGGyO',
+  'OySSSBBSSSyO',
+  'OyWWWBBWWWyO',
+  'OyWWWBBWWWyO',
+  'OyyyyyyyyyyO',
+  'OOOOOOOOOOOO',
+];
+/** Contrato enrollado con sello de oro (contrato). */
+const CONTRACT: PixelMap = [
+  '.OOOOOOOOOO.',
+  'OCcCCCCCCcCO',
+  '.OOWWWWWWOO.',
+  '..OWssssWO..',
+  '..OWWWWWWO..',
+  '..OWsssWWO..',
+  '..OWWWWWWO..',
+  '..OWssWyyO..',
+  '..OWWWWyyO..',
+  '.OOWWWWRROO.',
+  'OCcCCCCCCcCO',
+  '.OOOOOOOOOO.',
+];
+/** Sobre de semillas dorado con un brote (semillas conocidas). */
+const SEED_PACKET: PixelMap = [
+  '.OOOOOOOO.',
+  'OydydydydO',
+  'OYYYYYYYYO',
+  'OYWWWWWWYO',
+  'OYWWGGWWYO',
+  'OYWGlGGWYO',
+  'OYWWGGWWYO',
+  'OYWWdWWWYO',
+  'OYWWWWWWYO',
+  'OYYYYYYYYO',
+  'OyyyyyyyyO',
+  '.OOOOOOOO.',
+];
+/** Medalla con cinta (veterano). */
+const MEDAL: PixelMap = [
+  'OOOO..OOOO',
+  'ORRBOOBRRO',
+  '.ORRBBRRO.',
+  '..ORRRRO..',
+  '...OOOO...',
+  '..OYYYYO..',
+  '.OYWYYyyO.',
+  '.OYYYYyyO.',
+  '.OYYYyyyO.',
+  '.OyYyyydO.',
+  '..OyyddO..',
+  '...OOOO...',
+];
+/** Trébol de cuatro hojas con el corazón de oro (suerte). */
+const CLOVER: PixelMap = [
+  '.OOO.OOO..Y.',
+  'OlGGOGGlO...',
+  'OGGGOGGGO...',
+  'OOOOyOOOO...',
+  'OGGGOGGGO...',
+  'OlGGOGGGO...',
+  '.OOO.OOOO...',
+  '.......OgO..',
+  '........OgO.',
+  '.........OO.',
+];
+
 const url = (c: HTMLCanvasElement) => c.toDataURL();
 
 export const menuIcons: Record<MenuId, string> = {
@@ -246,6 +369,7 @@ export const menuIcons: Record<MenuId, string> = {
   arbol: url(mapCanvas(TREE_ICON, P)),
   diario: url(mapCanvas(DIARY_ICON, P)),
   ranking: url(mapCanvas(PODIUM_ICON, P)),
+  temporada: url(mapCanvas(STATUE_ICON, GOLD)),
 };
 
 export const crownIcon = url(crownCanvas());
@@ -280,6 +404,23 @@ export const nodeIcons: Record<NodeId, string> = {
 };
 
 export const rootIcon = url(mapCanvas(PLANT_MAPS.zanahoria[1], PLANT_PAL));
+
+export const goldenSeedIcon = url(mapCanvas(GOLDEN_SEED, GOLD));
+
+/** Talentos del árbol dorado: lo mismo que dejan en el huerto, pintado en oro. */
+export const talentIcons: Record<TalentId, string> = {
+  // saco de abono y bancal de siempre, pero dorados
+  abonoDorado: url(mapCanvas(FERTILIZER, { ...GOLD, C: '#f4b41b' })),
+  mercadoDorado: url(mapCanvas(MARKET, { ...GOLD, R: '#f4b41b' })),
+  herencia: url(mapCanvas(COIN_CHEST, GOLD)),
+  experiencia: url(mapCanvas(VETERAN_PHOTO, GOLD)),
+  contrato: url(mapCanvas(CONTRACT, GOLD)),
+  bancalHeredado: url(mapCanvas(SOIL, { ...GOLD, l: '#ffcd75', G: '#f4b41b' })),
+  casaHeredada: url(mapCanvas(HOUSE_ICON, { ...GOLD, R: '#f4b41b' })),
+  semillasConocidas: url(mapCanvas(SEED_PACKET, GOLD)),
+  veterano: url(mapCanvas(MEDAL, GOLD)),
+  suerte: url(mapCanvas(CLOVER, GOLD)),
+};
 
 /** Rasgos de carácter: un dibujito por rasgo para la ficha y las listas de gnomos. */
 const TRAIT_MAPS: Record<TraitId, PixelMap> = {

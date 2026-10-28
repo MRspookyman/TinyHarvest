@@ -1,9 +1,12 @@
 import {
-  CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, ORG, PRIORITIES, RIPE, ROTTEN,
-  TRAIT_IDS, TREE,
+  CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, ORG, PRESTIGE, PRIORITIES, RIPE,
+  ROTTEN, TALENT_IDS, TALENTS, TRAIT_IDS, TREE,
 } from './config';
 import { GRUPOS, LOG } from '../textos';
-import type { CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Priority, Rng, TraitId } from './types';
+import type {
+  CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Prestige, Priority, Rng, SeasonRecord, TalentId,
+  TraitId, Veteran,
+} from './types';
 
 const STAT_KEYS: (keyof GnomeStats)[] = ['tasks', 'harvests', 'value', 'plants', 'delivered', 'walked', 'naps', 'complaints'];
 const emptyStats = (): GnomeStats => ({ tasks: 0, harvests: 0, value: 0, plants: 0, delivered: 0, walked: 0, naps: 0, complaints: 0 });
@@ -17,6 +20,18 @@ export function makeGnome(
     id, name, job, group, x, y, tx: x, ty: y,
     state: 'think', task: null, pose: 'idle', timer: 0, t: 0, flip: false, carry: [], bubble: null, stats: emptyStats(),
     trait, legendary,
+  };
+}
+
+/** Lo permanente de una partida nueva: primera temporada, sin semillas ni talentos. */
+export function freshPrestige(): Prestige {
+  return {
+    season: 1,
+    goldenSeeds: 0,
+    talents: Object.fromEntries(TALENT_IDS.map(id => [id, 0])) as Record<TalentId, number>,
+    history: [],
+    veterans: [],
+    lifetimeEarned: 0,
   };
 }
 
@@ -45,6 +60,8 @@ export function createState(rng: Rng): GameState {
     manualHarvests: 0,
     rotted: 0,
     house: 0,
+    seasonTime: 0,
+    prestige: freshPrestige(),
     // sin datos todas las partes valen 1 (ver ORG)
     org: { mult: 1 + ORG.max, parts: { cosecha: 1, cesta: 1, siembra: 1, riego: 1 } },
     crowns: Object.fromEntries(JOB_IDS.map(j => [j, null])) as Record<JobId, number | null>,
@@ -64,7 +81,7 @@ export function createState(rng: Rng): GameState {
 // Los campos opcionales (semilla del grupo, estadísticas, podredumbre) se rellenan al cargar si faltan;
 // los cambios de forma van en MIGRATIONS. Los oficios y cultivos que falten (partidas viejas) empiezan en cero.
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 /** la partida más vieja que se sabe cargar */
 const OLDEST_VERSION = 3;
 
@@ -81,6 +98,8 @@ export interface SaveData {
   manualHarvests: number;
   rotted: number;
   house: number;
+  seasonTime: number;
+  prestige: Prestige;
   crowns: Record<JobId, number | null>;
   plots: { crop: CropId; stage: number; t: number; wet: number }[];
   gnomes: {
@@ -104,6 +123,8 @@ export function serialize(s: GameState): SaveData {
     manualHarvests: s.manualHarvests,
     rotted: s.rotted,
     house: s.house,
+    seasonTime: s.seasonTime,
+    prestige: structuredClone(s.prestige),
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet })),
     crowns: { ...s.crowns },
     gnomes: s.gnomes.map(g => ({
@@ -136,6 +157,10 @@ const MIGRATIONS: ((d: RawSave, rng: Rng) => void)[] = [
   d => {
     if (Array.isArray(d.plots)) for (const p of d.plots) if (p && typeof p === 'object') Object.assign(p, { wet: 0 });
   },
+  // v5 → v6 (iteración 8): la partida en curso es la primera temporada
+  d => {
+    Object.assign(d, { seasonTime: 0, prestige: freshPrestige() });
+  },
 ];
 
 export function deserialize(raw: unknown, rng: Rng): GameState | null {
@@ -157,6 +182,8 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   s.rotted = Math.max(0, num(d.rotted, 0));
   s.house = int(d.house, 0, 0, HOUSE.max);
   for (const j of JOB_IDS) s.hired[j] = int(d.hired?.[j], 0, 0, 999);
+  s.seasonTime = Math.max(0, num(d.seasonTime, 0));
+  s.prestige = loadPrestige(d.prestige);
 
   if (Array.isArray(d.groups)) {
     const groups = d.groups
@@ -207,4 +234,38 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   }
   if (Array.isArray(d.log)) s.log = d.log.filter((l): l is string => typeof l === 'string').slice(0, 15);
   return s;
+}
+
+/** Lo permanente se valida campo a campo: una partida rota no debe regalar semillas ni talentos imposibles. */
+function loadPrestige(raw: Partial<Prestige> | undefined): Prestige {
+  const p = freshPrestige();
+  if (!raw || typeof raw !== 'object') return p;
+  p.season = int(raw.season, 1, 1, 1e6);
+  p.goldenSeeds = int(raw.goldenSeeds, 0, 0, 1e9);
+  for (const id of TALENT_IDS) p.talents[id] = int(raw.talents?.[id], 0, 0, TALENTS[id].max);
+  p.lifetimeEarned = Math.max(0, num(raw.lifetimeEarned, 0));
+  if (Array.isArray(raw.history)) {
+    p.history = raw.history
+      .filter((r): r is SeasonRecord => !!r && typeof r === 'object')
+      .slice(0, PRESTIGE.historyMax)
+      .map(r => ({
+        season: int(r.season, 1, 1, 1e6),
+        earned: Math.max(0, num(r.earned, 0)),
+        seconds: Math.max(0, num(r.seconds, 0)),
+        seeds: int(r.seeds, 0, 0, 1e9),
+        crowned: (Array.isArray(r.crowned) ? r.crowned : [])
+          .filter(c => c && isJob(c.job) && typeof c.name === 'string')
+          .map(c => ({ job: c.job, name: c.name, tasks: int(c.tasks, 0, 0, 1e9), legendary: c.legendary === true })),
+      }));
+  }
+  if (Array.isArray(raw.veterans)) {
+    p.veterans = raw.veterans
+      .filter((v): v is Veteran => !!v && isJob(v.job) && typeof v.name === 'string')
+      .slice(0, TALENTS.veterano.max)
+      .map(v => ({
+        name: v.name, job: v.job, trait: isTrait(v.trait) ? v.trait : 'currante', legendary: v.legendary === true,
+        seasons: int(v.seasons, 1, 1, 1e6),
+      }));
+  }
+  return p;
 }

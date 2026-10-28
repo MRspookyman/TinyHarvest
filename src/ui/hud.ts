@@ -2,15 +2,15 @@
 import { CROP_IDS } from '../sim/config';
 import { cropUnlocked, cropValue } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
-import { cropIcons, menuIcons } from '../render/icons';
-import { CULTIVOS, MENUS, ORG, UI, type MenuId } from '../textos';
+import { cropIcons, goldenSeedIcon, menuIcons } from '../render/icons';
+import { CULTIVOS, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
   update(s: GameState, selected: CropId, openMenu: MenuId | null): void;
 }
 
-const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'diario'];
+const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'diario', 'temporada'];
 const ORG_PARTS = Object.keys(ORG.partes) as OrgPart[];
 /** por debajo de esto, una parte da pista; la calidad colorea el multiplicador y las barras */
 const ORG_OK = 0.9;
@@ -35,6 +35,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         </div>
       </div>
       <span class="stat"><b data-gnomes>0</b> ${UI.gnomos}</span>
+      <span class="stat" data-prestige hidden title="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold>0</b> · <span data-season></span></span>
     </div>`;
 
   // el detalle sale al pasar el ratón (CSS) y al pulsar, que es lo que hay en pantallas táctiles
@@ -79,11 +80,6 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
   ticker.setAttribute('aria-live', 'polite');
   stage.append(ticker);
 
-  const hint = document.createElement('p');
-  hint.className = 'hint';
-  hint.textContent = UI.pista;
-  stage.append(hint);
-
   bar.addEventListener('click', e => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
     if (!btn) return;
@@ -96,7 +92,12 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
     update(s, selected, openMenu) {
       setText(topbar.querySelector('[data-coins]'), String(Math.floor(s.coins)));
       setText(topbar.querySelector('[data-gnomes]'), String(s.gnomes.length));
-      hint.hidden = s.gnomes.length > 0;
+      // semillas doradas y temporada: solo cuando ya significan algo
+      const { goldenSeeds, season } = s.prestige;
+      const prestige = topbar.querySelector<HTMLElement>('[data-prestige]')!;
+      prestige.hidden = goldenSeeds === 0 && season === 1;
+      setText(prestige.querySelector('[data-gold]'), String(goldenSeeds));
+      setText(prestige.querySelector('[data-season]'), TEMPORADA.temporada(season));
 
       // organización: el multiplicador coloreado por la media de las partes, y pista para la peor
       const parts = s.org.parts;

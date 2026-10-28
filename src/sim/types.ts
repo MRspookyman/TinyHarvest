@@ -162,7 +162,9 @@ export type SimEvent =
   | { type: 'crown'; job: JobId; gnome: number }
   | { type: 'moment'; kind: MomentKind; x: number; y: number }
   /** un regador acaba de regar una parcela: salpicadura de agua */
-  | { type: 'water'; plot: number };
+  | { type: 'water'; plot: number }
+  /** empieza una temporada nueva (llega en los eventos del estado que devuelve endSeason) */
+  | { type: 'season'; season: number };
 
 /**
  * Multiplicador de organización (B6): premia una cadena de trabajo que funciona. Se calcula sobre una ventana
