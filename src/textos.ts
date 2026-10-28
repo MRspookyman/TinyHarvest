@@ -48,6 +48,12 @@ export const UI = {
   arengaActiva: (s: number) => `¡A tope! ${s} s`,
   arengaRecarga: (s: string) => `Se recarga en ${s}`,
   sinGnomos: 'Hace falta algún gnomo al que animar.',
+  // zum de la cámara
+  zum: 'Zum',
+  acercar: 'Acercar (rueda del ratón, + o pellizcar)',
+  alejar: 'Alejar (rueda del ratón, − o pellizcar)',
+  encuadre: 'Volver a ver todo el huerto (0)',
+  arrastrar: 'Arrastra el huerto para moverte',
 };
 
 /** Avisos de guardado y de errores: se quedan hasta que se resuelven. */

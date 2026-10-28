@@ -11,6 +11,8 @@ import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, drawSta
 import { frameIndex, type Atlas } from './sprites';
 
 const FONT = ['Pixelify Sans', 'monospace'];
+/** pasos de zum del jugador por encima (y por debajo) del encuadre normal */
+const ZOOM_MAX = 4;
 const BASKET_SPRITE_W = 12;
 const BASKET_SPRITE_H = 9;
 /** hueco de la puerta del granero (16 × 17), donde se dibuja abierta */
@@ -186,6 +188,16 @@ export class SceneView {
   /** centro actual de la cámara en el mundo (se acerca poco a poco al objetivo) */
   private cam = { x: 0, y: 0 };
   private followId: number | null = null;
+  /** zum del jugador: pasos de ART sobre el encuadre normal (negativo = más lejos) */
+  private zoom = 0;
+  /** centro elegido por el jugador al acercar o arrastrar; null = el encuadre normal */
+  private pan: { x: number; y: number } | null = null;
+  /** arrastre en curso (para mover la cámara) y punteros activos (para pellizcar con dos dedos) */
+  private drag: { x: number; y: number; cam: { x: number; y: number }; moved: boolean } | null = null;
+  private touches = new Map<number, { x: number; y: number }>();
+  private pinch = 0;
+  /** el último clic fue el final de un arrastre: no cuenta como clic */
+  private dragged = false;
   private layoutKey = '';
   private fieldKey = '';
   private time = 0;
@@ -274,6 +286,10 @@ export class SceneView {
     app.stage.hitArea = app.screen;
     app.stage.on('pointertap', (e: FederatedPointerEvent) => {
       if (!this.state) return;
+      if (this.dragged) {
+        this.dragged = false;
+        return;
+      }
       const l = this.world.toLocal(e.global);
       // los gnomos van delante de las parcelas y los edificios
       const g = this.gnomeAt(this.state, l.x, l.y);
@@ -283,11 +299,123 @@ export class SceneView {
       const id = plotAt(this.state, l.x, l.y);
       if (id !== null) this.onPlotClick(id);
     });
+    app.stage.on('pointerdown', (e: FederatedPointerEvent) => {
+      this.dragged = false;
+      this.touches.set(e.pointerId, { x: e.global.x, y: e.global.y });
+      if (this.touches.size === 2) {
+        // dos dedos: se pellizca, no se arrastra
+        this.drag = null;
+        this.pinch = this.touchSpread();
+        return;
+      }
+      if (e.button === 0) this.drag = { x: e.global.x, y: e.global.y, cam: { ...this.cam }, moved: false };
+    });
     app.stage.on('pointermove', (e: FederatedPointerEvent) => {
       const l = this.world.toLocal(e.global);
       this.pointer = { x: l.x, y: l.y };
+      if (this.touches.has(e.pointerId)) this.touches.set(e.pointerId, { x: e.global.x, y: e.global.y });
+      if (this.touches.size === 2 && this.pinch > 0) {
+        const spread = this.touchSpread();
+        const [a, b] = [...this.touches.values()];
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (spread / this.pinch > 1.25) { this.zoomBy(1, mid); this.pinch = spread; }
+        else if (spread / this.pinch < 0.8) { this.zoomBy(-1, mid); this.pinch = spread; }
+        this.dragged = true;
+        return;
+      }
+      const d = this.drag;
+      if (!d || this.followId !== null) return;
+      const dx = e.global.x - d.x, dy = e.global.y - d.y;
+      if (!d.moved && Math.hypot(dx, dy) < 6) return;
+      d.moved = true;
+      this.dragged = true;
+      this.pan = this.clampPan({ x: d.cam.x - dx / this.scale, y: d.cam.y - dy / this.scale }, this.scale);
+      this.cam = { ...this.pan };
     });
+    const release = (e: FederatedPointerEvent) => {
+      this.touches.delete(e.pointerId);
+      if (this.touches.size < 2) this.pinch = 0;
+      this.drag = null;
+    };
+    app.stage.on('pointerup', release);
+    app.stage.on('pointerupoutside', release);
     app.stage.on('pointerleave', () => (this.pointer = null));
+    // la rueda del ratón acerca y aleja hacia donde apunta
+    let wheel = 0;
+    app.canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      wheel += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+      if (Math.abs(wheel) < 80) return;
+      const r = app.canvas.getBoundingClientRect();
+      this.zoomBy(wheel < 0 ? 1 : -1, { x: e.clientX - r.left, y: e.clientY - r.top });
+      wheel = 0;
+    }, { passive: false });
+  }
+
+  private touchSpread() {
+    const [a, b] = [...this.touches.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  }
+
+  /** Escala con el zum del jugador: de ART en ART, entre ART (o 1) y ZOOM_MAX pasos sobre el encuadre normal. */
+  private zoomScale(zoom = this.zoom) {
+    const B = this.baseScale;
+    const min = B >= ART ? ART : 1;
+    return Math.min(B + ZOOM_MAX * ART, Math.max(min, B + zoom * ART));
+  }
+
+  /** Pasos de zum que se pueden dar desde aquí (para que los botones sepan si están al límite). */
+  get zoomRange(): { canIn: boolean; canOut: boolean; zoomed: boolean } {
+    return {
+      canIn: this.zoomScale(this.zoom + 1) !== this.zoomScale(),
+      canOut: this.zoomScale(this.zoom - 1) !== this.zoomScale(),
+      zoomed: this.zoom !== 0 || this.pan !== null,
+    };
+  }
+
+  /**
+   * Acerca (+1) o aleja (−1) un paso. Con `anchor` (px de pantalla), el punto del mundo que hay debajo se queda quieto;
+   * sin él, se acerca hacia el centro de la vista.
+   */
+  zoomBy(steps: number, anchor?: { x: number; y: number }) {
+    const before = this.zoomScale();
+    const next = Math.max(-ZOOM_MAX, Math.min(ZOOM_MAX, this.zoom + steps));
+    const after = this.zoomScale(next);
+    if (after === before) return;
+    this.zoom = next;
+    if (this.followId !== null) return;
+    // de vuelta al zum normal, también al encuadre normal (la cámara se desliza hasta él)
+    if (next === 0) {
+      this.pan = null;
+      return;
+    }
+    const { w, h } = this.view();
+    const a = anchor ?? { x: w / 2, y: h / 2 };
+    const wx = (a.x - this.world.x) / this.scale, wy = (a.y - this.world.y) / this.scale;
+    this.pan = this.clampPan({ x: wx - (a.x - w / 2) / after, y: wy - (a.y - h / 2) / after }, after);
+    this.cam = { ...this.pan };
+  }
+
+  /** Vuelve al encuadre normal. */
+  resetZoom() {
+    this.zoom = 0;
+    this.pan = null;
+  }
+
+  /** lo que se ve del lienzo sin la interfaz, en px de pantalla */
+  private view() {
+    const { width: sw, height: sh } = this.app.screen;
+    return { w: Math.max(1, sw - this.insets.right), h: Math.max(1, sh - this.insets.bottom) };
+  }
+
+  /** Centro de cámara que no enseña más allá del borde del mundo (si el mundo cabe entero, centrado). */
+  private clampPan(p: { x: number; y: number }, S: number) {
+    const { w, h } = this.view();
+    const hw = w / 2 / S, hh = h / 2 / S;
+    return {
+      x: WORLD.w <= hw * 2 ? WORLD.w / 2 : Math.min(Math.max(p.x, hw), WORLD.w - hw),
+      y: WORLD.h <= hh * 2 ? WORLD.h / 2 : Math.min(Math.max(p.y, hh), WORLD.h - hh),
+    };
   }
 
   /** Gnomo que sigue la cámara, o null con el encuadre normal. */
@@ -536,30 +664,27 @@ export class SceneView {
     const fit = Math.min(w / bw, h / bh);
     this.baseScale = fit >= ART ? Math.floor(fit / ART) * ART : Math.max(1, Math.floor(fit));
     this.base = { x: x0 + bw / 2, y: y0 + bh / 2 };
-    // al cambiar el tamaño de la ventana no hace falta un paseo de cámara
-    if (first || this.followId === null) this.cam = { ...this.base };
+    // al cambiar el tamaño de la ventana no hace falta un paseo de cámara (salvo con zum o arrastre del jugador)
+    if (first || (this.followId === null && this.pan === null)) this.cam = { ...this.base };
     this.grass.width = sw;
     this.grass.height = sh;
   }
 
   /**
-   * Escala entera y posición del mundo. Siguiendo a un gnomo: un paso más de zum y el gnomo en el centro,
-   * sin que el borde del mundo entre en pantalla. La posición se redondea para que los píxeles no tiemblen.
+   * Escala entera y posición del mundo. Con zum o arrastre del jugador, su encuadre. Siguiendo a un gnomo: un paso más
+   * de zum y el gnomo en el centro. Nunca enseña más allá del borde del mundo; la posición se redondea para que los
+   * píxeles no tiemblen.
    */
   private camera(s: GameState, dt: number) {
-    const { width: sw, height: sh } = this.app.screen;
-    // la cámara centra en la parte de la pantalla que no tapa la interfaz
-    const w = Math.max(1, sw - this.insets.right), h = Math.max(1, sh - this.insets.bottom);
+    const { w, h } = this.view();
     const g = this.followId === null ? undefined : s.gnomes.find(g => g.id === this.followId);
-    const B = this.baseScale;
+    const Z = this.zoomScale();
     // siguiendo a un gnomo, un paso más de zum (de ART en ART)
-    const S = g ? (B % ART === 0 ? B + ART : B + 1) : B;
-    let tx = this.base.x, ty = this.base.y;
-    if (g) {
-      const hw = w / 2 / S, hh = h / 2 / S;
-      tx = WORLD.w <= hw * 2 ? WORLD.w / 2 : Math.min(Math.max(g.x, hw), WORLD.w - hw);
-      ty = WORLD.h <= hh * 2 ? WORLD.h / 2 : Math.min(Math.max(g.y - 8, hh), WORLD.h - hh);
-    }
+    const S = g ? (Z % ART === 0 ? Z + ART : Z + 1) : Z;
+    let target = this.base;
+    if (g) target = this.clampPan({ x: g.x, y: g.y - 8 }, S);
+    else if (this.pan) target = this.pan = this.clampPan(this.pan, S);
+    const tx = target.x, ty = target.y;
     if (S !== this.scale) {
       this.scale = S;
       this.world.scale.set(S);
@@ -572,7 +697,7 @@ export class SceneView {
     const k = 1 - Math.exp(-dt * 6);
     this.cam.x += (tx - this.cam.x) * k;
     this.cam.y += (ty - this.cam.y) * k;
-    // de vuelta al encuadre normal, se encaja exacto al llegar
+    // al llegar se encaja exacto
     if (!g && Math.abs(tx - this.cam.x) < 0.5 / S && Math.abs(ty - this.cam.y) < 0.5 / S) this.cam = { x: tx, y: ty };
     this.world.position.set(Math.floor(w / 2 - this.cam.x * S), Math.floor(h / 2 - this.cam.y * S));
     this.grass.tilePosition.set(this.world.x, this.world.y);
@@ -1065,7 +1190,8 @@ export class SceneView {
   private syncHover(s: GameState) {
     this.hover.clear();
     this.nameTag.visible = false;
-    let cursor = 'default';
+    // con zum se puede arrastrar el huerto: la mano lo dice (agarrando mientras se arrastra)
+    let cursor = this.drag?.moved ? 'grabbing' : this.zoomRange.zoomed && this.followId === null ? 'grab' : 'default';
     let lm: Landmark | null = null;
     const pt = this.pointer;
     if (pt) {
@@ -1098,6 +1224,7 @@ export class SceneView {
       }
     }
     this.setHovered(lm);
-    this.app.canvas.style.cursor = cursor;
+    if (this.drag?.moved) cursor = 'grabbing';
+    if (this.app.canvas.style.cursor !== cursor) this.app.canvas.style.cursor = cursor;
   }
 }

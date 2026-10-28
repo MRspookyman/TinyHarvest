@@ -24,6 +24,7 @@ import { createSeasonMenu, createSeasonSummary } from './ui/menus/season';
 import { createTreeMenu } from './ui/menus/tree';
 import { createNotices } from './ui/notices';
 import { createTutorial } from './ui/tutorial';
+import { createZoomControls } from './ui/zoom';
 import { createWindows } from './ui/windows';
 import { AVISOS } from './textos';
 
@@ -183,6 +184,7 @@ async function start() {
   scene.onGnomeClick = id => card.open(id);
   const toolbar = stageEl.querySelector<HTMLElement>('.toolbar')!;
   const tutorial = createTutorial(stageEl, toolbar, !devParams || new URLSearchParams(location.search).get('tutorial') === '1');
+  const zoom = createZoomControls(stageEl, scene);
 
   let sinceSave = 0;
   app.ticker.add(ticker => {
@@ -198,6 +200,7 @@ async function start() {
       windows.update(state);
       card.update(state);
       tutorial.update(state, { menu: windows.current, card: card.current });
+      zoom.update();
       // la cámara encuadra el huerto en lo que no tapan la barra de abajo ni la ficha (D13); se aplica al siguiente fotograma
       scene.setInsets({
         right: card.el.hidden ? 0 : stageEl.clientWidth - card.el.offsetLeft,

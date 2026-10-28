@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.17 · **Última actualización:** 2026-10-28
+> **Estado:** borrador v0.18 · **Última actualización:** 2026-10-28
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -774,6 +774,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.18 (2026-10-28):** zum de la cámara. Rueda del ratón (acerca hacia donde apunta), pellizco con dos dedos, teclas + − 0 y tres botones abajo a la izquierda (acercar, alejar y volver a ver todo el huerto). Con zum, el huerto se arrastra para moverse (arrastrar no cuenta como clic) y la cámara nunca enseña más allá del borde del mundo. Siempre de 2 en 2 para que el pixel art siga nítido; hasta 4 pasos más cerca o más lejos que el encuadre normal. Seguir a un gnomo suma un paso más sobre el zum elegido.
 - **v0.17 (2026-10-28):** todo el arte redibujado a doble resolución: gnomos de 32 × 32 con todas sus poses y herramientas, plantas de 32 × 28, terreno, edificios con todas sus mejoras, decorado, bichos, bocadillos, efectos e iconos y marcos de la interfaz. La cámara usa escalas pares para que el pixel art siga nítido. Sin cambios de simulación, equilibrio ni partidas guardadas.
 - **v0.16 (2026-10-28):** iteración 10, «enganche». Ventaja de zona, sonido hecho por código y monedas que vuelan, próximo objetivo en la barra, cosecha dorada, maestría de cultivo, álbum de 35 cromos con páginas premiadas, arenga del capataz, encargos del pueblo con propina, amistades entre gnomos y estaciones. Equilibrado con el bot: árbol completo en 48–52 min.
 - **v0.15 (2026-10-28):** iteración 9, «zonas y robustez». Zonas por grupo marcadas en el tablón y visibles en el bancal, copia de las partidas ilegibles, aviso de «sin guardar» y parada segura ante errores. Medido el rendimiento con 40 gnomos (≤ 3,5 ms por fotograma) y añadida la sección j) del bot: las zonas ahorran paseo pero de momento no dan más monedas.
