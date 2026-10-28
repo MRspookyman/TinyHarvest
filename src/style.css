@@ -41,6 +41,30 @@ img.px { image-rendering: pixelated; display: block; }
 .stat { display: inline-flex; align-items: center; gap: 6px; color: var(--paper-dark); white-space: nowrap; }
 .stat b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .coin { width: 14px; height: 14px; background: var(--gold); box-shadow: inset -3px -3px 0 var(--gold-dark), 0 0 0 2px var(--outline); }
+/* contador de monedas: saltito al subir */
+.stat.bump .coin, .stat.bump b { animation: coin-bump 0.25s ease-out; }
+@keyframes coin-bump { 40% { transform: translateY(-3px) scale(1.12); } }
+/* próximo objetivo (G3): nombre, barra y cifras; dorado y palpitando cuando ya se puede */
+.goal { display: grid; grid-template-columns: auto; gap: 2px; min-width: 170px; max-width: 260px; padding: 2px 8px; border: 0; background: rgba(26, 28, 44, 0.25); box-shadow: inset 0 0 0 2px var(--wood); color: var(--paper-dark); font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
+.goal:hover { background: var(--wood); }
+.goal-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal-label b { color: var(--fg); font-weight: 600; }
+.goal-bar { display: block; height: 6px; background: var(--outline); box-shadow: 0 0 0 1px var(--wood-light); }
+.goal-bar i { display: block; height: 100%; width: 0; background: var(--gold-dark); transition: width 0.3s; }
+.goal-nums { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.goal.ready { box-shadow: inset 0 0 0 2px var(--gold); animation: goal-glow 1.4s ease-in-out infinite; }
+.goal.ready .goal-bar i { background: var(--gold); }
+.goal.ready .goal-nums { color: var(--gold); font-weight: 700; }
+@keyframes goal-glow { 50% { background: rgba(255, 205, 117, 0.22); } }
+/* sonido: un altavoz de píxeles; tachado si está quitado */
+.sound-btn { position: relative; width: 28px; height: 24px; border: 0; padding: 0; background: none; color: var(--paper-dark); cursor: pointer; }
+.sound-btn:hover { color: var(--fg); }
+.sound-btn i { position: absolute; left: 5px; top: 8px; width: 5px; height: 8px; background: currentColor; }
+.sound-btn i::before { content: ''; position: absolute; left: 4px; top: -4px; border: 8px solid transparent; border-right-color: currentColor; border-left: 0; }
+.sound-btn i::after { content: ''; position: absolute; left: 14px; top: -2px; width: 4px; height: 12px; border: 2px solid currentColor; border-left: 0; }
+.sound-btn.off i::after { width: 14px; height: 2px; top: 3px; left: 0; border: 0; background: var(--red); transform: rotate(-35deg); }
+@media (prefers-reduced-motion: reduce) { .goal.ready, .stat.bump .coin, .stat.bump b { animation: none; } }
+.fly-coin { position: fixed; z-index: 20; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--gold); box-shadow: inset -2px -2px 0 var(--gold-dark), 0 0 0 2px var(--outline); pointer-events: none; }
 
 /* organización: multiplicador junto a las monedas; el color dice lo bien que va */
 .org { position: relative; display: flex; }

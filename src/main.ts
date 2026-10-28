@@ -1,15 +1,17 @@
 import './style.css';
 import { Application, TextureSource } from 'pixi.js';
 import { SceneView } from './render/scene';
+import { createSound } from './render/sound';
 import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
   buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, endSeason, hire, hireCost,
-  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, renameGroup, setGroupColor, setGroupSeed, setGroupZone, setPriority, tick,
+  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, plotOrigin, renameGroup, setGroupColor, setGroupSeed, setGroupZone, setPriority, tick,
 } from './sim/sim';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
 import type { GameActions } from './ui/dom';
+import { flyCoins } from './ui/coinFly';
 import { createGnomeCard } from './ui/gnomeCard';
 import { createHud } from './ui/hud';
 import { createDiaryMenu } from './ui/menus/diary';
@@ -90,11 +92,20 @@ async function start() {
   await document.fonts.load('16px "Pixelify Sans"').catch(() => undefined);
 
   const scene = new SceneView(app, buildAtlas());
+  const sound = createSound();
+  // cualquier botón de la interfaz hace un clic suave
+  document.addEventListener('click', e => {
+    if ((e.target as HTMLElement).closest('button')) sound.play('click');
+  });
+  /** compra con sonido: solo suena si de verdad se ha comprado */
+  const bought = (ok: boolean, kind: 'buy' | 'hire' = 'buy') => {
+    if (ok) sound.play(kind);
+  };
 
   const actions: GameActions = {
-    hire: job => hire(state, job, rng),
-    buyNode: id => buyNode(state, id),
-    buyHouse: () => buyHouse(state),
+    hire: job => bought(hire(state, job, rng), 'hire'),
+    buyNode: id => bought(buyNode(state, id)),
+    buyHouse: () => bought(buyHouse(state)),
     createGroup: () => createGroup(state),
     renameGroup: (id, name) => renameGroup(state, id, name),
     setGroupColor: (id, color) => setGroupColor(state, id, color),
@@ -120,7 +131,7 @@ async function start() {
       windows.close();
       card.close();
     },
-    buyTalent: id => buyTalent(state, id),
+    buyTalent: id => bought(buyTalent(state, id)),
     endSeason: () => {
       if (!canEndSeason(state)) return;
       state = endSeason(state, rng);
@@ -146,12 +157,21 @@ async function start() {
     ranking: createRankingMenu(actions),
     temporada: seasonMenu,
   });
-  const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m));
+  const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m), sound);
+  const coinStat = document.querySelector<HTMLElement>('[data-coin-stat]')!;
   const summary = createSeasonSummary(stageEl, actions);
   // después de las ventanas y del resumen: su Esc va primero
   const card = createGnomeCard(stageEl, actions, id => scene.follow(id));
 
-  scene.onPlotClick = id => clickPlot(state, id, seed);
+  scene.onPlotClick = id => {
+    const r = clickPlot(state, id, seed);
+    if (r === 'plant') sound.play('plant');
+    if (r === 'harvest') {
+      sound.play('harvest');
+      const o = plotOrigin(state.plots[id]);
+      flyCoins(scene.pageOf(o.x + 9, o.y + 4), coinStat, 2);
+    }
+  };
   scene.onOpenMenu = m => windows.open(m);
   scene.onGnomeClick = id => card.open(id);
   const toolbar = stageEl.querySelector<HTMLElement>('.toolbar')!;
@@ -164,6 +184,9 @@ async function start() {
       tick(state, dt, rng);
       if (!cropUnlocked(state, seed)) seed = 'zanahoria';
       scene.sync(state, dt);
+      playEvents(state.events);
+      // los eventos son de un fotograma: ya los han visto la escena y el sonido
+      state.events.length = 0;
       hud.update(state, seed, windows.current);
       windows.update(state);
       card.update(state);
@@ -186,6 +209,18 @@ async function start() {
       notices.show('error', AVISOS.roto, [{ label: AVISOS.recargar, onClick: () => location.reload() }]);
     }
   });
+
+  function playEvents(events: GameState['events']) {
+    for (const e of events) {
+      if (e.type === 'harvest') sound.play('harvest');
+      else if (e.type === 'coins') sound.play('coins', e.amount);
+      else if (e.type === 'crown') sound.play('crown');
+      else if (e.type === 'golden') {
+        sound.play('golden');
+        flyCoins(scene.pageOf(e.x, e.y), coinStat, 6);
+      }
+    }
+  }
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') persist();

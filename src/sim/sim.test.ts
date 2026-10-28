@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS,
-  MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER,
+  MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS,
 } from './config';
 import {
   basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
-  hire, hireCost, houseCapacity, isOpen, moveGnome, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
-  seedsCoinsNeeded, setGroupColor, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, waterTime,
+  hire, hireCost, houseCapacity, isOpen, moveGnome, nextGoal, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
+  seedsCoinsNeeded, setGroupColor, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, turfBonus, waterTime,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
 import type { GameState, JobId, Rng, TraitId } from './types';
@@ -483,6 +483,64 @@ describe('zonas', () => {
     setGroupZone(s, s.groups[0].id, { c0: 0, r0: 0, c1: FIELD.maxCols, r1: 0 });
     setGroupZone(s, s.groups[0].id, { c0: -1, r0: 0, c1: 2, r1: 0 });
     expect(s.groups[0].zone).toBe(null);
+  });
+});
+
+describe('enganche', () => {
+  it('la ventaja de zona crece cuanto más pequeña es la zona y no se da con todo el bancal ni sin zona', () => {
+    const rng = seeded(40);
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    const g = hireFree(s, 'recolector', rng);
+    const id = s.groups[0].id;
+    expect(turfBonus(s, g)).toBe(0);
+    setGroupZone(s, id, { c0: 0, r0: 0, c1: FIELD.maxCols - 1, r1: FIELD.maxRows - 1 });
+    expect(turfBonus(s, g)).toBe(0);
+    setGroupZone(s, id, { c0: 0, r0: 0, c1: 2, r1: FIELD.maxRows - 1 });
+    const third = turfBonus(s, g);
+    setGroupZone(s, id, { c0: 0, r0: 0, c1: 0, r1: FIELD.maxRows - 1 });
+    expect(turfBonus(s, g)).toBeGreaterThan(third);
+    expect(third).toBeCloseTo(ZONE_BONUS * (2 / 3));
+    // los porteadores van a todas partes: no tienen zona
+    expect(turfBonus(s, hireFree(s, 'porteador', rng))).toBe(0);
+  });
+
+  it('una cosecha dorada vale GOLDEN.mult veces más, a mano o con un gnomo, y se pierde si se pudre', () => {
+    const rng = seeded(41);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = -1;
+    const p = s.plots[0];
+    Object.assign(p, { stage: RIPE, t: 0, golden: true });
+    s.coins = 0;
+    clickPlot(s, p.id, 'zanahoria');
+    expectSold(s.coins, CROPS.zanahoria.value * GOLDEN.mult);
+    expect(p.golden).toBe(false);
+    expect(s.events.some(e => e.type === 'golden')).toBe(true);
+
+    // un gnomo cobra lo de más en el acto y lleva el cultivo normal al saco
+    Object.assign(p, { stage: RIPE, t: 0, golden: true, res: null });
+    s.coins = 0;
+    const g = hireFree(s, 'recolector', rng);
+    run(s, 6, rng);
+    expect(p.stage).toBe(-1);
+    expect(s.coins).toBeGreaterThanOrEqual(CROPS.zanahoria.value * (GOLDEN.mult - 1));
+    expect(g.stats.harvests).toBe(1);
+
+    // lo que se echa a perder deja de brillar
+    const q = s.plots[1];
+    Object.assign(q, { stage: RIPE, t: CROPS.zanahoria.keep - 0.01, golden: true });
+    tick(s, 0.1, rng);
+    expect(q).toMatchObject({ stage: ROTTEN, golden: false });
+  });
+
+  it('el próximo objetivo es la mejora más barata que ya se puede comprar; con el árbol completo, la siguiente semilla', () => {
+    const s = createState(seeded(42));
+    const reachable = NODE_IDS.filter(id => nodeReachable(s, id));
+    const cheapest = reachable.reduce((a, b) => (nodeCost(s, b) < nodeCost(s, a) ? b : a));
+    expect(nextGoal(s)).toMatchObject({ kind: 'node', id: cheapest, need: nodeCost(s, cheapest) });
+    for (const id of NODE_IDS) s.tree[id] = TREE[id].max;
+    s.totalEarned = seedsCoinsNeeded(3);
+    expect(nextGoal(s)).toMatchObject({ kind: 'seed', seeds: 4, need: seedsCoinsNeeded(4) });
   });
 });
 

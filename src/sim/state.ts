@@ -39,7 +39,7 @@ export function createState(rng: Rng): GameState {
   const plots: Plot[] = [];
   for (let row = 0; row < FIELD.maxRows; row++) {
     for (let col = 0; col < FIELD.maxCols; col++) {
-      plots.push({ id: plots.length, col, row, crop: 'zanahoria', stage: -1, t: 0, res: null, wet: 0, wres: null });
+      plots.push({ id: plots.length, col, row, crop: 'zanahoria', stage: -1, t: 0, res: null, wet: 0, wres: null, golden: false });
     }
   }
   // una fila ya sembrada para que haya algo que recoger desde el principio
@@ -101,7 +101,7 @@ export interface SaveData {
   seasonTime: number;
   prestige: Prestige;
   crowns: Record<JobId, number | null>;
-  plots: { crop: CropId; stage: number; t: number; wet: number }[];
+  plots: { crop: CropId; stage: number; t: number; wet: number; golden?: boolean }[];
   gnomes: {
     id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[]; stats: GnomeStats;
     trait: TraitId; legendary: boolean;
@@ -125,7 +125,7 @@ export function serialize(s: GameState): SaveData {
     house: s.house,
     seasonTime: s.seasonTime,
     prestige: structuredClone(s.prestige),
-    plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet })),
+    plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet, golden: p.golden })),
     crowns: { ...s.crowns },
     gnomes: s.gnomes.map(g => ({
       id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry], stats: { ...g.stats },
@@ -221,6 +221,8 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
       plot.t = Math.max(0, num(p?.t, 0));
       // solo lo que crece puede estar regado
       plot.wet = plot.stage >= 0 && plot.stage < RIPE ? Math.max(0, num(p?.wet, 0)) : 0;
+      // solo lo maduro puede brillar
+      plot.golden = plot.stage === RIPE && p?.golden === true;
     });
   }
   if (Array.isArray(d.gnomes)) {

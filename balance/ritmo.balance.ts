@@ -783,28 +783,29 @@ const ZONE_MIN = 10;
 const ZONE_SPLIT = 4;
 const zoneCrops = (col: number): CropId => (col < ZONE_SPLIT ? 'calabaza' : 'zanahoria');
 
+/** Dos grupos con su zona y su semilla: `left` gnomos de cada oficio a la calabaza (izquierda), el resto a la zanahoria. */
+function twoZones(s: GameState, left: (crew: number) => number) {
+  const a = s.groups[0];
+  const b = createGroup(s)!;
+  setGroupZone(s, a.id, { c0: 0, r0: 0, c1: ZONE_SPLIT - 1, r1: FIELD.maxRows - 1 });
+  setGroupZone(s, b.id, { c0: ZONE_SPLIT, r0: 0, c1: FIELD.maxCols - 1, r1: FIELD.maxRows - 1 });
+  setGroupSeed(s, a.id, 'calabaza');
+  setGroupSeed(s, b.id, 'zanahoria');
+  for (const job of ['recolector', 'sembrador'] as const) {
+    const crew = s.gnomes.filter(g => g.job === job);
+    crew.slice(left(crew.length)).forEach(g => moveGnome(s, g.id, b.id));
+  }
+}
+
 test('j) Zonas', () => {
   const rows: (string | number)[][] = [];
   for (const st of [{ rec: 6, sem: 4 }, { rec: 12, sem: 8 }]) {
     const setups: { name: string; setup: (s: GameState) => void }[] = [
       { name: 'un grupo, «cercano»', setup: () => undefined },
       { name: 'un grupo, «valioso»', setup: s => setPriority(s, s.groups[0].id, 'valioso') },
-      {
-        // ¼ de la plantilla a la calabaza (lenta y cómoda), el resto a la zanahoria; cada grupo con su semilla
-        name: 'dos zonas (¼ calabaza, ¾ zanahoria)',
-        setup: s => {
-          const left = s.groups[0];
-          const right = createGroup(s)!;
-          setGroupZone(s, left.id, { c0: 0, r0: 0, c1: ZONE_SPLIT - 1, r1: FIELD.maxRows - 1 });
-          setGroupZone(s, right.id, { c0: ZONE_SPLIT, r0: 0, c1: FIELD.maxCols - 1, r1: FIELD.maxRows - 1 });
-          setGroupSeed(s, left.id, 'calabaza');
-          setGroupSeed(s, right.id, 'zanahoria');
-          for (const job of ['recolector', 'sembrador'] as const) {
-            const crew = s.gnomes.filter(g => g.job === job);
-            crew.slice(Math.round(crew.length / 4)).forEach(g => moveGnome(s, g.id, right.id));
-          }
-        },
-      },
+      { name: 'dos zonas, ¼ de la plantilla a la calabaza', setup: s => twoZones(s, n => Math.round(n / 4)) },
+      // la calabaza (lenta y cómoda) casi no da trabajo: con un gnomo de cada oficio basta
+      { name: 'dos zonas, 1 de cada oficio a la calabaza', setup: s => twoZones(s, () => 1) },
     ];
     for (const { name, setup } of setups) {
       const rng = mulberry32(SEED);
@@ -815,9 +816,30 @@ test('j) Zonas', () => {
       rows.push([`${st.rec} rec + ${st.sem} sem`, name, f2(s.totalEarned / (ZONE_MIN * 60)), s.rotted, Math.round(walked)]);
     }
   }
+  // el mismo cultivo en todo el bancal: solo cuenta lo que se ahorra (o se pierde) al repartir el trabajo en franjas
+  const even: (string | number)[][] = [];
+  for (const crop of ['zanahoria', 'tomate'] as const) {
+    for (const bands of [1, 3]) {
+      const rng = mulberry32(SEED);
+      const s = fullField(rng, 12, 8, () => crop, {}, crop === 'tomate' ? { regador: 4 } : {});
+      if (bands > 1) {
+        const width = Math.ceil(FIELD.maxCols / bands);
+        const groups = [s.groups[0], ...Array.from({ length: bands - 1 }, () => createGroup(s)!)];
+        groups.forEach((g, i) => setGroupZone(s, g.id, { c0: i * width, r0: 0, c1: Math.min(FIELD.maxCols, (i + 1) * width) - 1, r1: FIELD.maxRows - 1 }));
+        for (const job of ['recolector', 'sembrador', 'regador'] as const) {
+          s.gnomes.filter(g => g.job === job).forEach((g, i) => moveGnome(s, g.id, groups[i % bands].id));
+        }
+      }
+      for (let n = 0; n < ZONE_MIN * STEPS_PER_MIN; n++) step(s, rng);
+      const walked = s.gnomes.reduce((a, g) => a + g.stats.walked, 0) / s.gnomes.length;
+      even.push([crop, bands === 1 ? 'un grupo' : `${bands} franjas de columnas`, f2(s.totalEarned / (ZONE_MIN * 60)), s.rotted, Math.round(walked)]);
+    }
+  }
   const out = [
     `## j) Zonas (bancal al máximo: ${ZONE_SPLIT} columnas de calabaza a la izquierda y zanahoria el resto, ${ZONE_MIN} min, sin clics)`, '',
-    table(['Plantilla', 'Organización', 'monedas/s', 'echados a perder', 'pasos por gnomo'], rows),
+    table(['Plantilla', 'Organización', 'monedas/s', 'echados a perder', 'pasos por gnomo'], rows), '',
+    `### Un solo cultivo, 12 rec + 8 sem (+ 4 regadores con el tomate), repartidos a partes iguales`, '',
+    table(['Cultivo', 'Organización', 'monedas/s', 'echados a perder', 'pasos por gnomo'], even),
   ];
   console.log(`\n${out.join('\n')}\n`);
 });

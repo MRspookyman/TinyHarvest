@@ -1,9 +1,10 @@
 // Lo que está siempre en pantalla: monedas y organización arriba, barra de accesos y semillas abajo, y el último aviso del diario.
 import { CROP_IDS } from '../sim/config';
-import { cropUnlocked, cropValue } from '../sim/sim';
+import { cropUnlocked, cropValue, nextGoal } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
 import { cropIcons, goldenSeedIcon, menuIcons } from '../render/icons';
-import { CULTIVOS, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
+import type { Sound } from '../render/sound';
+import { ARBOL, CULTIVOS, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
@@ -16,11 +17,16 @@ const ORG_PARTS = Object.keys(ORG.partes) as OrgPart[];
 const ORG_OK = 0.9;
 const quality = (f: number) => (f < 0.5 ? 'bad' : f < 0.8 ? 'mid' : 'good');
 
-export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: GameActions, open: (m: MenuId) => void): Hud {
+export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: GameActions, open: (m: MenuId) => void, sound: Sound): Hud {
   topbar.innerHTML = `
     <h1>${UI.titulo}</h1>
     <div class="stats">
-      <span class="stat"><i class="coin" aria-hidden="true"></i><b data-coins>0</b> ${UI.monedas}</span>
+      <button type="button" class="stat goal" data-goal>
+        <span class="goal-label">${UI.proximo}: <b data-goal-name></b></span>
+        <i class="goal-bar" aria-hidden="true"><i data-goal-fill></i></i>
+        <span class="goal-nums" data-goal-nums></span>
+      </button>
+      <span class="stat" data-coin-stat><i class="coin" aria-hidden="true"></i><b data-coins>0</b> ${UI.monedas}</span>
       <div class="org" data-org>
         <button type="button" class="stat org-btn" aria-expanded="false" aria-controls="org-pop" title="${esc(ORG.boton)}">
           <i class="org-icon" aria-hidden="true"></i><b data-org-mult></b>
@@ -36,7 +42,29 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       </div>
       <span class="stat"><b data-gnomes>0</b> ${UI.gnomos}</span>
       <span class="stat" data-prestige hidden title="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold>0</b> · <span data-season></span></span>
+      <button type="button" class="sound-btn" data-sound aria-pressed="false"><i aria-hidden="true"></i></button>
     </div>`;
+
+  const goalBtn = topbar.querySelector<HTMLButtonElement>('[data-goal]')!;
+  let goalMenu: MenuId = 'arbol';
+  goalBtn.addEventListener('click', () => open(goalMenu));
+  const soundBtn = topbar.querySelector<HTMLButtonElement>('[data-sound]')!;
+  const syncSound = () => {
+    soundBtn.setAttribute('aria-pressed', String(!sound.muted));
+    soundBtn.classList.toggle('off', sound.muted);
+    const label = sound.muted ? UI.sonidoOff : UI.sonidoOn;
+    soundBtn.title = label;
+    soundBtn.setAttribute('aria-label', label);
+  };
+  soundBtn.addEventListener('click', () => {
+    sound.setMuted(!sound.muted);
+    syncSound();
+  });
+  syncSound();
+  // el contador de monedas da un saltito cuando sube (como mucho cada 0,2 s, para que no tiemble)
+  const coinStat = topbar.querySelector<HTMLElement>('[data-coin-stat]')!;
+  let lastCoins = 0;
+  let lastBump = 0;
 
   // el detalle sale al pasar el ratón (CSS) y al pulsar, que es lo que hay en pantallas táctiles
   const org = topbar.querySelector<HTMLElement>('[data-org]')!;
@@ -91,6 +119,28 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
   return {
     update(s, selected, openMenu) {
       setText(topbar.querySelector('[data-coins]'), String(Math.floor(s.coins)));
+      const now = performance.now();
+      if (s.coins > lastCoins + 0.5 && now - lastBump > 200) {
+        lastBump = now;
+        coinStat.classList.remove('bump');
+        void coinStat.offsetWidth;
+        coinStat.classList.add('bump');
+      }
+      lastCoins = s.coins;
+
+      // próximo objetivo (G3): nombre, barra y cifras; brilla cuando ya se puede
+      const goal = nextGoal(s);
+      const name = goal.kind === 'node' ? ARBOL[goal.id].nombre : UI.proximoSemilla(goal.seeds);
+      const fill = Math.min(1, goal.have / goal.need);
+      goalMenu = goal.kind === 'node' ? 'arbol' : 'temporada';
+      setText(goalBtn.querySelector('[data-goal-name]'), name);
+      setText(goalBtn.querySelector('[data-goal-nums]'), fill >= 1 && goal.kind === 'node' ? UI.listo : `${Math.floor(goal.have)} / ${goal.need}`);
+      const width = `${Math.round(fill * 100)}%`;
+      const goalFill = goalBtn.querySelector<HTMLElement>('[data-goal-fill]')!;
+      if (goalFill.style.width !== width) goalFill.style.width = width;
+      toggleClass(goalBtn, 'ready', fill >= 1 && goal.kind === 'node');
+      const help = goal.kind === 'node' ? UI.proximoAyuda : UI.proximoSemillaAyuda;
+      if (goalBtn.title !== help) goalBtn.title = help;
       setText(topbar.querySelector('[data-gnomes]'), String(s.gnomes.length));
       // semillas doradas y temporada: solo cuando ya significan algo
       const { goldenSeeds, season } = s.prestige;

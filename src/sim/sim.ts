@@ -4,7 +4,7 @@ import {
   CROW_EAT, CROW_NOTICE, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, GUARD, HAPPENING_EVERY, HAPPENING_TIME,
   HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
   MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
-  TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD,
+  TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS,
 } from './config';
 import { createState, makeGnome, randomTrait } from './state';
 import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
@@ -26,6 +26,24 @@ export const nodeReachable = (s: GameState, id: NodeId) => {
   return parent === null || s.tree[parent] > 0;
 };
 export const nodeMaxed = (s: GameState, id: NodeId) => s.tree[id] >= TREE[id].max;
+
+/**
+ * Próximo objetivo (G3), siempre a la vista en la barra de arriba: la mejora más barata del árbol que ya se puede
+ * comprar o, con el árbol completo, la siguiente semilla dorada de la temporada.
+ */
+export type Goal =
+  | { kind: 'node'; id: NodeId; have: number; need: number }
+  | { kind: 'seed'; seeds: number; have: number; need: number };
+export function nextGoal(s: GameState): Goal {
+  let best: NodeId | null = null;
+  for (const id of NODE_IDS) {
+    if (nodeMaxed(s, id) || !nodeReachable(s, id)) continue;
+    if (best === null || nodeCost(s, id) < nodeCost(s, best)) best = id;
+  }
+  if (best) return { kind: 'node', id: best, have: s.coins, need: nodeCost(s, best) };
+  const seeds = seasonSeeds(s) + 1;
+  return { kind: 'seed', seeds, have: s.totalEarned, need: seedsCoinsNeeded(seeds) };
+}
 
 export function buyNode(s: GameState, id: NodeId): boolean {
   if (nodeMaxed(s, id) || !nodeReachable(s, id)) return false;
@@ -57,13 +75,27 @@ export const jobUnlocked = (s: GameState, j: JobId) => {
 };
 export const walkSpeed = (s: GameState) => BASE_SPEED * (1 + 0.2 * s.tree.botas);
 export const workMult = (s: GameState) => Math.max(0.3, 1 - 0.18 * s.tree.cafe);
-/** velocidad de un gnomo concreto: la del huerto con su rasgo y, si es legendario, un poco más (el guardián, con silbato) */
+/**
+ * Ventaja de zona (G1): los recolectores, sembradores y regadores de un grupo con zona «se conocen el terreno»
+ * y van más rápido en todo su ciclo (ir, trabajar y volver). Cuanto más pequeña es la zona frente al bancal abierto,
+ * más ventaja; una zona de todo el bancal no da nada.
+ */
+export function turfBonus(s: GameState, g: Gnome): number {
+  if (g.job !== 'recolector' && g.job !== 'sembrador' && g.job !== 'regador') return 0;
+  const zone = groupOf(s, g).zone;
+  if (!zone) return 0;
+  const f = fieldSize(s);
+  const cols = Math.max(0, Math.min(zone.c1, f.cols - 1) - zone.c0 + 1);
+  const rows = Math.max(0, Math.min(zone.r1, f.rows - 1) - zone.r0 + 1);
+  return ZONE_BONUS * Math.max(0, 1 - (cols * rows) / (f.cols * f.rows));
+}
+/** velocidad de un gnomo concreto: la del huerto con su rasgo, si es legendario, en su zona y (el guardián) con silbato */
 export const gnomeWalkSpeed = (s: GameState, g: Gnome) =>
   walkSpeed(s) * (TRAIT_WALK[g.trait] ?? 1) * (g.legendary ? LEGENDARY.mult : 1)
-  * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1);
+  * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1) * (1 + turfBonus(s, g));
 /** multiplicador del tiempo de trabajo de un gnomo concreto (menos = más rápido) */
 export const gnomeWorkMult = (s: GameState, g: Gnome) =>
-  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1);
+  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g));
 export const capacity = (s: GameState) => 1 + s.tree.saco;
 export const basketMax = (s: GameState) => BASKET.base + BASKET.perLevel * s.tree.cesta;
 /** segundos por fase con el abono (y el abono dorado), a velocidad normal (ver growRate) */
@@ -302,12 +334,20 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
   const p = s.plots[id];
   if (!p || !isOpen(s, p)) return null;
   if (p.stage === RIPE) {
-    const v = cropValue(s, p.crop);
+    const golden = p.golden;
+    const v = cropValue(s, p.crop) * (golden ? GOLDEN.mult : 1);
     s.coins += v;
     s.totalEarned += v;
     const o = plotOrigin(p);
-    s.events.push({ type: 'coins', x: o.x + 9, y: o.y + 2, amount: Math.round(v) });
-    if (s.manualHarvests++ % 5 === 0) log(s, LOG.manual(CULTIVOS[p.crop].uno));
+    const manual = s.manualHarvests++ % 5 === 0;
+    if (golden) {
+      p.golden = false;
+      s.events.push({ type: 'golden', crop: p.crop, x: o.x + 9, y: o.y + 6, amount: Math.round(v) });
+      log(s, LOG.doradaMano(CULTIVOS[p.crop].uno, Math.round(v)));
+    } else {
+      s.events.push({ type: 'coins', x: o.x + 9, y: o.y + 2, amount: Math.round(v) });
+      if (manual) log(s, LOG.manual(CULTIVOS[p.crop].uno));
+    }
     p.stage = -1;
     p.t = 0;
     p.res = null;
@@ -363,6 +403,7 @@ export function tick(s: GameState, dt: number, rng: Rng) {
       p.t = 0;
       p.wet = 0;
       org.ripened++;
+      p.golden = rng() < GOLDEN.chance;
     }
   }
   for (const g of s.gnomes) {
@@ -382,6 +423,7 @@ export function tick(s: GameState, dt: number, rng: Rng) {
 
 function rot(s: GameState, p: Plot, rng: Rng) {
   p.stage = ROTTEN;
+  p.golden = false;
   p.t = 0;
   s.rotted++;
   orgOf(s).lost++;
@@ -974,14 +1016,25 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
     // el jugador puede haberla recogido mientras el gnomo estaba agachado
     if (p.stage !== RIPE) return think(g);
     const crop = p.crop;
+    const golden = p.golden;
     p.stage = -1;
     p.t = 0;
+    p.golden = false;
     g.stats.harvests++;
     g.stats.tasks++;
     const o = plotOrigin(p);
     s.events.push({ type: 'harvest', gnome: g.id, crop, x: o.x + 9, y: o.y + 9 });
-    // el glotón se come alguna zanahoria recién recogida
-    if (g.trait === 'gloton' && crop === 'zanahoria' && rng() < LIFE.glutton) {
+    if (golden) {
+      // lo dorado se cobra en el acto: lo que vale de más; el cultivo normal sigue al saco
+      const extra = cropValue(s, crop) * (GOLDEN.mult - 1);
+      s.coins += extra;
+      s.totalEarned += extra;
+      g.stats.value += extra;
+      s.events.push({ type: 'golden', crop, x: o.x + 9, y: o.y + 6, amount: Math.round(extra) });
+      say(g, 'heart', 1.5);
+      log(s, LOG.dorada(g.name, CULTIVOS[crop].uno, Math.round(extra)));
+    } else if (g.trait === 'gloton' && crop === 'zanahoria' && rng() < LIFE.glutton) {
+      // el glotón se come alguna zanahoria recién recogida (las doradas, no: se las queda mirando)
       say(g, 'yum', Infinity);
       moment(s, 'comer', g.x, g.y);
       if (rng() < 0.4) log(s, LOG.comer(g.name));

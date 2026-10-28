@@ -33,6 +33,15 @@ export const UI = {
   ahora: 'Ahora',
   borrar: 'Borrar partida',
   borrarSeguro: '¿Seguro? Pulsa otra vez',
+  // próximo objetivo (G3) y sonido (G2)
+  proximo: 'Próximo',
+  proximoAyuda: 'Lo siguiente que puedes conseguir. Pulsa para abrir el árbol de mejoras.',
+  proximoSemilla: (n: number) => (n === 1 ? 'La primera semilla dorada' : `Semilla dorada n.º ${n}`),
+  proximoSemillaAyuda: 'El árbol está completo: cuanto más ganes esta temporada, más semillas doradas te llevarás. Pulsa para ver la estatua.',
+  listo: '¡Ya puedes!',
+  sonido: 'Sonido',
+  sonidoOn: 'Quitar el sonido',
+  sonidoOff: 'Poner el sonido',
 };
 
 /** Avisos de guardado y de errores: se quedan hasta que se resuelven. */
@@ -197,6 +206,8 @@ export const LOG = {
   zonaTodo: (g: string) => `«${g}» vuelve a trabajar en todo el bancal. Han arrancado los palitos.`,
   grupoBorrado: (a: string, b: string) => `«${a}» se disuelve. Sus miembros vuelven a «${b}» con la cabeza gacha.`,
   podrido: (uno: string) => `Se ha echado a perder ${uno}. Huele a reproche.`,
+  dorada: (n: string, uno: string, monedas: number) => `¡Cosecha dorada! ${n} ha recogido ${uno} que brilla como el sol: +${monedas} monedas. Dice que ya lo sabía.`,
+  doradaMano: (uno: string, monedas: number) => `¡Cosecha dorada! Has recogido ${uno} que brilla como el sol: +${monedas} monedas. Los gnomos se quitan el gorro.`,
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
   primeraCorona: (n: string, oficio: string) => `${n} es el primer «mejor ${oficio} del mes». Nadie sabe quién decide esto, pero ya lleva corona.`,
   corona: (nuevo: string, viejo: string, oficio: string) => `${nuevo} le quita a ${viejo} la corona de mejor ${oficio}. Dice que no le importa, pero no se la quita ni para dormir.`,

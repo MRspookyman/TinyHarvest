@@ -60,6 +60,8 @@ export interface Plot {
   wet: number;
   /** id del regador que va a regarla, o null (aparte de `res`, que es para recoger y sembrar) */
   wres: number | null;
+  /** cosecha dorada (G4): madura brillando y vale GOLDEN.mult veces más; se pierde si se echa a perder */
+  golden: boolean;
 }
 
 /** Rectángulo de parcelas del bancal, con los bordes incluidos (columnas c0..c1, filas r0..r1). */
@@ -174,7 +176,9 @@ export type SimEvent =
   /** un regador acaba de regar una parcela: salpicadura de agua */
   | { type: 'water'; plot: number }
   /** empieza una temporada nueva (llega en los eventos del estado que devuelve endSeason) */
-  | { type: 'season'; season: number };
+  | { type: 'season'; season: number }
+  /** se ha recogido una cosecha dorada (G4): destello y monedas de más */
+  | { type: 'golden'; crop: CropId; x: number; y: number; amount: number };
 
 /**
  * Multiplicador de organización (B6): premia una cadena de trabajo que funciona. Se calcula sobre una ventana

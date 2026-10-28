@@ -285,3 +285,14 @@ export const LIFE = {
   bumpNervioso: 0.3,
   greet: 1,
 } as const;
+
+// ---------- Enganche (iteración 10) ----------
+
+/**
+ * Zonas (G1): los gnomos que van a una parcela de la zona de su grupo «se conocen el terreno»: andan y trabajan
+ * hasta un ZONE_BONUS más rápido. La ventaja crece cuanto más pequeña es la zona (una zona de todo el bancal no da nada).
+ * Ajustado con `npm run balance` (apartado j).
+ */
+export const ZONE_BONUS = 0.4;
+/** Cosecha dorada (G4): al madurar, una planta de cada tantas sale dorada y vale `mult` veces más. */
+export const GOLDEN = { chance: 0.008, mult: 10 } as const;

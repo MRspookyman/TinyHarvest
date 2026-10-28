@@ -536,6 +536,13 @@ export class SceneView {
     return { x: this.world.x + x * this.scale, y: this.world.y + y * this.scale };
   }
 
+  /** Un punto del mundo en coordenadas de la página (para efectos HTML encima del lienzo). */
+  pageOf(x: number, y: number) {
+    const r = this.app.canvas.getBoundingClientRect();
+    const p = this.toScreen(x, y);
+    return { x: r.left + (p.x * r.width) / this.app.screen.width, y: r.top + (p.y * r.height) / this.app.screen.height };
+  }
+
   private syncPlants(s: GameState) {
     const soil = this.soil;
     soil.clear();
@@ -577,6 +584,9 @@ export class SceneView {
       sp.scale.x = (p.id * 7) % 3 === 0 ? -1 : 1;
       const bounce = ripe && !wilting && Math.sin(this.time * 5 + p.id * 1.7) > 0.6 ? -1 : 0;
       sp.position.set(o.x + 9, o.y + 2 + bounce);
+      // cosecha dorada (G4): la planta madura brilla en oro y suelta destellos a menudo
+      const golden = ripe && p.golden;
+      sp.tint = golden ? 0xffd75e : 0xffffff;
       sparkle.zIndex = o.y + 16;
       if (p.stage === ROTTEN) {
         // una mosca da vueltas sobre lo echado a perder
@@ -584,10 +594,11 @@ export class SceneView {
         sparkle.texture = this.atlas.fly;
         sparkle.position.set(Math.round(o.x + 8 + Math.cos(a) * 5), Math.round(o.y + 3 + Math.sin(a * 1.7) * 2));
         sparkle.visible = true;
-      } else if (ripe && !wilting) {
+      } else if (ripe && (golden || !wilting)) {
         sparkle.texture = this.atlas.sparkle;
-        sparkle.position.set(o.x + 12, o.y + 1);
-        sparkle.visible = Math.sin(this.time * 2.3 + p.id * 2.1) > 0.93;
+        const k = golden ? Math.floor(this.time * 4 + p.id) % 3 : 0;
+        sparkle.position.set(o.x + 12 - k * 4, o.y + 1 + (k % 2) * 4);
+        sparkle.visible = Math.sin(this.time * (golden ? 9 : 2.3) + p.id * 2.1) > (golden ? 0.2 : 0.93);
       }
     }
   }
@@ -848,20 +859,21 @@ export class SceneView {
     this.particles.push({ sprite, x, y, vx, vy, g, t: 0, life, flutter });
   }
 
-  /** Atiende todos los eventos de la simulación (y los vacía) y anima lo que dejan en pantalla. */
+  /** Atiende los eventos de la simulación y anima lo que dejan en pantalla (main.ts los vacía después). */
   private syncEvents(s: GameState, dt: number) {
     for (const e of s.events) {
       switch (e.type) {
-        case 'coins': {
-          const text = new Text({
-            text: `+${e.amount}`,
-            style: { fontFamily: FONT, fontSize: 8 * this.scale, fontWeight: '600', fill: '#ffcd75', stroke: { color: '#1a1c2c', width: this.scale * 1.2 } },
-          });
-          text.anchor.set(0.5);
-          this.overlay.addChild(text);
-          this.floats.push({ text, x: e.x, y: e.y, t: 0 });
+        case 'coins':
+          this.addFloat(`+${e.amount}`, e.x, e.y, '#ffcd75', 8);
           break;
-        }
+        case 'golden':
+          // cosecha dorada: corona de destellos y la cifra grande en oro
+          for (let i = 0; i < 12; i++) {
+            const ang = (i / 12) * Math.PI * 2;
+            this.addParticle(this.atlas.sparkle, e.x, e.y, Math.cos(ang) * 30, Math.sin(ang) * 30 - 10, 20, 0.9);
+          }
+          this.addFloat(`+${e.amount}`, e.x, e.y - 6, '#fff3b0', 12);
+          break;
         case 'harvest': {
           const sprite = new Sprite(this.atlas.items[e.crop]);
           sprite.anchor.set(0.5, 1);
@@ -899,7 +911,6 @@ export class SceneView {
         }
       }
     }
-    s.events.length = 0;
 
     for (const f of this.floats) {
       f.t += dt;
@@ -942,6 +953,16 @@ export class SceneView {
     const gone = this.particles.filter(p => p.t >= p.life);
     for (const p of gone) p.sprite.destroy();
     if (gone.length) this.particles = this.particles.filter(p => p.t < p.life);
+  }
+
+  private addFloat(label: string, x: number, y: number, fill: string, size: number) {
+    const text = new Text({
+      text: label,
+      style: { fontFamily: FONT, fontSize: size * this.scale, fontWeight: '600', fill, stroke: { color: '#1a1c2c', width: this.scale * 1.2 } },
+    });
+    text.anchor.set(0.5);
+    this.overlay.addChild(text);
+    this.floats.push({ text, x, y, t: 0 });
   }
 
   /** Puerta del granero abierta un momento tras cada entrega, y el montón que se va vaciando solo. */
