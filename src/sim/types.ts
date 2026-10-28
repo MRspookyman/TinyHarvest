@@ -235,6 +235,10 @@ export interface GameState {
   house: number;
   /** se recalcula en cada tick; no se guarda */
   org: Organization;
+  /** segundos jugados en esta temporada (solo cuentan con el juego abierto) */
+  seasonTime: number;
+  /** lo permanente: sobrevive al fin de temporada */
+  prestige: Prestige;
   /** id del gnomo con la corona de cada oficio (el que más tareas lleva), o null */
   crowns: Record<JobId, number | null>;
   critters: Critter[];
@@ -246,4 +250,61 @@ export interface GameState {
   log: string[];
   /** salida para el render; no se guarda */
   events: SimEvent[];
+}
+
+// ---------- Prestigio (iteración 8) ----------
+
+/**
+ * Talentos del árbol dorado: se compran con semillas doradas y duran para siempre.
+ * - abonoDorado: los cultivos crecen un poco más rápido (por nivel).
+ * - mercadoDorado: todo se vende un poco más caro (por nivel).
+ * - herencia: empiezas cada temporada con monedas (por nivel).
+ * - experiencia: empiezas cada temporada con gnomos ya contratados gratis (recolectores y sembradores, por nivel).
+ * - contrato: contratar sube de precio más despacio (por nivel).
+ * - bancalHeredado: empiezas con el bancal ya ampliado (por nivel).
+ * - casaHeredada: empiezas con la casa ya ampliada (por nivel).
+ * - semillasConocidas: empiezas con cultivos ya desbloqueados (nivel n = los n primeros tras la zanahoria).
+ * - veterano: los gnomos coronados al acabar la temporada vuelven en la siguiente con su nombre y rasgo (por nivel, cuántos).
+ * - suerte: más probabilidad de gnomo legendario (por nivel).
+ */
+export type TalentId =
+  | 'abonoDorado' | 'mercadoDorado' | 'herencia' | 'experiencia' | 'contrato'
+  | 'bancalHeredado' | 'casaHeredada' | 'semillasConocidas' | 'veterano' | 'suerte';
+
+/** Un gnomo que vuelve la temporada siguiente gracias al talento «veterano». */
+export interface Veteran {
+  name: string;
+  job: JobId;
+  trait: TraitId;
+  legendary: boolean;
+  /** cuántas temporadas lleva en el huerto (1 = la primera vez que vuelve) */
+  seasons: number;
+}
+
+/** Una temporada terminada, para el salón de la fama. */
+export interface SeasonRecord {
+  season: number;
+  /** monedas ganadas en la temporada */
+  earned: number;
+  /** segundos jugados */
+  seconds: number;
+  /** semillas doradas que dio */
+  seeds: number;
+  /** los coronados al acabar: el mejor de cada oficio */
+  crowned: { job: JobId; name: string; tasks: number; legendary: boolean }[];
+}
+
+export interface Prestige {
+  /** temporada en curso (la primera es la 1) */
+  season: number;
+  /** semillas doradas sin gastar */
+  goldenSeeds: number;
+  /** nivel de cada talento */
+  talents: Record<TalentId, number>;
+  /** temporadas terminadas, la más reciente primero */
+  history: SeasonRecord[];
+  /** gnomos que volverán (o han vuelto) por el talento «veterano» */
+  veterans: Veteran[];
+  /** monedas ganadas en todas las temporadas */
+  lifetimeEarned: number;
 }

@@ -23,6 +23,11 @@ export const IDLE_AREA = { x0: 50, x1: 104, y0: 128, y1: 146 } as const;
  * el regador se pone en (x + w/2, y + h + 2) para llenar la regadera. Solo se dibuja con «regadores» comprado.
  */
 export const WELL = { x: 98, y: 28, w: 12, h: 16 } as const;
+/**
+ * Estatua del Gnomo Dorado (iteración 8): a la derecha del bancal. Se pulsa para abrir la ventana «Temporada»
+ * (fin de temporada, árbol dorado de talentos y salón de la fama). Crece con las temporadas jugadas.
+ */
+export const STATUE = { x: 280, y: 96, w: 16, h: 28 } as const;
 
 export const STAGES = 5;
 export const RIPE = STAGES - 1;
