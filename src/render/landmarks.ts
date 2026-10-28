@@ -38,11 +38,27 @@ export function drawBarn(market = 0, guild = false, gilded = false, contract = f
   }
   for (let k = 0; k < 13; k++) {
     rect(ctx, bx + 24 - 2 * k, by + k, 4 + 4 * k, 1, k === 0 ? '#1a1c2c' : '#333c57');
+    if (k > 0) {
+      rect(ctx, bx + 24 - 2 * k, by + k, 2 * k + 1, 1, '#566c86');
+    }
     rect(ctx, bx + 23 - 2 * k, by + k, 1, 1, '#1a1c2c');
     rect(ctx, bx + 28 + 2 * k, by + k, 1, 1, '#1a1c2c');
   }
   rect(ctx, bx + 2, by + 13, 48, 32, '#b13e53');
-  for (let x = bx + 5; x < bx + 50; x += 4) rect(ctx, x, by + 13, 1, 32, '#93324a');
+  // Listones agrupados, con la esquina derecha en sombra.
+  for (let x = bx + 5; x < bx + 50; x += 4) {
+    rect(ctx, x, by + 15, 1, 28, '#93324a');
+    if ((x - bx - 5) % 12 === 0) rect(ctx, x - 2, by + 16, 1, 26, '#e8687d');
+  }
+  rect(ctx, bx + 44, by + 13, 6, 32, '#93324a');
+  rect(ctx, bx + 48, by + 15, 2, 28, '#5d275d');
+  rect(ctx, bx + 2, by + 14, 1, 29, '#e8687d');
+  // El alero proyecta una sombra continua, sin textura de tejas.
+  rect(ctx, bx + 1, by + 13, 50, 1, '#1a1c2c');
+  rect(ctx, bx + 3, by + 14, 47, 2, '#5d275d');
+  rect(ctx, bx + 2, by + 43, 48, 2, '#566c86');
+  rect(ctx, bx + 3, by + 43, 39, 1, '#94b0c2');
+  rect(ctx, bx + 44, by + 43, 6, 2, '#333c57');
   rect(ctx, bx + 1, by + 13, 1, 32, '#1a1c2c');
   rect(ctx, bx + 50, by + 13, 1, 32, '#1a1c2c');
   rect(ctx, bx + 1, by + 45, 50, 1, '#1a1c2c');
@@ -51,8 +67,15 @@ export function drawBarn(market = 0, guild = false, gilded = false, contract = f
   rect(ctx, bx + 23, by + 19, 6, 2, '#ffcd75');
   rect(ctx, bx + 25, by + 18, 2, 1, '#ffcd75');
   if (gilded) rect(ctx, bx + 23, by + 16, 6, 2, '#1a1c2c');
+  rect(ctx, bx + 23, by + 16, 1, 3, '#333c57');
+  rect(ctx, bx + 22, by + 21, 8, 1, gilded ? '#ffcd75' : '#e8687d');
+  rect(ctx, bx + 23, by + 22, 8, 1, '#93324a');
   rect(ctx, bx + 17, by + 27, 18, 18, '#1a1c2c');
   rect(ctx, bx + 18, by + 28, 16, 17, '#5d275d');
+  rect(ctx, bx + 18, by + 28, 16, 2, '#333c57');
+  rect(ctx, bx + 26, by + 30, 8, 15, '#333c57');
+  rect(ctx, bx + 25, by + 30, 1, 15, '#1a1c2c');
+  rect(ctx, bx + 17, by + 26, 18, 1, '#e8687d');
   for (let i = 0; i < 16; i++) {
     const y = by + 28 + Math.floor((i * 17) / 16);
     rect(ctx, bx + 18 + i, y, 1, 1, '#f4f4f4');
@@ -157,6 +180,7 @@ export function drawBoard(groups = 1, photo = false): HTMLCanvasElement {
     rect(ctx, x, top ? top - 1 : 14, 2, h - (top ? top - 1 : 14), '#5a3a2a');
     rect(ctx, x - 1, top + 14, 1, h - top - 14, '#1a1c2c');
     rect(ctx, x + 2, top + 14, 1, h - top - 14, '#1a1c2c');
+    rect(ctx, x, top + 16, 1, h - top - 17, '#a8723f');
   }
   rect(ctx, 1, h - 1, w - 2, 1, '#2e9a58');
   // tejadillo rojo, como el del granero
@@ -175,8 +199,11 @@ export function drawBoard(groups = 1, photo = false): HTMLCanvasElement {
   rect(ctx, 1, top + 1, w - 2, 14, '#a8723f');
   rect(ctx, 1, top + 1, w - 2, 1, '#c8925f');
   for (const y of [5, 10]) rect(ctx, 1, top + y, w - 2, 1, '#8b5a3c');
+  rect(ctx, w - 3, top + 2, 2, 12, '#8b5a3c');
+  rect(ctx, 1, top + 14, w - 2, 1, '#5a3a2a');
   // hojas con chinchetas
   for (const [x, y, sw, sh, pin] of BOARD_SHEETS.slice(0, Math.max(1, groups))) {
+    rect(ctx, x + 1, top + y + 1, sw, sh, '#5a3a2a');
     rect(ctx, x, top + y, sw, sh, '#f4f4f4');
     for (let ly = y + 2; ly < y + sh - 1; ly += 2) rect(ctx, x + 1, top + ly, sw - 2, 1, '#94b0c2');
     rect(ctx, x + Math.floor(sw / 2), top + y, 1, 1, pin);
@@ -229,7 +256,9 @@ export function drawOldTree(stage = 0): HTMLCanvasElement {
       rect(ctx, x, y, 1, 1, edge ? '#1a1c2c' : x >= 21 ? '#5a3a2a' : '#8b5a3c');
     }
   }
-  for (let y = 30; y < h - 4; y += 3) rect(ctx, 17 + (y % 2), y, 1, 2, '#5a3a2a');
+  rect(ctx, 16, 30, 1, h - 34, '#c8925f');
+  rect(ctx, 20, 30, 1, 4, '#5a3a2a');
+  rect(ctx, 18, h - 6, 2, 3, '#5a3a2a');
   // hueco con farolillo
   rect(ctx, 18, 33, 4, 6, '#1a1c2c');
   rect(ctx, 17, 34, 1, 4, '#1a1c2c');
@@ -243,13 +272,16 @@ export function drawOldTree(stage = 0): HTMLCanvasElement {
       const edge = !inCanopy(x - 1, y) || !inCanopy(x + 1, y) || !inCanopy(x, y - 1) || !inCanopy(x, y + 1);
       let color = '#257179';
       if (edge) color = '#1c3b33';
-      else if (x + y < 20) color = '#38b764';
-      else if (y > 24) color = '#1f5e57';
+      else if (((x - 14) / 13) ** 2 + ((y - 12) / 10) ** 2 < 1) color = '#38b764';
+      else if (y > 24 || x > 30) color = '#1f5e57';
+      else if (((x - 7) / 7) ** 2 + ((y - 20) / 5) ** 2 < 1) color = '#2e9a58';
       rect(ctx, x, y, 1, 1, color);
     }
   }
-  const speckles: [number, number][] = [[10, 9], [14, 5], [22, 4], [7, 15], [27, 9], [12, 19], [33, 17], [19, 12]];
-  for (const [x, y] of speckles) if (inCanopy(x, y)) rect(ctx, x, y, 1, 1, '#a7f070');
+  // Pequeñas masas de luz agrupadas en lugar de píxeles dispersos.
+  for (const [x, y, width] of [[12, 7, 4], [9, 9, 3], [5, 19, 3]] as const) {
+    for (let dx = 0; dx < width; dx++) if (inCanopy(x + dx, y)) rect(ctx, x + dx, y, 1, 1, '#a7f070');
+  }
   // flores blancas entre las hojas
   if (stage >= 2) {
     for (const [x, y] of [[11, 6], [26, 6], [4, 18], [35, 19], [20, 9], [30, 15], [8, 12]] as const) {
@@ -326,6 +358,7 @@ export function drawHouse(level: number, golden = false): HTMLCanvasElement {
     rect(ctx, chx, chTop, 4, 7, '#1a1c2c');
     rect(ctx, chx + 1, chTop + 1, 2, 6, '#8b5a3c');
     rect(ctx, chx + 1, chTop + 3, 2, 1, '#5a3a2a');
+    rect(ctx, chx + 1, chTop + 1, 1, 2, '#c8925f');
     rect(ctx, chx + 2, chTop - 2, 1, 1, '#94b0c2');
     rect(ctx, chx + 3, chTop - 3, 1, 1, '#94b0c2');
   }
@@ -342,6 +375,10 @@ export function drawHouse(level: number, golden = false): HTMLCanvasElement {
   rect(ctx, wx0, wallTop, wallW, wallH, '#1a1c2c');
   rect(ctx, wx0 + 1, wallTop, wallW - 2, wallH - 1, '#f4f4f4');
   rect(ctx, wx1 - 2, wallTop, 2, wallH - 1, '#94b0c2');
+  rect(ctx, wx0 + 1, wallTop + 1, wallW - 2, 2, '#94b0c2');
+  rect(ctx, wx1 - 3, wallTop + 3, 1, wallH - 4, '#94b0c2');
+  rect(ctx, wx0 + 1, h - 3, wallW - 2, 2, '#94b0c2');
+  rect(ctx, wx1 - 2, h - 3, 2, 2, '#566c86');
   rect(ctx, wx0 - 1, h - 1, wallW + 2, 1, '#2e9a58');
   // puerta redondeada con pomo
   const doorH = tier === 0 ? 7 : 8;
@@ -350,6 +387,8 @@ export function drawHouse(level: number, golden = false): HTMLCanvasElement {
   rect(ctx, dx, dy + 1, 6, doorH, '#1a1c2c');
   rect(ctx, dx + 1, dy + 1, 4, doorH - 1, '#8b5a3c');
   rect(ctx, dx + 3, dy + 1, 2, doorH - 1, '#5a3a2a');
+  rect(ctx, dx + 1, dy + 1, 4, 1, '#5a3a2a');
+  rect(ctx, dx + 1, dy + 2, 1, doorH - 2, '#a8723f');
   rect(ctx, dx + 3, dy + Math.floor(doorH / 2) + 1, 1, 1, '#ffcd75');
   if (golden) {
     rect(ctx, dx + 3, dy + Math.floor(doorH / 2), 2, 2, '#ffcd75');
@@ -375,6 +414,8 @@ export function drawHouse(level: number, golden = false): HTMLCanvasElement {
   for (const [x, y] of windows) {
     rect(ctx, x, y, 4, 4, '#1a1c2c');
     rect(ctx, x + 1, y + 1, 2, 2, '#ffcd75');
+    rect(ctx, x + 2, y + 2, 1, 1, '#ef7d57');
+    rect(ctx, x, y + 4, 4, 1, '#94b0c2');
   }
 
   // sombrero rojo con motas
@@ -389,8 +430,8 @@ export function drawHouse(level: number, golden = false): HTMLCanvasElement {
       const edge = !inCap(x - 1, y) || !inCap(x + 1, y) || !inCap(x, y - 1) || y === capTop + capH - 1;
       let color = '#b13e53';
       if (edge) color = '#1a1c2c';
-      else if (y === capTop + capH - 2) color = '#93324a';
-      else if (x < cx - 2 && y < capTop + 3) color = '#e8687d';
+      else if (y >= capTop + capH - 3 || x > cx + capW / 4) color = '#93324a';
+      else if (((x - (cx - capW / 6)) / (capW / 3)) ** 2 + ((y - (capTop + capH / 3)) / (capH / 2)) ** 2 < 1) color = '#e8687d';
       rect(ctx, x, y, 1, 1, color);
     }
   }
@@ -430,7 +471,7 @@ export function drawStatue(tier: number): HTMLCanvasElement {
     rect(ctx, x, y, bw, bh, '#1a1c2c');
     rect(ctx, x + 1, y + 1, bw - 2, bh - 2, '#94b0c2');
     rect(ctx, x + bw - 2, y + 1, 1, bh - 2, '#566c86');
-    if (bh > 3) rect(ctx, x + 1, y + 1, bw - 3, 1, '#f4f4f4');
+    rect(ctx, x + 1, y + 1, bw - 3, 1, '#f4f4f4');
   };
   if (tier === 0) {
     block(2, top + 2, 16, 3);

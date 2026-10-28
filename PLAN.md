@@ -67,13 +67,17 @@
 
 **Assets (de momento) ✅:** sprites dibujados por código o un pack gratuito (p. ej. Kenney, CC0). Para la demo empiezo con sprites por código y cambiamos si encontramos un pack que encaje. El arte propio queda para más adelante.
 
+**Prueba de asset generado descartada:** se mantienen los gnomos originales y sus animaciones por código. La propuesta de GPT Image 2 queda en `estilo/gnomo-prueba.webp` solo como referencia, sin uso en el juego.
+
 **Estilo cerrado ✅** (referencia: [estilo/gnomo.html](estilo/gnomo.html))
 - **Gnomos a 16×16**, ampliados ×3–4 en pantalla, con contorno oscuro `#1a1c2c`. El gorro les tapa los ojos, tienen una nariz enorme, barba blanca, túnica verde azulada y botas de 2 px. Andan a saltitos.
 - **Color del gorro por oficio:** rojo (recolector), lima (sembrador), marrón (porteador), azul (regador), dorado (capataz), gris (guardián).
 - **Animaciones:** quieto, andar (4 fotogramas), recoger (agacharse), cargar saco, protestar (bocadillo "!!") y siesta (Zz).
 - **Huerto:** un **bancal rectangular continuo**, con surcos de lado a lado, borde de tierra oscura y hierba que invade los bordes. Crece añadiendo filas o columnas.
-- **Plantas:** con contorno verde oscuro y 4 fases (semilla, brote, joven, madura). El tomate crece con un palo de tutor. **Pendiente: hacerlas más detalladas** (más fases y más detalle en la planta madura).
+- **Plantas:** sprites de 16×14 con contorno, sombreado y dibujo propio por cultivo en las cinco fases: semilla, brote, joven, creciendo y madura. Frutos, espigas, flores y zarcillos más detallados; aviso amarillento antes de estropearse y moho gris al echarse a perder. Ráfagas ocasionales desplazan 1 px las seis filas superiores de las plantas vivas, sin mover el montículo; semillas y plantas echadas a perder no se mecen.
 - **Profundidad:** plantas y gnomos se ordenan por fila, así que un gnomo puede quedar delante o detrás de una planta.
+- **Terreno y edificios:** hierba de textura suave con matas espaciadas, caminos de borde escalonado y sombras de contacto pixeladas. Luz desde arriba a la izquierda en tejados, paredes, troncos y pedestales; las mejoras conservan sus detalles visibles.
+- **Interfaz:** selección de herramientas marcada, semillas bloqueadas legibles y estados del árbol con bordes, símbolos y texto además del color. En pantallas estrechas, la barra se envuelve, el árbol permite desplazamiento horizontal y la ficha de mejora pasa debajo; el lienzo se reajusta cuando cambia el espacio disponible.
 
 ---
 
@@ -591,7 +595,7 @@ El mejor cultivo según la plantilla (monedas/s, bancal 9×6 de un solo cultivo)
 |---|---|---|---|---|---|
 | F1 | **Repositorio git** | S | Alto (seguridad) | — | ✅ It4 |
 | F2 | **Migrar partidas guardadas** (lista de migraciones desde la versión 3) | S | Medio | — | ✅ It6 |
-| F3 | **Plantas más detalladas** (pendiente desde la sección 3) | M | Medio | — | Más adelante |
+| F3 | **Plantas más detalladas y balanceo suave** | M | Medio | — | Hecho (2026-10-28) |
 | F4 | **Sonido** | M | Medio | — | Más adelante |
 | F5 | **Pequeño tutorial** al empezar (seis pistas que avanzan al hacer la cosa) | S–M | Medio | — | ✅ It8 |
 | F6 | **Táctil y móvil** | M | Bajo por ahora | — | Más adelante |
@@ -604,7 +608,7 @@ flowchart LR
   I5 --> I6["It6 · Vida en el huerto<br/>D6 D7 D8 D9 D10 D1 D2 D3 D4 F2"]
   I6 --> I7["It7 · Contenido<br/>C1 C2 C3 B6"]
   I7 --> I8["It8 · Prestigio<br/>E1 F5"]
-  I8 --> L["Después<br/>A5 C4 C5 E2 F3 F4 F6"]
+  I8 --> L["Después<br/>A5 C4 C5 E2 F4 F6"]
 ```
 
 | Iteración | Objetivo | Se da por buena cuando… |
@@ -626,7 +630,7 @@ flowchart LR
 ## ❓ Preguntas abiertas
 
 - [ ] Cuando el autor pueda jugar: ¿es entretenido dejarlo un minuto y solo mirar? (último criterio de la demo)
-- [ ] ¿Qué viene después de la iteración 8? Lo que queda en el backlog es «más adelante»: zonas por grupo (A5), calabaza 2×2 (C4), molino y mercado (C5), día y noche (D11), biomas (E2), plantas más detalladas (F3), sonido (F4), táctil y móvil (F6). Falta decidir el orden, y si antes se publica la demo en itch.io.
+- [ ] ¿Qué viene después de la iteración 8? Lo que queda en el backlog es «más adelante»: zonas por grupo (A5), calabaza 2×2 (C4), molino y mercado (C5), día y noche (D11), biomas (E2), sonido (F4), táctil y móvil (F6). Falta decidir el orden, y si antes se publica la demo en itch.io.
 
 ---
 
@@ -647,7 +651,7 @@ flowchart LR
 | 11 | Primer hito | Demo muy básica (sección 8) para validar la idea |
 | 12 | Resolución | Gnomos 16×16 con contorno oscuro |
 | 13 | Huerto | Bancal rectangular continuo con surcos |
-| 14 | Plantas | Estilo con contorno; hacerlas más detalladas en la demo |
+| 14 | Plantas | Sprites detallados de 16×14 por cultivo y fase, con balanceo suave sin cambiar la simulación |
 | 15 | Hoja de ruta | Opción A: mecánica antes que números (sección 9.2) |
 | 16 | Ranking | Ranking de gnomos en la iteración 4, a petición del autor |
 | 17 | Control de versiones | Repositorio git local desde la iteración 4 |
@@ -659,6 +663,8 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **2026-10-28 · Pulido visual:** terreno menos ruidoso, camino irregular y sombras de contacto; volumen en granero, casas, tablón, árbol y pedestales sin cambiar tamaños ni mejoras. Barra y ventanas más claras, árbol con marcas de estado y etiquetas accesibles, y distribución adaptable a pantallas estrechas. Corregido el desajuste del lienzo cuando la barra superior cambia de altura. Sin cambios de mecánicas, equilibrio ni guardados.
+- **2026-10-28 · F3:** redibujadas las cinco fases de los seis cultivos con semillas propias, hojas sombreadas, frutos y espigas. Se conservan los avisos de deterioro y los iconos heredan el nuevo arte. Balanceo ocasional de 1 px mediante texturas precalculadas, con base fija y sin animar semillas ni plantas echadas a perder. Sin cambios de equilibrio, simulación ni partidas guardadas.
 - **v0.14 (2026-10-27):** iteración 8, «prestigio». Estatua del Gnomo Dorado (brilla cuando se puede terminar), fin de temporada con semillas doradas y resumen con confeti, árbol dorado de 10 talentos (cada uno deja huella en el huerto), salón de la fama con los coronados y veteranos que vuelven, semillas y temporada en la barra, y tutorial de seis pistas. Temporadas de 64 → 48 → 39 min según el bot. Con esto se completa la hoja de ruta de la sección 9.2.
 - **v0.13 (2026-10-27):** iteración 7, «contenido». Regador con pozo y riego (tomate y melón con sed), guardián con atalaya contra cuervos y topos, fresa y melón, multiplicador de organización hasta ×1,30 con desplegable en la barra, ficha plegable y cámara que respeta la barra y la ficha. Seis cultivos, cada uno el mejor para alguna plantilla; árbol completo en 64–70 min.
 - **v0.12 (2026-10-27):** iteración 6, «vida en el huerto». Rasgos y legendarios, bocadillos de intención, reacciones entre gnomos, ociosos con gracia, más vida en la cosecha, bichos y sucesos (cuervo, caracol, topo, ranas, sindicato, espantapájaros), ficha del gnomo con cámara que lo sigue, cada mejora visible en el huerto (D12, pedido del autor), medida de la vida en el bot y migración de partidas. Pasa algo distinto cada 0,5–5 s de media y el árbol se completa en 60–68 min.

@@ -1,7 +1,7 @@
 // Sprites del juego, según la hoja de estilo (estilo/gnomo.html).
 import { Texture } from 'pixi.js';
 import { blit, makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
-import { CROP_IDS, GROUP_PALETTE, JOB_IDS } from '../sim/config';
+import { CROP_IDS, GROUP_PALETTE, JOB_IDS, ROTTEN } from '../sim/config';
 import type { BubbleKind, CropId, JobId, Pose } from '../sim/types';
 
 export const BASE: Palette = {
@@ -317,7 +317,7 @@ export const PLANT_PAL: Palette = {
   x: '#5d5a4e', z: '#8b8466', q: '#3f3a32',
 };
 
-// El trigo y la calabaza se generan con un pequeño lienzo de caracteres en vez de dibujarse a mano.
+// Lienzo de caracteres para los cultivos con guías, hojas y espigas.
 type Grid = string[][];
 const grid = (): Grid => Array.from({ length: 14 }, () => Array<string>(16).fill('.'));
 const put = (g: Grid, x: number, y: number, ch: string) => {
@@ -327,34 +327,45 @@ const stamp = (g: Grid, map: PixelMap, x: number, y: number) =>
   map.forEach((row, r) => [...row].forEach((ch, c) => ch !== '.' && put(g, x + c, y + r, ch)));
 const toMap = (g: Grid): PixelMap => g.map(r => r.join(''));
 const mound = (g: Grid) => {
-  for (let x = 6; x <= 9; x++) put(g, x, 12, 'm');
-  for (let x = 5; x <= 10; x++) put(g, x, 13, 'm');
+  stamp(g, ['......mmmm......', '.....hmmmmh.....'], 0, 12);
 };
+const pad = (start: number, rows: string[]): PixelMap => Array<string>(start).fill('................').concat(rows);
+function seed(a: string, b: string): PixelMap {
+  return pad(11, [`.......${a}${b}.......`, '.....mmhhmm.....', '....hmmmmmmh....']);
+}
 
-function wheat(stage: 2 | 3 | 4): PixelMap {
+function wheat(stage: 1 | 2 | 3 | 4): PixelMap {
   const g = grid();
-  mound(g);
-  const ripe = stage === 4;
-  const heights = stage === 2 ? [3, 4, 3, 4] : stage === 3 ? [7, 8, 7, 8] : [9, 10, 8, 10];
-  [3, 6, 9, 12].forEach((x, i) => {
-    const top = 12 - heights[i];
-    for (let y = top; y <= 12; y++) put(g, x, y, ripe ? 'T' : 'G');
-    if (stage === 2) {
-      put(g, x - 1, top + 1, 'l');
-      return;
+  if (stage === 1) {
+    for (const [x, top] of [[6, 10], [8, 9], [9, 10]]) {
+      for (let y = top; y < 12; y++) put(g, x, y, y === top ? 'l' : 'G');
     }
-    // espiga: verde al crecer, dorada al madurar
-    const [a, b] = ripe ? ['Y', 'U'] : ['l', 'G'];
-    put(g, x, top, a);
-    put(g, x - 1, top + 1, a); put(g, x, top + 1, b); put(g, x + 1, top + 1, a);
-    put(g, x - 1, top + 2, b); put(g, x, top + 2, a); put(g, x + 1, top + 2, b);
-    put(g, x, top + 3, a);
-    put(g, x + (i % 2 ? -1 : 1), top + 6, ripe ? 'U' : 'G');
-  });
+  } else {
+    const ripe = stage === 4;
+    [3, 6, 9, 12].forEach((x, i) => {
+      const top = stage === 2 ? [7, 6, 8, 7][i] : (ripe ? [3, 2, 3, 2] : [4, 3, 4, 3])[i];
+      for (let y = top; y < 12; y++) put(g, x, y, ripe ? 'T' : 'G');
+      put(g, x + (i % 2 ? 1 : -1), stage === 2 ? top + 2 : 9, ripe ? 'U' : 'G');
+      if (stage === 2) {
+        put(g, x, top, 'l');
+        return;
+      }
+      // Las dos espigas pares se abren hacia fuera: centros 3, 5, 9, 13.
+      const ear = ripe ? x + (i === 1 ? -1 : i === 3 ? 1 : 0) : x;
+      const earTop = ripe ? top - (i % 2) : top - 1;
+      for (let y = 0; y < 4; y++) {
+        for (let dx = (y === 0 || y === 3 ? 0 : -1); dx <= (y === 0 || y === 3 ? 0 : 1); dx++) {
+          put(g, ear + dx, earTop + y, (y + dx + 1) % 2 ? (ripe ? 'U' : 'G') : (ripe ? 'Y' : 'l'));
+        }
+      }
+      if (ripe) put(g, ear, earTop - 1, 'Y');
+    });
+  }
+  mound(g);
   return toMap(g);
 }
 
-const LEAF: PixelMap = ['.DD.', 'DlGD', 'DGGD', '.DD.'];
+const LEAF: PixelMap = ['.DD.', 'DlGD', 'DGgD', '.DD.'];
 
 function ellipse(g: Grid, cx: number, cy: number, rx: number, ry: number, fill: string, rib: string, edge: string, ribs: number[]) {
   const inside = (x: number, y: number) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
@@ -367,152 +378,190 @@ function ellipse(g: Grid, cx: number, cy: number, rx: number, ry: number, fill: 
   }
 }
 
-function pumpkin(stage: 2 | 3 | 4): PixelMap {
+function pumpkin(stage: 1 | 2 | 3 | 4): PixelMap {
   const g = grid();
-  mound(g);
-  for (let x = 3; x <= 12; x++) put(g, x, 11, 'g');
-  if (stage === 2) {
+  for (let x = stage === 1 ? 7 : 3; x <= (stage === 1 ? 8 : 12); x++) put(g, x, 11, 'g');
+  if (stage === 1) {
+    stamp(g, LEAF, 4, 8);
+    stamp(g, LEAF, 8, 8);
+  } else if (stage === 2) {
     stamp(g, LEAF, 3, 7);
     stamp(g, LEAF, 9, 6);
   } else if (stage === 3) {
-    stamp(g, LEAF, 1, 5);
-    stamp(g, LEAF, 11, 4);
-    stamp(g, LEAF, 6, 2);
-    ellipse(g, 8, 9.5, 3, 2.2, 'l', 'G', 'D', [0.5]);
+    for (const [x, y] of [[1, 5], [10, 4], [6, 2]]) stamp(g, LEAF, x, y);
+    ellipse(g, 8, 10, 3, 2, 'l', 'G', 'D', [0.5]);
+    put(g, 7, 7, 'g');
+    stamp(g, ['.Y.', 'YYY', '.Y.'], 2, 9);
   } else {
-    stamp(g, LEAF, 0, 4);
-    stamp(g, LEAF, 12, 3);
-    ellipse(g, 8, 8.5, 6, 4, 'C', 'c', 'K', [0.5, 3.5]);
-    put(g, 7, 3, 'g'); put(g, 8, 3, 'g'); put(g, 8, 4, 'g');
+    stamp(g, LEAF, 0, 3);
+    stamp(g, LEAF, 11, 2);
+    ellipse(g, 8, 9, 6, 4, 'C', 'c', 'K', [0.5, 3.5]);
+    stamp(g, ['.GG.', 'G..G', '.gg.'], 6, 2);
+    put(g, 8, 5, 'g');
     put(g, 4, 6, 'Y'); put(g, 5, 6, 'Y'); put(g, 4, 7, 'Y');
   }
+  mound(g);
   return toMap(g);
 }
-const pad = (start: number, rows: string[]) => Array<string>(start).fill('................').concat(rows);
 
-const SEED = pad(11, [
+const CARROT_SPROUT = pad(8, [
+  '.....l....l.....',
+  '.....Gl..lG.....',
+  '......G..g......',
+  '.......Gg.......',
   '......mmmm......',
-  '.....mmhhmm.....',
+  '.....hmmmmh.....',
+]);
+const CARROT_YOUNG = pad(5, [
+  '.......l........',
+  '....l..G...l....',
+  '....Gl.G..lG....',
+  '.....G.Gg.G.....',
+  '.....lGGgGl.....',
+  '......GGgG......',
+  '.......Gg.......',
   '......mmmm......',
+  '.....hmmmmh.....',
 ]);
-const SPROUT = pad(7, [
-  '....DD....DD....',
-  '...DlGD..DGlD...',
-  '....DGGDDGGD....',
-  '.....DDGGDD.....',
-  '.......GD.......',
-  '......mGgm......',
-  '.....mmmmmm.....',
+const CARROT_GROWING = pad(3, [
+  '.......l........',
+  '...l...G...l....',
+  '...Gl.lG..lG....',
+  '....Gg.Gg.G.....',
+  '..l..GlGgG..l...',
+  '...Gl.GGgG.lG...',
+  '....GGGGggGG....',
+  '......GGgg......',
+  '.......Gg.......',
+  '......mYCm......',
+  '.....hmmmmh.....',
 ]);
-const CARROT_GROWING = pad(5, [
-  '....D...D..D....',
-  '...DlD.DlDDlD...',
-  '...DGD.DGDDGD...',
-  '....DGDGGDGD....',
-  '.....DGGGGD.....',
-  '......DGgD......',
-  '.......gg.......',
-  '......mCCm......',
-  '.....mmmmmm.....',
-]);
-const CARROT_YOUNG = CARROT_GROWING.map(r => r.replace(/C/g, 'g'));
 const CARROT_RIPE = pad(1, [
-  '...D....D....D..',
-  '..DlD..DlD..DlD.',
-  '..DGD..DGD..DGD.',
-  '..DGlD.DGD.DlGD.',
-  '...DGGDDGDDGGD..',
-  '....DGGGGGGGD...',
-  '.....DGGgGGD....',
-  '......DgggD.....',
-  '.....KCYCCcK....',
-  '.....KCCCCcK....',
-  '....mKCCCccKm...',
-  '....mmKKKKKmm...',
-  '.....mmmmmmm....',
+  '..l....l....l...',
+  '.DlD..DlD..DlD..',
+  '..GgD.DGD.DGg...',
+  '..DlGDDGDDGlD...',
+  '...DGGGGgGGD....',
+  '....DGGggGD.....',
+  '......Ggg.......',
+  '....KKYYYYKK....',
+  '....KYCCCCcK....',
+  '....KCccCCcK....',
+  '....KCCCCccK....',
+  '....mKKccKKm....',
+  '.....hmmmmh.....',
+]);
+const TOMATO_SPROUT = pad(4, [
+  '..........w.....',
+  '..........w.....',
+  '..........w.....',
+  '..........w.....',
+  '.....DD.DDw.....',
+  '....DlGDlGwD....',
+  '.....DgDGgw.....',
+  '.......Gg.w.....',
+  '......mmmm......',
+  '.....hmmmmh.....',
 ]);
 const TOMATO_YOUNG = pad(3, [
   '..........w.....',
-  '..........w.....',
   '......DD..w.....',
   '.....DlGD.w.....',
-  '....DGGGGDwD....',
-  '....DGlGGGwGD...',
-  '.....DGGGgwGD...',
-  '......DGgDwD....',
-  '.......gg.w.....',
-  '......mmggwm....',
-  '.....mmmmmmmm...',
+  '......DgD.wDD...',
+  '...DD..GgDwGlD..',
+  '..DlGD.Gg.wDD...',
+  '...DgDGGg.w.....',
+  '......DGgDw.....',
+  '.......Gg.w.....',
+  '......mmmm......',
+  '.....hmmmmh.....',
 ]);
-const TOMATO_RIPE = [
+const TOMATO_RIPE: PixelMap = [
   '..........w.....',
-  '.........DwD....',
-  '....DDD.DGwGD...',
-  '...DGlGDGGwlGD..',
-  '..DGGRRGGGwGGGD.',
-  '..DGRWRRGGwRRGD.',
-  '..DGRRRRGgwRWRD.',
-  '...DGRRrGGwRRrD.',
-  '...DGGrGRRwGrD..',
-  '....DGgRWRwRGD..',
-  '.....DgRRrwrD...',
-  '......DgrrwD....',
-  '......mmggwmm...',
-  '.....mmmmmmmmm..',
+  '.......DD.w.....',
+  '...DD.DlGDwDD...',
+  '..DlGD.DGGwlGD..',
+  '...DG.GGGGwDD...',
+  '..DGWRGlGDwGWRD.',
+  '..DGRrDGGGwGRrD.',
+  '...DGGGDGGwGGD..',
+  '..DlGDG.GGwGDD..',
+  '...DDWRGGGwWRD..',
+  '.....RrDGgwRr...',
+  '.......Gg.w.....',
+  '......mmmm......',
+  '.....hmmmmh.....',
 ];
-// tomates verdes: la misma mata antes de enrojecer
-const TOMATO_GREEN = TOMATO_RIPE.map(r => r.replace(/R/g, 'l').replace(/r/g, 'G'));
-const SPROUT_STAKE = SPROUT.map((r, i) => (i >= 4 && i <= 12 ? r.slice(0, 10) + 'w' + r.slice(11) : r));
+// Cada fruto conserva el cáliz; antes de madurar no tiene brillo blanco.
+const TOMATO_GREEN = TOMATO_RIPE.map(r => r.replace(/[RW]/g, 'l').replace(/r/g, 'G'));
+// Una flor junto al tutor, sin recolorear los frutos.
+TOMATO_GREEN[7] = '...DGGGDGGwYGD..';
 
 const FLOWER: PixelMap = ['.W.', 'WYW', '.W.'];
-const BERRY: PixelMap = ['.G.', 'RYR', 'RRR', '.r.'];
-/** Fresa: mata baja; florece en blanco y luego cuelgan las fresas por delante de las hojas. */
-function strawberry(stage: 2 | 3 | 4): PixelMap {
+const BERRY: PixelMap = ['.G.', 'RYR', 'RRr', '.r.'];
+/** Mata de cinco hojas; flores y frutos cuelgan por delante. */
+function strawberry(stage: 1 | 2 | 3 | 4): PixelMap {
   const g = grid();
-  mound(g);
-  for (const [x, y] of [[7, 10], [8, 10], [7, 11], [8, 11]]) put(g, x, y, 'g');
-  if (stage === 2) {
-    stamp(g, LEAF, 4, 8);
-    stamp(g, LEAF, 8, 7);
-    return toMap(g);
-  }
-  for (const [x, y] of [[1, 7], [5, 6], [9, 6], [12, 8], [6, 8]]) stamp(g, LEAF, x, y);
-  if (stage === 3) {
-    for (const [x, y] of [[3, 4], [10, 3], [13, 6]]) stamp(g, FLOWER, x, y);
+  put(g, 7, 11, 'G'); put(g, 8, 11, 'g');
+  if (stage === 1) {
+    for (const [x, y] of [[5, 10], [7, 8], [9, 10]]) stamp(g, ['lG', 'Gg'], x, y);
+  } else if (stage === 2) {
+    for (const [x, y] of [[3, 8], [7, 6], [10, 8]]) stamp(g, LEAF, x, y);
   } else {
-    stamp(g, FLOWER, 10, 3);
-    for (const [x, y] of [[1, 9], [11, 9], [6, 9]]) stamp(g, BERRY, x, y);
+    for (const [x, y] of [[1, 7], [4, 5], [8, 5], [12, 7], [6, 8]]) stamp(g, LEAF, x, y);
+    if (stage === 3) {
+      for (const [x, y] of [[1, 4], [10, 2], [12, 9]]) stamp(g, FLOWER, x, y);
+    } else {
+      stamp(g, FLOWER, 10, 2);
+      for (const [x, y] of [[2, 8], [11, 8], [6, 8]]) stamp(g, BERRY, x, y);
+    }
   }
+  mound(g);
   return toMap(g);
 }
 
-/** Melón: guía que se arrastra con zarcillos y un melón grande a rayas. */
-function melon(stage: 2 | 3 | 4): PixelMap {
+/** Guía con zarcillo y fruto rayado, de pequeño a maduro. */
+function melon(stage: 1 | 2 | 3 | 4): PixelMap {
   const g = grid();
-  mound(g);
-  for (let x = stage === 2 ? 4 : 2; x <= (stage === 2 ? 11 : 13); x++) put(g, x, 11, 'g');
-  // zarcillo enroscado al final de la guía
-  for (const [x, y] of [[12, 10], [13, 9], [12, 8]]) put(g, x + (stage === 2 ? 0 : 2), y, 'G');
-  if (stage === 2) {
+  for (let x = stage === 1 ? 7 : 3; x <= (stage === 1 ? 8 : 12); x++) put(g, x, 11, 'g');
+  if (stage === 1) {
+    stamp(g, LEAF, 3, 8);
+    stamp(g, LEAF, 8, 8);
+    put(g, 12, 10, 'G'); put(g, 12, 9, 'G');
+  } else if (stage === 2) {
     stamp(g, LEAF, 2, 8);
     stamp(g, LEAF, 8, 6);
+    stamp(g, ['.GG', 'G.G', '.G.'], 12, 8);
   } else if (stage === 3) {
-    stamp(g, LEAF, 0, 6);
-    stamp(g, LEAF, 11, 4);
-    stamp(g, LEAF, 5, 3);
-    ellipse(g, 8, 9.5, 4, 2.3, 'l', 'G', 'D', [0.5, 2.5]);
+    for (const [x, y] of [[0, 6], [10, 4], [5, 3]]) stamp(g, LEAF, x, y);
+    stamp(g, ['.GG', 'G.G', '.G.'], 12, 8);
+    ellipse(g, 8, 10, 4, 2, 'l', 'G', 'D', [0.5, 2.5]);
+    put(g, 8, 7, 'g');
   } else {
     stamp(g, LEAF, 0, 2);
-    stamp(g, LEAF, 12, 1);
-    ellipse(g, 8, 8.5, 7, 4, 'G', 'g', 'K', [0.5, 2.5, 4.5]);
-    put(g, 8, 4, 'g'); put(g, 9, 3, 'g');
+    stamp(g, LEAF, 11, 1);
+    ellipse(g, 8, 9, 7, 4, 'G', 'g', 'K', [0.5, 2.5, 4.5]);
+    stamp(g, ['.GG', 'G.G', '.G.'], 7, 1);
+    put(g, 8, 4, 'g'); put(g, 8, 5, 'g');
     put(g, 4, 6, 'l'); put(g, 5, 6, 'l'); put(g, 3, 7, 'l');
   }
+  mound(g);
   return toMap(g);
 }
 
 const recolor = (map: Record<string, string>) => (m: PixelMap): PixelMap =>
   m.map(r => r.replace(/./g, ch => map[ch] ?? ch));
+
+/** Fotograma de ráfaga: las filas de arriba de la planta se desplazan 1 px a la derecha. */
+const SWAY_ROWS = 6;
+function swayMap(m: PixelMap): PixelMap {
+  return m.map((r, i) => {
+    if (i >= SWAY_ROWS) return r;
+    if (r[15] !== '.') throw new Error(`Planta recortada al mecerse: fila ${i} «${r}»`);
+    return '.' + r.slice(0, 15);
+  });
+}
+
 /** Madura que lleva mucho esperando: las hojas amarillean y el trigo se oscurece; el fruto aún vale. */
 const passing = recolor({ G: 'U', l: 'Y', g: 'G', Y: 'U', U: 'm' });
 /** Echada a perder: todo pasa a grises de moho y el fruto a marrón. */
@@ -524,12 +573,12 @@ const RIPE_MAPS: Record<CropId, PixelMap> = {
 
 /** Fases por cultivo: semilla, brote, joven, creciendo, madura y echada a perder (índice ROTTEN). */
 export const PLANT_MAPS: Record<CropId, PixelMap[]> = {
-  zanahoria: [SEED, SPROUT, CARROT_YOUNG, CARROT_GROWING, RIPE_MAPS.zanahoria, rotten(RIPE_MAPS.zanahoria)],
-  trigo: [SEED, SPROUT, wheat(2), wheat(3), RIPE_MAPS.trigo, rotten(RIPE_MAPS.trigo)],
-  tomate: [SEED, SPROUT_STAKE, TOMATO_YOUNG, TOMATO_GREEN, RIPE_MAPS.tomate, rotten(RIPE_MAPS.tomate)],
-  calabaza: [SEED, SPROUT, pumpkin(2), pumpkin(3), RIPE_MAPS.calabaza, rotten(RIPE_MAPS.calabaza)],
-  fresa: [SEED, SPROUT, strawberry(2), strawberry(3), RIPE_MAPS.fresa, rotten(RIPE_MAPS.fresa)],
-  melon: [SEED, SPROUT, melon(2), melon(3), RIPE_MAPS.melon, rotten(RIPE_MAPS.melon)],
+  zanahoria: [seed('T', 'U'), CARROT_SPROUT, CARROT_YOUNG, CARROT_GROWING, RIPE_MAPS.zanahoria, rotten(RIPE_MAPS.zanahoria)],
+  trigo: [seed('Y', 'U'), wheat(1), wheat(2), wheat(3), RIPE_MAPS.trigo, rotten(RIPE_MAPS.trigo)],
+  tomate: [seed('Y', 'T'), TOMATO_SPROUT, TOMATO_YOUNG, TOMATO_GREEN, RIPE_MAPS.tomate, rotten(RIPE_MAPS.tomate)],
+  calabaza: [seed('W', 'T'), pumpkin(1), pumpkin(2), pumpkin(3), RIPE_MAPS.calabaza, rotten(RIPE_MAPS.calabaza)],
+  fresa: [seed('R', 'r'), strawberry(1), strawberry(2), strawberry(3), RIPE_MAPS.fresa, rotten(RIPE_MAPS.fresa)],
+  melon: [seed('T', 'w'), melon(1), melon(2), melon(3), RIPE_MAPS.melon, rotten(RIPE_MAPS.melon)],
 };
 
 const byCrop = <T>(f: (c: CropId) => T) => Object.fromEntries(CROP_IDS.map(c => [c, f(c)])) as Record<CropId, T>;
@@ -546,6 +595,10 @@ export interface Atlas {
   plants: Record<CropId, Texture[]>;
   /** madura a punto de echarse a perder */
   passing: Record<CropId, Texture>;
+  /** fotograma mecido de cada fase; semilla y echada a perder reutilizan plants */
+  plantsSway: Record<CropId, Texture[]>;
+  /** madura a punto de echarse a perder, mecida */
+  passingSway: Record<CropId, Texture>;
   items: Record<CropId, Texture>;
   /** cesta con 0..4 niveles de montón */
   basket: Texture[];
@@ -639,11 +692,14 @@ export function buildAtlas(): Atlas {
   sctx.fillRect(0, 0, 10, 1);
   const bubble = (icon: PixelMap) => Texture.from(bubbleCanvas(icon, BUBBLE_PAL));
   const kinds = Object.keys(BUBBLE_ICONS) as Exclude<BubbleKind, 'crop'>[];
+  const plants = byCrop(c => PLANT_MAPS[c].map(m => tex(m, PLANT_PAL)));
   return {
     gnome: byJob(j => gnomeFrames(hatPal(j), BODY, j)),
     legendary: byJob(j => gnomeFrames(legendPal(j), LEGEND_BODY, j)),
-    plants: byCrop(c => PLANT_MAPS[c].map(m => tex(m, PLANT_PAL))),
+    plants,
+    plantsSway: byCrop(c => PLANT_MAPS[c].map((m, i) => (i === 0 || i === ROTTEN ? plants[c][i] : tex(swayMap(m), PLANT_PAL)))),
     passing: byCrop(c => tex(PASSING_MAPS[c], PLANT_PAL)),
+    passingSway: byCrop(c => tex(swayMap(PASSING_MAPS[c]), PLANT_PAL)),
     items: byCrop(c => tex(ITEMS[c], itemPal)),
     basket: BASKET_PILES.map((_, level) => Texture.from(basketCanvas(level))),
     rings: GROUP_PALETTE.map(color => tex(RING, { X: color })),

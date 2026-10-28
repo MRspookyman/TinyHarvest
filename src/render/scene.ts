@@ -566,7 +566,12 @@ export class SceneView {
       }
       const ripe = p.stage === RIPE;
       const wilting = ripe && p.t >= keepTime(s, p.crop) * WILT_WARNING;
-      sp.texture = wilting ? this.atlas.passing[p.crop] : this.atlas.plants[p.crop][p.stage];
+      // de vez en cuando una ráfaga mece la planta 1 px; cada parcela a su ritmo
+      const sway = p.stage > 0 && p.stage !== ROTTEN && Math.sin(this.time * 1.6 + p.id * 2.3) > 0.8;
+      const a = this.atlas;
+      sp.texture = wilting
+        ? (sway ? a.passingSway : a.passing)[p.crop]
+        : (sway ? a.plantsSway : a.plants)[p.crop][p.stage];
       sp.anchor.set(0.5, 0);
       // parte de las plantas en espejo, para que el bancal no parezca copiado y pegado
       sp.scale.x = (p.id * 7) % 3 === 0 ? -1 : 1;

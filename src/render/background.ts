@@ -1,6 +1,6 @@
 // Fondo del mundo: hierba y camino (fijos) y el bancal (se redibuja al ampliarlo).
 // El granero, la casa de gnomos, el tablón y el árbol viejo son sprites aparte (landmarks.ts) porque se pueden pulsar.
-import { DOOR, FIELD, HOUSE, OLD_TREE, STATUE, WORLD } from '../sim/config';
+import { BARN, BOARD, DOOR, FIELD, HOUSE, OLD_TREE, STATUE, WORLD } from '../sim/config';
 import { makeCanvas, rng } from './pixelart';
 
 function paintGrass(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number) {
@@ -12,11 +12,21 @@ function paintGrass(ctx: CanvasRenderingContext2D, w: number, h: number, seed: n
     // envuelve en los bordes para que la baldosa se repita sin costuras
     ctx.fillRect((x + w) % w, (y + h) % h, 1, 1);
   };
-  for (let i = 0; i < (w * h) / 14; i++) {
-    const x = Math.floor(gr() * w), y = Math.floor(gr() * h), k = gr();
-    if (k < 0.5) { dot(x, y, '#2e9a58'); dot(x + 1, y - 1, '#2e9a58'); }
-    else if (k < 0.85) dot(x, y, '#5fcf72');
-    else dot(x, y, '#a7f070');
+  // Manchas suaves y espaciadas: dejan zonas de descanso para leer plantas y gnomos.
+  for (let i = 0; i < (w * h) / 340; i++) {
+    const x = Math.floor(gr() * w), y = Math.floor(gr() * h);
+    const pw = 4 + Math.floor(gr() * 6), ph = 2 + Math.floor(gr() * 3);
+    const color = gr() < 0.6 ? '#35b161' : '#3bbb67';
+    for (let dy = 0; dy < ph; dy++) {
+      const inset = dy === 0 || dy === ph - 1 ? 2 : 0;
+      for (let dx = inset; dx < pw - inset; dx++) dot(x + dx, y + dy, color);
+    }
+  }
+  for (let i = 0; i < (w * h) / 180; i++) {
+    const x = Math.floor(gr() * w), y = Math.floor(gr() * h);
+    dot(x, y, '#2e9a58');
+    dot(x + 1, y - 1, '#2e9a58');
+    if (gr() < 0.35) dot(x, y - 1, '#5fcf72');
   }
 }
 
@@ -37,29 +47,44 @@ export function drawBackground(): HTMLCanvasElement {
 
   paintGrass(ctx, WORLD.w, WORLD.h, 99);
 
-  // camino del granero al bancal
+  // Camino pisado: centro continuo y bordes escalonados, no una losa rectangular.
   const pathW = FIELD.x - 2 - 34;
-  rect(34, DOOR.y - 6, pathW, 10, '#c8925f');
-  rect(34, DOOR.y - 6, pathW, 1, '#a8723f');
-  rect(34, DOOR.y + 3, pathW, 1, '#a8723f');
   const pr = rng(5);
-  for (let i = 0; i < 26; i++) rect(36 + Math.floor(pr() * (pathW - 4)), DOOR.y - 4 + Math.floor(pr() * 6), 1, 1, '#e0b07a');
+  for (let x = 34; x < 34 + pathW; x += 4) {
+    const width = Math.min(4, 34 + pathW - x);
+    const top = DOOR.y - 6 + Math.floor(pr() * 2);
+    const bottom = DOOR.y + 3 - Math.floor(pr() * 2);
+    rect(x, top, width, bottom - top + 1, '#c8925f');
+    rect(x, top, width, 1, '#d9a066');
+    rect(x, bottom, width, 1, '#a8723f');
+  }
+  for (let i = 0; i < 12; i++) {
+    const x = 36 + Math.floor(pr() * (pathW - 5));
+    const y = DOOR.y - 3 + Math.floor(pr() * 4);
+    rect(x, y, 2, 1, '#d9a066');
+  }
+  for (const x of [48, 71, 94]) {
+    const y = DOOR.y + (x % 3) - 2;
+    rect(x, y + 1, 3, 1, '#a8723f');
+    rect(x, y, 2, 1, '#e0b07a');
+  }
 
-  // sombra bajo el árbol viejo
-  ctx.fillStyle = 'rgba(26,28,44,.22)';
-  ctx.beginPath();
-  ctx.ellipse(OLD_TREE.x + OLD_TREE.w / 2, OLD_TREE.y + OLD_TREE.h - 1, OLD_TREE.w / 2 - 2, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // y bajo la casa de gnomos
-  ctx.beginPath();
-  ctx.ellipse(HOUSE.x + HOUSE.w / 2, HOUSE.y + HOUSE.h - 1, HOUSE.w / 2 - 3, 2, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Sombras de contacto escalonadas, desplazadas hacia abajo y a la derecha.
+  const contact = (x: number, bottom: number, width: number) => {
+    rect(x + 2, bottom - 1, width, 2, 'rgba(26,28,44,.20)');
+    rect(x + 4, bottom + 1, width - 3, 1, 'rgba(26,28,44,.12)');
+  };
+  contact(BARN.x + 2, BARN.y + BARN.h, BARN.w - 4);
+  contact(BOARD.x + 2, BOARD.y + BOARD.h, BOARD.w - 4);
+  contact(OLD_TREE.x + 5, OLD_TREE.y + OLD_TREE.h, OLD_TREE.w - 10);
+  contact(HOUSE.x + 4, HOUSE.y + HOUSE.h, HOUSE.w - 8);
+  contact(STATUE.x, STATUE.y + STATUE.h, STATUE.w - 2);
 
   // flores, lejos del granero, del árbol y de donde puede llegar a crecer el bancal
   const fx0 = FIELD.x - 8, fy0 = FIELD.y - 8;
   const fx1 = FIELD.x + FIELD.maxCols * FIELD.cell + 8, fy1 = FIELD.y + FIELD.maxRows * FIELD.cell + 8;
   const f = rng(17);
-  for (let placed = 0, tries = 0; placed < 22 && tries < 400; tries++) {
+  for (let placed = 0, tries = 0; placed < 12 && tries < 400; tries++) {
     const x = 4 + Math.floor(f() * (WORLD.w - 8)), y = 4 + Math.floor(f() * (WORLD.h - 8));
     const petal = f() < 0.5 ? '#f4f4f4' : '#ef7d57';
     if (x > fx0 && x < fx1 && y > fy0 && y < fy1) continue;
@@ -102,6 +127,9 @@ export function drawField(cols: number, rows: number, abono = 0, golden = 0): HT
   rect(-2, -2, fw + 4, fh + 4, '#3e2519');
   rect(-1, -1, fw + 2, fh + 2, '#5c3a29');
   rect(0, 0, fw, fh, '#7a4b33');
+  rect(-1, -1, fw + 1, 1, '#a06a48');
+  rect(-1, 0, 1, fh - 1, '#8b5a3c');
+  rect(0, fh, fw + 1, 1, '#3e2519');
   for (let row = 0; row < rows; row++) {
     const cy = row * FIELD.cell;
     rect(0, cy + 9, fw, 1, '#a06a48');
@@ -110,7 +138,7 @@ export function drawField(cols: number, rows: number, abono = 0, golden = 0): HT
     rect(0, cy + 17, fw, 1, '#4f3022');
   }
   const sr = rng(11);
-  for (let i = 0; i < (fw * fh) / 31; i++) {
+  for (let i = 0; i < (fw * fh) / 58; i++) {
     rect(Math.floor(sr() * fw), Math.floor(sr() * fh), 1, 1, sr() < 0.6 ? '#6b4430' : '#a06a48');
   }
   // grumos de mantillo

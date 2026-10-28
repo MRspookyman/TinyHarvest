@@ -61,7 +61,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
   bar.innerHTML = `
     <div class="tool-group">
       ${MENU_ORDER.map(m => `
-        <button type="button" class="tool" data-menu="${m}" title="${esc(MENUS[m].sub)}">
+        <button type="button" class="tool" data-menu="${m}" aria-label="${esc(MENUS[m].boton)}" aria-pressed="false" title="${esc(MENUS[m].sub)}">
           ${pixelImg(menuIcons[m])}<span>${MENUS[m].boton}</span>
         </button>`).join('')}
     </div>
@@ -114,7 +114,11 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       }
       setText(org.querySelector('[data-org-tip]'), parts[worst] < ORG_OK ? ORG.consejo[worst] : ORG.todoBien);
 
-      for (const m of MENU_ORDER) toggleClass(bar.querySelector(`[data-menu="${m}"]`), 'active', openMenu === m);
+      for (const m of MENU_ORDER) {
+        const btn = bar.querySelector<HTMLButtonElement>(`[data-menu="${m}"]`)!;
+        toggleClass(btn, 'active', openMenu === m);
+        btn.setAttribute('aria-pressed', String(openMenu === m));
+      }
       for (const c of CROP_IDS) {
         const btn = bar.querySelector<HTMLButtonElement>(`[data-seed="${c}"]`)!;
         const locked = !cropUnlocked(s, c);
@@ -122,6 +126,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         btn.setAttribute('aria-pressed', String(selected === c));
         const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}`;
         if (btn.title !== title) btn.title = title;
+        if (btn.getAttribute('aria-label') !== title) btn.setAttribute('aria-label', title);
       }
 
       // el aviso más reciente del diario aparece un momento sobre el huerto

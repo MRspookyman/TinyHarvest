@@ -43,6 +43,7 @@ export function createTreeMenu(actions: GameActions): Menu {
         ${NODE_IDS.map(id => `
           <button type="button" class="node" data-node="${id}" style="left:${TREE[id].x}%;top:${TREE[id].y}%" aria-label="${ARBOL[id].nombre}">
             ${pixelImg(nodeIcons[id])}
+            <span class="node-mark" aria-hidden="true"></span>
             <span class="pips">${'<i></i>'.repeat(TREE[id].max)}</span>
           </button>`).join('')}
        </div>
@@ -51,6 +52,7 @@ export function createTreeMenu(actions: GameActions): Menu {
         <span class="detail-branch" data-d-branch></span>
         <h3 data-d-name></h3>
         <span class="detail-level" data-d-level></span>
+        <span class="detail-state" data-d-state></span>
         <p data-d-desc></p>
         <p class="detail-extra" data-d-extra></p>
         <button type="button" class="btn" data-buy></button>
@@ -70,6 +72,7 @@ export function createTreeMenu(actions: GameActions): Menu {
     el,
     update(s: GameState) {
       toggleClass(el.querySelector('[data-node="root"]'), 'selected', selected === 'root');
+      el.querySelector('[data-node="root"]')!.setAttribute('aria-pressed', String(selected === 'root'));
       for (const id of NODE_IDS) {
         const btn = el.querySelector<HTMLElement>(`[data-node="${id}"]`)!;
         const reachable = nodeReachable(s, id);
@@ -79,6 +82,13 @@ export function createTreeMenu(actions: GameActions): Menu {
         toggleClass(btn, 'maxed', maxed);
         toggleClass(btn, 'affordable', reachable && !maxed && s.coins >= nodeCost(s, id));
         toggleClass(btn, 'selected', selected === id);
+        const status = maxed ? UI.alMaximo : !reachable ? 'Bloqueado' : s.tree[id] > 0 ? 'Adquirido · mejorable' : 'Disponible';
+        const mark = maxed ? '✓' : !reachable ? '×' : s.tree[id] > 0 ? '✓' : '+';
+        setText(btn.querySelector('.node-mark'), mark);
+        btn.setAttribute('aria-pressed', String(selected === id));
+        const label = `${ARBOL[id].nombre}. ${status}. ${UI.nivel(s.tree[id], TREE[id].max)}`;
+        if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
+        if (btn.title !== label) btn.title = label;
         btn.querySelectorAll('.pips i').forEach((pip, i) => toggleClass(pip, 'on', i < s.tree[id]));
         toggleClass(el.querySelector(`[data-line="${id}"]`), 'lit', reachable);
       }
@@ -88,6 +98,7 @@ export function createTreeMenu(actions: GameActions): Menu {
         setText(el.querySelector('[data-d-branch]'), '');
         setText(el.querySelector('[data-d-name]'), UI.raiz);
         setText(el.querySelector('[data-d-level]'), '');
+        setText(el.querySelector('[data-d-state]'), '');
         setText(el.querySelector('[data-d-desc]'), UI.raizDesc);
         setText(el.querySelector('[data-d-extra]'), '');
         buy.hidden = true;
@@ -101,6 +112,7 @@ export function createTreeMenu(actions: GameActions): Menu {
       setText(el.querySelector('[data-d-branch]'), RAMAS[def.branch]);
       setText(el.querySelector('[data-d-name]'), ARBOL[id].nombre);
       setText(el.querySelector('[data-d-level]'), def.max > 1 ? UI.nivel(s.tree[id], def.max) : '');
+      setText(el.querySelector('[data-d-state]'), maxed ? `✓ ${UI.alMaximo}` : !reachable ? '× Bloqueado' : s.tree[id] > 0 ? '✓ Adquirido · mejorable' : '+ Disponible');
       setText(el.querySelector('[data-d-desc]'), ARBOL[id].desc);
       let extra = '';
       if (!reachable && def.parent) extra = UI.necesita(ARBOL[def.parent].nombre);

@@ -41,6 +41,9 @@ async function start() {
   const app = new Application();
   await app.init({ resizeTo: stageEl, background: '#38b764', antialias: false, roundPixels: true });
   stageEl.prepend(app.canvas);
+  // La barra puede cambiar de altura al poblarse o envolver sus estadísticas.
+  // resizeTo atiende al tamaño de ventana, no a los cambios del elemento anfitrión.
+  new ResizeObserver(() => app.resize()).observe(stageEl);
   await document.fonts.load('16px "Pixelify Sans"').catch(() => undefined);
 
   const scene = new SceneView(app, buildAtlas());
