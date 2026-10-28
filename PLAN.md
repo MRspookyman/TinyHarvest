@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.16 · **Última actualización:** 2026-10-28
+> **Estado:** borrador v0.17 · **Última actualización:** 2026-10-28
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -69,12 +69,13 @@
 
 **Prueba de asset generado descartada:** se mantienen los gnomos originales y sus animaciones por código. La propuesta de GPT Image 2 queda en `estilo/gnomo-prueba.webp` solo como referencia, sin uso en el juego.
 
-**Estilo cerrado ✅** (referencia: [estilo/gnomo.html](estilo/gnomo.html))
-- **Gnomos a 16×16**, ampliados ×3–4 en pantalla, con contorno oscuro `#1a1c2c`. El gorro les tapa los ojos, tienen una nariz enorme, barba blanca, túnica verde azulada y botas de 2 px. Andan a saltitos.
+**Estilo cerrado ✅** (referencia: [estilo/gnomo-32.html](estilo/gnomo-32.html); la hoja original de 16 × 16 sigue en [estilo/gnomo.html](estilo/gnomo.html))
+- **Arte a doble resolución (v0.17):** todo se dibuja con 2 × 2 píxeles por unidad del mundo (`ART = 2` en `render/pixelart.ts`). La simulación, las posiciones y los tamaños no cambian; la cámara usa escalas pares para que cada píxel del dibujo ocupe píxeles enteros de pantalla.
+- **Gnomos a 32 × 32** (32 × 34 con el saltito), con contorno oscuro `#1a1c2c` de un píxel. El gorro con la punta caída y un remiendo les tapa los ojos; narizota redonda con brillo, mejillas sonrosadas, barba blanca en punta con mechones y bigote, túnica verde azulada con cinturón y hebilla, manoplas y botas. Andan a saltitos, con la punta del gorro, la barba y los brazos meciéndose. Dibujo en `render/gnome.ts`.
 - **Color del gorro por oficio:** rojo (recolector), lima (sembrador), marrón (porteador), azul (regador), dorado (capataz), gris (guardián).
 - **Animaciones:** quieto, andar (4 fotogramas), recoger (agacharse), cargar saco, protestar (bocadillo "!!") y siesta (Zz).
 - **Huerto:** un **bancal rectangular continuo**, con surcos de lado a lado, borde de tierra oscura y hierba que invade los bordes. Crece añadiendo filas o columnas.
-- **Plantas:** sprites de 16×14 con contorno, sombreado y dibujo propio por cultivo en las cinco fases: semilla, brote, joven, creciendo y madura. Frutos, espigas, flores y zarcillos más detallados; aviso amarillento antes de estropearse y moho gris al echarse a perder. Ráfagas ocasionales desplazan 1 px las seis filas superiores de las plantas vivas, sin mover el montículo; semillas y plantas echadas a perder no se mecen.
+- **Plantas:** sprites de 32 × 28 con contorno, sombreado y dibujo propio por cultivo en las cinco fases: semilla, brote, joven, creciendo y madura (nervios en las hojas, granos y aristas en el trigo, gajos en la calabaza, semillas en las fresas, rayas en el melón). Aviso amarillento antes de estropearse y moho gris al echarse a perder. Ráfagas ocasionales desplazan 1 píxel las doce filas superiores de las plantas vivas, sin mover el montículo. Dibujo en `render/plants.ts`.
 - **Profundidad:** plantas y gnomos se ordenan por fila, así que un gnomo puede quedar delante o detrás de una planta.
 - **Terreno y edificios:** hierba de textura suave con matas espaciadas, caminos de borde escalonado y sombras de contacto pixeladas. Luz desde arriba a la izquierda en tejados, paredes, troncos y pedestales; las mejoras conservan sus detalles visibles.
 - **Interfaz:** selección de herramientas marcada, semillas bloqueadas legibles y estados del árbol con bordes, símbolos y texto además del color. En pantallas estrechas, la barra se envuelve, el árbol permite desplazamiento horizontal y la ficha de mejora pasa debajo; el lienzo se reajusta cuando cambia el espacio disponible.
@@ -756,9 +757,9 @@ flowchart LR
 | 9 | Temporada | La primera dura 1–2 h |
 | 10 | Arte | Sprites por código o pack gratuito, de momento |
 | 11 | Primer hito | Demo muy básica (sección 8) para validar la idea |
-| 12 | Resolución | Gnomos 16×16 con contorno oscuro |
+| 12 | Resolución | Arte a doble resolución: gnomos de 32 × 32 con contorno oscuro y todo lo demás al mismo nivel de detalle (v0.17) |
 | 13 | Huerto | Bancal rectangular continuo con surcos |
-| 14 | Plantas | Sprites detallados de 16×14 por cultivo y fase, con balanceo suave sin cambiar la simulación |
+| 14 | Plantas | Sprites detallados de 32 × 28 por cultivo y fase, con balanceo suave sin cambiar la simulación |
 | 15 | Hoja de ruta | Opción A: mecánica antes que números (sección 9.2) |
 | 16 | Ranking | Ranking de gnomos en la iteración 4, a petición del autor |
 | 17 | Control de versiones | Repositorio git local desde la iteración 4 |
@@ -773,6 +774,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.17 (2026-10-28):** todo el arte redibujado a doble resolución: gnomos de 32 × 32 con todas sus poses y herramientas, plantas de 32 × 28, terreno, edificios con todas sus mejoras, decorado, bichos, bocadillos, efectos e iconos y marcos de la interfaz. La cámara usa escalas pares para que el pixel art siga nítido. Sin cambios de simulación, equilibrio ni partidas guardadas.
 - **v0.16 (2026-10-28):** iteración 10, «enganche». Ventaja de zona, sonido hecho por código y monedas que vuelan, próximo objetivo en la barra, cosecha dorada, maestría de cultivo, álbum de 35 cromos con páginas premiadas, arenga del capataz, encargos del pueblo con propina, amistades entre gnomos y estaciones. Equilibrado con el bot: árbol completo en 48–52 min.
 - **v0.15 (2026-10-28):** iteración 9, «zonas y robustez». Zonas por grupo marcadas en el tablón y visibles en el bancal, copia de las partidas ilegibles, aviso de «sin guardar» y parada segura ante errores. Medido el rendimiento con 40 gnomos (≤ 3,5 ms por fotograma) y añadida la sección j) del bot: las zonas ahorran paseo pero de momento no dan más monedas.
 - **2026-10-28 · Pulido visual:** terreno menos ruidoso, camino irregular y sombras de contacto; volumen en granero, casas, tablón, árbol y pedestales sin cambiar tamaños ni mejoras. Barra y ventanas más claras, árbol con marcas de estado y etiquetas accesibles, y distribución adaptable a pantallas estrechas. Corregido el desajuste del lienzo cuando la barra superior cambia de altura. Sin cambios de mecánicas, equilibrio ni guardados.

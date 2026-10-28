@@ -3,6 +3,7 @@ import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, 
 import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, STATUE, WELL, WILT_WARNING, WORLD, type SeasonId } from '../sim/config';
 import { basketMax, canEndSeason, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, seasonOf, waterTime } from '../sim/sim';
 import type { Critter, GameState, Gnome, Pose } from '../sim/types';
+import { ART, artTexture } from './pixelart';
 import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
 import { DecorView, TOWER, WELL_DRAW_H } from './decor';
@@ -121,9 +122,9 @@ export class SceneView {
 
   private world = new Container();
   /** hierba que rellena la pantalla alrededor del mundo */
-  private grass = new TilingSprite({ texture: Texture.from(drawGrassTile()), width: 1, height: 1 });
+  private grass = new TilingSprite({ texture: artTexture(drawGrassTile()), width: 1, height: 1 });
   /** fondo del mundo (hierba, caminos); se tiñe con la estación */
-  private ground = new Sprite(Texture.from(drawBackground()));
+  private ground = new Sprite(artTexture(drawBackground()));
   /** segundos hasta la próxima partícula de la estación */
   private seasonT = 0;
   private field = new Sprite();
@@ -212,13 +213,13 @@ export class SceneView {
     }
 
     const addLandmark = (menu: MenuId, canvas: HTMLCanvasElement, x: number, y: number, label?: Landmark['label']) => {
-      const normal = Texture.from(canvas);
-      const hover = Texture.from(outlined(canvas));
+      const normal = artTexture(canvas);
+      const hover = artTexture(outlined(canvas));
       const sprite = new Sprite(normal);
       sprite.position.set(x, y);
-      sprite.zIndex = y + canvas.height;
+      sprite.zIndex = y + canvas.height / ART;
       this.entities.addChild(sprite);
-      const lm: Landmark = { menu, label, sprite, normal, hover, x, y, w: canvas.width, h: canvas.height };
+      const lm: Landmark = { menu, label, sprite, normal, hover, x, y, w: canvas.width / ART, h: canvas.height / ART };
       this.landmarks.push(lm);
       return lm;
     };
@@ -227,7 +228,7 @@ export class SceneView {
     this.tree = addLandmark('arbol', drawOldTree(), OLD_TREE.x, OLD_TREE.y);
     // la estatua se centra en su caja y se apoya en su base; crece con las temporadas
     const statue0 = drawStatue(0);
-    this.statue = addLandmark('temporada', statue0, STATUE.x + (STATUE.w - STATUE_DRAW_W) / 2, STATUE.y + STATUE.h - statue0.height);
+    this.statue = addLandmark('temporada', statue0, STATUE.x + (STATUE.w - STATUE_DRAW_W) / 2, STATUE.y + STATUE.h - statue0.height / ART);
     this.statueGlow.zIndex = STATUE.y + STATUE.h - 0.5;
     this.entities.addChild(this.statueGlow);
     for (let i = 0; i < 2; i++) {
@@ -352,7 +353,7 @@ export class SceneView {
     if (key === this.fieldKey) return;
     this.fieldKey = key;
     const old = this.field.texture;
-    this.field.texture = Texture.from(drawField(f.cols, f.rows, s.tree.abono, s.prestige.talents.abonoDorado));
+    this.field.texture = artTexture(drawField(f.cols, f.rows, s.tree.abono, s.prestige.talents.abonoDorado));
     if (old !== Texture.EMPTY) old.destroy(true);
   }
 
@@ -389,7 +390,7 @@ export class SceneView {
       let tex = this.houseTextures.get(key);
       if (!tex) {
         const canvas = drawHouse(s.house, golden);
-        tex = { normal: Texture.from(canvas), hover: Texture.from(outlined(canvas)), w: canvas.width, h: canvas.height };
+        tex = { normal: artTexture(canvas), hover: artTexture(outlined(canvas)), w: canvas.width / ART, h: canvas.height / ART };
         this.houseTextures.set(key, tex);
       }
       lm.normal = tex.normal;
@@ -466,7 +467,7 @@ export class SceneView {
     }
     const canvas = drawStatue(statueTier(this.state?.prestige.season ?? 1));
     const old = this.statueFlash.texture;
-    this.statueFlash.texture = Texture.from(silhouette(canvas, '#fff4c2'));
+    this.statueFlash.texture = artTexture(silhouette(canvas, '#fff4c2'));
     if (old !== Texture.EMPTY) old.destroy(true);
     this.flashT = FLASH_TIME;
   }
@@ -480,7 +481,7 @@ export class SceneView {
     let tex = entry.cache.get(key);
     if (!tex) {
       const canvas = draw();
-      tex = { normal: Texture.from(canvas), hover: Texture.from(outlined(canvas)), w: canvas.width, h: canvas.height };
+      tex = { normal: artTexture(canvas), hover: artTexture(outlined(canvas)), w: canvas.width / ART, h: canvas.height / ART };
       entry.cache.set(key, tex);
     }
     lm.normal = tex.normal;
@@ -509,7 +510,10 @@ export class SceneView {
     return best;
   }
 
-  /** El encuadre normal enseña el granero, el bancal abierto y la estatua con la mayor escala entera que quepa. */
+  /**
+   * El encuadre normal enseña el granero, el bancal abierto y la estatua con la mayor escala que quepa. Con el arte a
+   * doble resolución (ART), la escala va de ART en ART para que cada píxel del dibujo ocupe píxeles enteros de pantalla.
+   */
   private layout(s: GameState) {
     const { width: sw, height: sh } = this.app.screen;
     // el encuadre cabe en lo que no tapa la interfaz
@@ -526,9 +530,11 @@ export class SceneView {
     const y0 = Math.min(BARN.y - 12, well ? WELL.y + WELL.h - WELL_DRAW_H - 2 : Infinity, tower ? TOWER.y - 2 : Infinity);
     // la estatua siempre se ve (con el cofre de la herencia a su pie, que llega casi al borde del mundo)
     const x1 = Math.max(FIELD.x + f.cols * FIELD.cell + 12, tower ? TOWER.x + TOWER.w + 4 : 0, STATUE.x + STATUE.w + 4);
-    const y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 14, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4);
+    // margen justo bajo el bancal (cabe la valla): con el arte doble, unas unidades deciden si cabe la escala siguiente
+    const y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 8, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4);
     const bw = x1 - x0, bh = y1 - y0;
-    this.baseScale = Math.max(1, Math.floor(Math.min(w / bw, h / bh)));
+    const fit = Math.min(w / bw, h / bh);
+    this.baseScale = fit >= ART ? Math.floor(fit / ART) * ART : Math.max(1, Math.floor(fit));
     this.base = { x: x0 + bw / 2, y: y0 + bh / 2 };
     // al cambiar el tamaño de la ventana no hace falta un paseo de cámara
     if (first || this.followId === null) this.cam = { ...this.base };
@@ -546,7 +552,8 @@ export class SceneView {
     const w = Math.max(1, sw - this.insets.right), h = Math.max(1, sh - this.insets.bottom);
     const g = this.followId === null ? undefined : s.gnomes.find(g => g.id === this.followId);
     const B = this.baseScale;
-    const S = g ? (B <= 2 ? B * 2 : B + 1) : B;
+    // siguiendo a un gnomo, un paso más de zum (de ART en ART)
+    const S = g ? (B % ART === 0 ? B + ART : B + 1) : B;
     let tx = this.base.x, ty = this.base.y;
     if (g) {
       const hw = w / 2 / S, hh = h / 2 / S;

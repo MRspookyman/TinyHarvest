@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Gnomo a 32 × 32</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Pixelify+Sans:wght@400;600&display=swap">
+<style>
+/* Hoja del gnomo a doble resolución: se abre con `npm run dev` en /estilo/gnomo-32.html (usa src/render/gnome.ts) */
+:root { --bg: #edf1e7; --surface: #f8faf4; --fg: #1f2a24; --muted: #56665b; --line: #d2dacb; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 Nunito, system-ui, sans-serif; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; display: flex; flex-direction: column; gap: 36px; }
+h1, h2 { font-family: 'Pixelify Sans', monospace; font-weight: 600; margin: 0; line-height: 1.1; }
+h1 { font-size: 2.6rem; }
+h2 { font-size: 1.5rem; }
+p { margin: 0; max-width: 70ch; }
+.muted { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; background: #38b764; border-radius: 8px; }
+figcaption { font-size: .8rem; color: #f4f4f4; text-shadow: 1px 1px 0 #1a1c2c; text-align: center; }
+canvas { image-rendering: pixelated; display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gnomo a 32 × 32</h1>
+    <p class="muted">El gnomo del juego a doble resolución: gorro que tapa los ojos, narizota, barba blanca en punta, túnica verde azulada y botas. Luz desde arriba a la izquierda. Ampliado ×4.</p>
+  </header>
+  <section>
+    <h2>Oficios</h2>
+    <div class="row" id="jobs"></div>
+  </section>
+  <section>
+    <h2>Poses (animadas)</h2>
+    <div class="row" id="poses"></div>
+  </section>
+</div>
+<script type="module">
+import { gnomeIconCanvas, gnomeTextures, statueGnomeCanvas } from '/src/render/gnome.ts';
+
+const JOBS = { recolector: 'Recolector', sembrador: 'Sembrador', porteador: 'Porteador', regador: 'Regador', guardian: 'Guardián' };
+const POSES = { idle: 'Quieto', walk: 'Andar', harvest: 'Recoger', wave: 'Saludar', complain: 'Protestar', sit: 'Sentado', fall: 'De culo', scare: 'Espantar', water: 'Regar', watch: 'Vigilar' };
+
+function fig(src, caption, parent, k = 4) {
+  const c = document.createElement('canvas');
+  c.width = src.width * k; c.height = src.height * k;
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(src, 0, 0, c.width, c.height);
+  const f = document.createElement('figure'); f.append(c);
+  const cap = document.createElement('figcaption'); cap.textContent = caption; f.append(cap);
+  document.getElementById(parent).append(f);
+  return c;
+}
+for (const [job, name] of Object.entries(JOBS)) fig(gnomeIconCanvas(job), name, 'jobs');
+fig(statueGnomeCanvas(), 'Estatua', 'jobs');
+
+// poses: los fotogramas salen de las texturas del juego (su lienzo de origen)
+const live = [];
+for (const [pose, name] of Object.entries(POSES)) {
+  const job = pose === 'water' ? 'regador' : pose === 'watch' ? 'guardian' : 'sembrador';
+  const frames = gnomeTextures(job, false)[pose].map(t => t.source.resource);
+  live.push({ c: fig(frames[0], name, 'poses'), frames });
+}
+let t = 0;
+setInterval(() => {
+  t++;
+  for (const { c, frames } of live) {
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.clearRect(0, 0, c.width, c.height);
+    x.drawImage(frames[t % frames.length], 0, 0, c.width, c.height);
+  }
+}, 200);
+</script>
+</body>
+</html>

@@ -1,6 +1,19 @@
 // Pixel art por código: un sprite es una lista de filas de caracteres; cada carácter es un color de la paleta.
+import { CanvasSource, Texture } from 'pixi.js';
+
 export type PixelMap = readonly string[];
 export type Palette = Record<string, string>;
+
+/**
+ * Resolución del arte: cada unidad del mundo tiene ART × ART píxeles de dibujo. Todo el arte se dibuja a esta
+ * resolución; las posiciones y tamaños de la simulación siguen en unidades del mundo.
+ */
+export const ART = 2;
+
+/** Textura de un lienzo ya dibujado a resolución ART: ocupa lo mismo que antes en el mundo. */
+export function artTexture(canvas: HTMLCanvasElement): Texture {
+  return new Texture({ source: new CanvasSource({ resource: canvas, resolution: ART }) });
+}
 
 export function makeCanvas(w: number, h: number): HTMLCanvasElement {
   const c = document.createElement('canvas');

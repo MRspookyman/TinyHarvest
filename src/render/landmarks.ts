@@ -1,528 +1,452 @@
-// Elementos del huerto que abren menús: granero (contratar), casa de gnomos (contratar y ampliar),
-// tablón (grupos), árbol viejo (mejoras) y estatua del Gnomo Dorado (temporada y talentos).
-// Cada uno tiene su versión con contorno claro para cuando el ratón pasa por encima.
+// Edificios y monumentos del huerto: dibujo artesanal a doble resolución.
+// Las medidas de configuración siguen en unidades del mundo; las coordenadas de dibujo son píxeles de arte.
 import { BOARD, HOUSE, NODE_IDS, OLD_TREE, TREE } from '../sim/config';
 import type { GameState } from '../sim/types';
 import { makeCanvas } from './pixelart';
-import { statueCanvas } from './sprites';
+import { statueGnomeCanvas } from './gnome';
 
 type Ctx = CanvasRenderingContext2D;
+const INK = '#1a1c2c';
 const rect = (ctx: Ctx, x: number, y: number, w: number, h: number, color: string) => {
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
 };
-
-/** altura extra del granero cuando el mercado iza su bandera en el tejado */
+/** Bloque con contorno de un píxel de arte, iluminación superior izquierda. */
+function panel(ctx: Ctx, x: number, y: number, w: number, h: number, body: string, light: string, shade: string) {
+  rect(ctx, x, y, w, h, INK);
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, body);
+  rect(ctx, x + 1, y + 1, w - 2, 1, light);
+  rect(ctx, x + 1, y + 2, 1, h - 3, light);
+  rect(ctx, x + w - 2, y + 2, 1, h - 3, shade);
+  rect(ctx, x + 2, y + h - 2, w - 3, 1, shade);
+}
+/** Tejas escalonadas, con juntas alternas y bisel iluminado. Coordenadas en píxeles de arte. */
+function roof(ctx: Ctx, cx: number, y: number, half: number, height: number, red = false) {
+  for (let row = 0; row < height; row++) {
+    const spread = Math.floor((row + 1) * half / height);
+    rect(ctx, cx - spread, y + row, spread * 2, 1, INK);
+    if (spread > 1 && row < height - 1) {
+      rect(ctx, cx - spread + 1, y + row, spread * 2 - 2, 1, red ? '#b13e53' : '#333c57');
+      rect(ctx, cx - spread + 1, y + row, Math.max(1, spread - 1), 1, red ? '#e8687d' : '#566c86');
+      for (let x = cx - spread + 2; x < cx + spread - 1; x++) {
+        if ((x + Math.floor(row / 4) * 4) % 9 === 0) rect(ctx, x, y + row, 1, 1, red ? '#93324a' : '#1a1c2c');
+        else if (row % 4 === 1) rect(ctx, x, y + row, 1, 1, red ? '#ef7d57' : '#94b0c2');
+      }
+    }
+  }
+}
+/** Altura extra de la bandera, en unidades del mundo. */
 const BARN_FLAG = 8;
-/** colores de lo que se vende en el mercado: zanahoria, trigo, tomate, calabaza */
 const GOODS = ['#ef7d57', '#ffcd75', '#e8687d', '#a7f070'] as const;
 
-/**
- * Granero de 54 × 46 (54 × 54 con la bandera del mercado al máximo). Se apoya con la base en BARN.y + 46.
- * market (0–5): toldo del mercado a la izquierda de la puerta, con cajas, estante y por fin bandera.
- * guild: estandarte del gremio de porteadores a la derecha de la puerta.
- * gilded (talento «mercado dorado»): marco de oro en el ventanuco del pajar y ribete de oro en el toldo.
- * contract (talento «contrato»): un contrato con sello clavado en la puerta.
- */
+/** Granero de 108 × 92 píxeles de arte; con bandera mide 108 × 108. */
 export function drawBarn(market = 0, guild = false, gilded = false, contract = false): HTMLCanvasElement {
-  const top = market >= 5 ? BARN_FLAG : 0;
-  const c = makeCanvas(54, 46 + top);
-  const ctx = c.getContext('2d')!;
-  const bx = 1, by = top;
-  // bandera del mercado en lo alto del tejado
+  const top = market >= 5 ? BARN_FLAG * 2 : 0;
+  const c = makeCanvas(108, 92 + top), ctx = c.getContext('2d')!;
   if (top) {
-    rect(ctx, bx + 25, 0, 1, by + 1, '#5a3a2a');
-    rect(ctx, bx + 26, 0, 6, 4, '#1a1c2c');
-    rect(ctx, bx + 26, 1, 5, 2, '#ffcd75');
-    rect(ctx, bx + 28, 1, 1, 2, '#ef7d57');
+    panel(ctx, 52, 0, 3, 23, '#8b5a3c', '#c8925f', '#5a3a2a');
+    panel(ctx, 55, 1, 13, 8, '#ffcd75', '#fee3a0', '#c28a3a');
+    rect(ctx, 60, 3, 2, 4, '#ef7d57');
+    rect(ctx, 57, 3, 1, 2, '#f4f4f4');
   }
-  for (let k = 0; k < 13; k++) {
-    rect(ctx, bx + 24 - 2 * k, by + k, 4 + 4 * k, 1, k === 0 ? '#1a1c2c' : '#333c57');
-    if (k > 0) {
-      rect(ctx, bx + 24 - 2 * k, by + k, 2 * k + 1, 1, '#566c86');
+  panel(ctx, 4, top + 25, 100, 67, '#b13e53', '#e8687d', '#5d275d');
+  rect(ctx, 92, top + 28, 10, 60, '#93324a');
+  // Tablas separadas por juntas finas, nudos y vetas de la madera.
+  for (let x = 9; x < 101; x += 8) {
+    rect(ctx, x, top + 29, 1, 57, '#93324a');
+    rect(ctx, x + 1, top + 30, 1, 55, '#e8687d');
+    for (let y = 34 + x % 7; y < 84; y += 17) {
+      rect(ctx, x + 4, top + y, 1, 7, '#93324a');
+      rect(ctx, x + 3, top + y + 2, 3, 1, '#5d275d');
+      rect(ctx, x + 3, top + y + 1, 2, 1, '#ef7d57');
     }
-    rect(ctx, bx + 23 - 2 * k, by + k, 1, 1, '#1a1c2c');
-    rect(ctx, bx + 28 + 2 * k, by + k, 1, 1, '#1a1c2c');
   }
-  rect(ctx, bx + 2, by + 13, 48, 32, '#b13e53');
-  // Listones agrupados, con la esquina derecha en sombra.
-  for (let x = bx + 5; x < bx + 50; x += 4) {
-    rect(ctx, x, by + 15, 1, 28, '#93324a');
-    if ((x - bx - 5) % 12 === 0) rect(ctx, x - 2, by + 16, 1, 26, '#e8687d');
+  roof(ctx, 54, top, 53, 28);
+  rect(ctx, 5, top + 28, 97, 3, '#5d275d');
+  rect(ctx, 5, top + 29, 96, 1, '#93324a');
+  panel(ctx, 5, top + 86, 98, 5, '#566c86', '#94b0c2', '#333c57');
+  for (let x = 15; x < 100; x += 16) rect(ctx, x, top + 88, 1, 2, '#333c57');
+  // Ventanuco del pajar y briznas de heno individuales.
+  panel(ctx, 46, top + 31, 16, 13, gilded ? '#c28a3a' : '#333c57', gilded ? '#fee3a0' : '#e8687d', '#5d275d');
+  rect(ctx, 48, top + 33, 12, 8, INK);
+  for (let x = 48; x < 60; x += 2) {
+    rect(ctx, x, top + 39 - x % 3, 1, 4 + x % 3, '#ffcd75');
+    rect(ctx, x + 1, top + 40, 1, 3, '#c28a3a');
   }
-  rect(ctx, bx + 44, by + 13, 6, 32, '#93324a');
-  rect(ctx, bx + 48, by + 15, 2, 28, '#5d275d');
-  rect(ctx, bx + 2, by + 14, 1, 29, '#e8687d');
-  // El alero proyecta una sombra continua, sin textura de tejas.
-  rect(ctx, bx + 1, by + 13, 50, 1, '#1a1c2c');
-  rect(ctx, bx + 3, by + 14, 47, 2, '#5d275d');
-  rect(ctx, bx + 2, by + 43, 48, 2, '#566c86');
-  rect(ctx, bx + 3, by + 43, 39, 1, '#94b0c2');
-  rect(ctx, bx + 44, by + 43, 6, 2, '#333c57');
-  rect(ctx, bx + 1, by + 13, 1, 32, '#1a1c2c');
-  rect(ctx, bx + 50, by + 13, 1, 32, '#1a1c2c');
-  rect(ctx, bx + 1, by + 45, 50, 1, '#1a1c2c');
-  rect(ctx, bx + 22, by + 15, 8, 6, gilded ? '#c28a3a' : '#1a1c2c');
-  if (gilded) rect(ctx, bx + 22, by + 15, 8, 1, '#ffcd75');
-  rect(ctx, bx + 23, by + 19, 6, 2, '#ffcd75');
-  rect(ctx, bx + 25, by + 18, 2, 1, '#ffcd75');
-  if (gilded) rect(ctx, bx + 23, by + 16, 6, 2, '#1a1c2c');
-  rect(ctx, bx + 23, by + 16, 1, 3, '#333c57');
-  rect(ctx, bx + 22, by + 21, 8, 1, gilded ? '#ffcd75' : '#e8687d');
-  rect(ctx, bx + 23, by + 22, 8, 1, '#93324a');
-  rect(ctx, bx + 17, by + 27, 18, 18, '#1a1c2c');
-  rect(ctx, bx + 18, by + 28, 16, 17, '#5d275d');
-  rect(ctx, bx + 18, by + 28, 16, 2, '#333c57');
-  rect(ctx, bx + 26, by + 30, 8, 15, '#333c57');
-  rect(ctx, bx + 25, by + 30, 1, 15, '#1a1c2c');
-  rect(ctx, bx + 17, by + 26, 18, 1, '#e8687d');
-  for (let i = 0; i < 16; i++) {
-    const y = by + 28 + Math.floor((i * 17) / 16);
-    rect(ctx, bx + 18 + i, y, 1, 1, '#f4f4f4');
-    rect(ctx, bx + 33 - i, y, 1, 1, '#f4f4f4');
+  rect(ctx, 45, top + 44, 19, 2, gilded ? '#ffcd75' : '#e8687d');
+  // Puerta de dos hojas, tablas y herrajes.
+  panel(ctx, 36, top + 54, 36, 36, '#5a3a2a', '#c8925f', '#333c57');
+  for (let x = 40; x < 70; x += 5) rect(ctx, x, top + 56, 1, 32, '#8b5a3c');
+  rect(ctx, 54, top + 55, 1, 34, INK);
+  for (let i = 0; i < 32; i++) {
+    rect(ctx, 38 + i, top + 56 + i, 1, 2, '#f4f4f4');
+    rect(ctx, 69 - i, top + 56 + i, 1, 2, '#94b0c2');
   }
-  // el contrato, clavado con una chincheta dorada sobre el aspa de la puerta
+  for (const x of [38, 65]) for (const y of [60, 80]) {
+    rect(ctx, x, top + y, 5, 2, INK);
+    rect(ctx, x + 1, top + y, 1, 1, '#94b0c2');
+  }
+  rect(ctx, 51, top + 72, 1, 3, '#ffcd75');
+  rect(ctx, 57, top + 72, 1, 3, '#ffcd75');
   if (contract) {
-    rect(ctx, bx + 23, by + 30, 6, 8, '#1a1c2c');
-    rect(ctx, bx + 24, by + 31, 4, 6, '#f4f4f4');
-    for (const y of [32, 34]) rect(ctx, bx + 24, by + y, 3, 1, '#94b0c2');
-    rect(ctx, bx + 26, by + 36, 2, 1, '#b13e53');
-    rect(ctx, bx + 25, by + 30, 2, 1, '#ffcd75');
+    panel(ctx, 48, top + 60, 12, 16, '#fee3a0', '#f4f4f4', '#c8925f');
+    for (let y = 64; y < 72; y += 3) rect(ctx, 50, top + y, y === 70 ? 4 : 7, 1, '#8b5a3c');
+    rect(ctx, 55, top + 72, 3, 3, '#b13e53');
+    rect(ctx, 55, top + 72, 1, 1, '#e8687d');
+    rect(ctx, 53, top + 60, 2, 2, '#ffcd75');
   }
-
-  // mercado: toldo a rayas sobre la pared izquierda; cada nivel añade algo a la tienda
   if (market >= 1) {
-    const ax0 = bx + (market >= 2 ? 2 : 5), ax1 = bx + (market >= 2 ? 15 : 14);
-    const stripe = (x: number) => (Math.floor((x - ax0) / 2) % 2 === 0 ? '#f4f4f4' : market >= 3 ? '#41a6f6' : '#ffcd75');
-    rect(ctx, ax0, by + 22, ax1 - ax0 + 1, 1, gilded ? '#ffcd75' : '#1a1c2c');
-    for (let x = ax0; x <= ax1; x++) {
-      rect(ctx, x, by + 23, 1, 3, stripe(x));
-      const tip = (x - ax0) % 3 !== 2;
-      rect(ctx, x, by + 26, 1, 1, tip ? stripe(x) : '#1a1c2c');
-      rect(ctx, x, by + 27, 1, 1, tip ? '#1a1c2c' : '#93324a');
-      rect(ctx, x, by + 28, 1, 1, '#93324a');
+    const ax = market >= 2 ? 6 : 12, aw = market >= 2 ? 28 : 20;
+    panel(ctx, ax, top + 44, aw, 12, '#f4f4f4', gilded ? '#ffcd75' : '#fee3a0', '#566c86');
+    for (let x = ax + 1; x < ax + aw - 1; x++) {
+      const col = Math.floor((x - ax) / 4) % 2 ? market >= 3 ? '#41a6f6' : '#ffcd75' : '#f4f4f4';
+      rect(ctx, x, top + 46, 1, 7, col);
+      if ((x - ax) % 6 < 4) rect(ctx, x, top + 55, 1, 2, col);
+      if ((x - ax) % 4 === 1) rect(ctx, x, top + 47, 1, 4, '#fee3a0');
     }
-    rect(ctx, ax0, by + 23, 1, 3, '#1a1c2c');
-    rect(ctx, ax1, by + 23, 1, 3, '#1a1c2c');
-    // cajas de género contra la pared
+    if (gilded) rect(ctx, ax, top + 54, aw, 1, '#ffcd75');
     const crates = market >= 4 ? 3 : market >= 2 ? 2 : 1;
     for (let i = 0; i < crates; i++) {
-      const x = bx + 2 + i * 5;
-      rect(ctx, x, by + 40, 5, 5, '#1a1c2c');
-      rect(ctx, x + 1, by + 41, 3, 3, '#c8925f');
-      rect(ctx, x + 1, by + 42, 3, 1, '#8b5a3c');
-      rect(ctx, x + 1, by + 39, 3, 1, GOODS[i % GOODS.length]);
-      rect(ctx, x + 2, by + 38, 1, 1, GOODS[(i + 1) % GOODS.length]);
+      const x = 6 + i * 10;
+      panel(ctx, x, top + 80, 10, 10, '#a8723f', '#e4b27a', '#5a3a2a');
+      rect(ctx, x + 1, top + 85, 8, 1, '#5a3a2a');
+      rect(ctx, x + 4, top + 81, 1, 8, '#8b5a3c');
+      for (let j = 0; j < 3; j++) {
+        rect(ctx, x + 1 + j * 3, top + 77 + j % 2, 3, 3, GOODS[(i + j) % GOODS.length]);
+        rect(ctx, x + 1 + j * 3, top + 77 + j % 2, 1, 1, '#fee3a0');
+        rect(ctx, x + 2 + j * 3, top + 76 + j % 2, 1, 1, '#38b764');
+      }
+      rect(ctx, x + 1, top + 81, 1, 1, INK);
+      rect(ctx, x + 8, top + 88, 1, 1, INK);
     }
-    // estante con producto a la vista
     if (market >= 3) {
-      rect(ctx, ax0, by + 35, ax1 - ax0 + 1, 1, '#8b5a3c');
-      rect(ctx, ax0, by + 36, ax1 - ax0 + 1, 1, '#1a1c2c');
-      for (let x = ax0 + 1, i = 0; x + 1 < ax1; x += 3, i++) rect(ctx, x, by + 33, 2, 2, GOODS[i % GOODS.length]);
+      panel(ctx, ax, top + 70, aw, 4, '#8b5a3c', '#c8925f', '#5a3a2a');
+      for (let x = ax + 2, i = 0; x < ax + aw - 3; x += 6, i++) {
+        panel(ctx, x, top + 65, 5, 5, GOODS[i % GOODS.length], '#fee3a0', '#b13e53');
+        rect(ctx, x + 2, top + 64, 1, 1, '#38b764');
+      }
     }
-    // cartel con una moneda colgando del toldo
     if (market >= 4) {
-      const sx = Math.floor((ax0 + ax1) / 2) - 2;
-      rect(ctx, sx + 2, by + 29, 1, 1, '#1a1c2c');
-      rect(ctx, sx, by + 30, 5, 3, '#1a1c2c');
-      rect(ctx, sx + 1, by + 30, 3, 2, '#ffcd75');
-      rect(ctx, sx + 2, by + 30, 1, 2, '#ef7d57');
+      const x = ax + Math.floor(aw / 2) - 5;
+      rect(ctx, x + 5, top + 57, 1, 3, INK);
+      panel(ctx, x, top + 60, 11, 6, '#c28a3a', '#ffcd75', '#8b5a3c');
+      rect(ctx, x + 4, top + 61, 3, 4, '#ffcd75');
+      rect(ctx, x + 5, top + 62, 1, 2, '#ef7d57');
     }
   }
-
-  // gremio de porteadores: estandarte azul con un saco bordado
   if (guild) {
-    rect(ctx, bx + 37, by + 22, 13, 1, '#1a1c2c');
-    rect(ctx, bx + 38, by + 22, 11, 1, '#5a3a2a');
-    rect(ctx, bx + 39, by + 23, 9, 11, '#1a1c2c');
-    rect(ctx, bx + 40, by + 23, 7, 10, '#3b5dc9');
-    rect(ctx, bx + 40, by + 23, 1, 10, '#41a6f6');
-    // cola de golondrina
-    rect(ctx, bx + 40, by + 33, 3, 1, '#3b5dc9');
-    rect(ctx, bx + 44, by + 33, 3, 1, '#3b5dc9');
-    rect(ctx, bx + 40, by + 34, 2, 1, '#1a1c2c');
-    rect(ctx, bx + 45, by + 34, 2, 1, '#1a1c2c');
-    rect(ctx, bx + 43, by + 33, 1, 1, '#1a1c2c');
-    // el saco
-    rect(ctx, bx + 43, by + 25, 1, 1, '#ffcd75');
-    rect(ctx, bx + 42, by + 26, 3, 4, '#c8925f');
-    rect(ctx, bx + 44, by + 27, 1, 3, '#a8723f');
-    rect(ctx, bx + 42, by + 31, 3, 1, '#ffcd75');
+    panel(ctx, 77, top + 44, 24, 3, '#8b5a3c', '#c8925f', '#5a3a2a');
+    panel(ctx, 81, top + 47, 17, 21, '#3b5dc9', '#41a6f6', '#29366f');
+    for (const x of [83, 94]) {
+      rect(ctx, x, top + 49, 1, 17, '#ffcd75');
+      rect(ctx, x, top + 68, 2, 2, '#3b5dc9');
+    }
+    for (let y = 50; y < 66; y += 3) rect(ctx, 96, top + y, 1, 1, '#94b0c2');
+    panel(ctx, 86, top + 54, 8, 10, '#c8925f', '#ffcd75', '#8b5a3c');
+    rect(ctx, 88, top + 51, 4, 3, '#ffcd75');
+    rect(ctx, 87, top + 54, 6, 1, '#5a3a2a');
+    rect(ctx, 89, top + 56, 1, 5, '#e4b27a');
+    rect(ctx, 88, top + 66, 3, 3, '#b13e53');
   }
   return c;
 }
 
-/** hojas del tablón en orden de aparición: (x, y, ancho, alto, chincheta) */
+/** Hojas del tablón: coordenadas en unidades del mundo, convertidas al dibujarlas. */
 const BOARD_SHEETS: [number, number, number, number, string][] = [
-  [2, 3, 5, 7, '#41a6f6'],
-  [8, 2, 5, 6, '#e8687d'],
-  [15, 3, 5, 6, '#ffcd75'],
-  [5, 8, 4, 5, '#a7f070'],
-  [12, 7, 5, 6, '#ef7d57'],
+  [2, 3, 5, 7, '#41a6f6'], [8, 2, 5, 6, '#e8687d'], [15, 3, 5, 6, '#ffcd75'],
+  [5, 8, 4, 5, '#a7f070'], [12, 7, 5, 6, '#ef7d57'],
 ];
-/** a partir de cuántos grupos el tablón estrena tejadillo */
 export const BOARD_ROOF_GROUPS = 6;
+/** Altura del tejadillo en unidades del mundo. */
 const BOARD_ROOF = 6;
 
-/**
- * Tablón de anuncios con una hoja clavada por grupo (hasta 5) y tejadillo desde BOARD_ROOF_GROUPS grupos.
- * Con tejadillo es más alto: se apoya con la base en BOARD.y + BOARD.h.
- * photo (talento «experiencia»): foto enmarcada en oro de dos veteranos, abajo a la derecha.
- */
+/** Un anuncio por grupo; tejadillo desde BOARD_ROOF_GROUPS y foto de veteranos opcional. */
 export function drawBoard(groups = 1, photo = false): HTMLCanvasElement {
-  const { w } = BOARD;
-  const top = groups >= BOARD_ROOF_GROUPS ? BOARD_ROOF : 0;
-  const h = BOARD.h + top;
-  const c = makeCanvas(w, h);
-  const ctx = c.getContext('2d')!;
-  // postes
-  for (const x of [3, w - 5]) {
-    rect(ctx, x, top ? top - 1 : 14, 2, h - (top ? top - 1 : 14), '#5a3a2a');
-    rect(ctx, x - 1, top + 14, 1, h - top - 14, '#1a1c2c');
-    rect(ctx, x + 2, top + 14, 1, h - top - 14, '#1a1c2c');
-    rect(ctx, x, top + 16, 1, h - top - 17, '#a8723f');
+  const w = BOARD.w * 2, top = groups >= BOARD_ROOF_GROUPS ? BOARD_ROOF * 2 : 0;
+  const h = BOARD.h * 2 + top, c = makeCanvas(w, h), ctx = c.getContext('2d')!;
+  for (const x of [6, w - 10]) {
+    panel(ctx, x - 1, top + 27, 6, h - top - 28, '#8b5a3c', '#c8925f', '#5a3a2a');
+    rect(ctx, x + 2, top + 34, 1, 8, '#5a3a2a');
+    rect(ctx, x - 2, h - 2, 8, 2, '#257179');
   }
-  rect(ctx, 1, h - 1, w - 2, 1, '#2e9a58');
-  // tejadillo rojo, como el del granero
-  if (top) {
-    rect(ctx, 7, 0, 8, 1, '#1a1c2c');
-    rect(ctx, 4, 1, 14, 1, '#1a1c2c');
-    rect(ctx, 6, 1, 10, 1, '#b13e53');
-    rect(ctx, 1, 2, 20, 1, '#1a1c2c');
-    rect(ctx, 3, 2, 16, 1, '#e8687d');
-    rect(ctx, 0, 3, w, 1, '#1a1c2c');
-    rect(ctx, 1, 3, w - 2, 1, '#b13e53');
-    rect(ctx, 0, 4, w, 1, '#1a1c2c');
+  panel(ctx, 0, top, w, 32, '#a8723f', '#e4b27a', '#5a3a2a');
+  for (const y of [10, 20]) rect(ctx, 1, top + y, w - 2, 1, '#5a3a2a');
+  for (let y = 4; y < 29; y += 7) {
+    rect(ctx, 3, top + y, 9, 1, '#c8925f');
+    rect(ctx, 25, top + y + 2, 12, 1, '#8b5a3c');
   }
-  // tabla
-  rect(ctx, 0, top, w, 16, '#1a1c2c');
-  rect(ctx, 1, top + 1, w - 2, 14, '#a8723f');
-  rect(ctx, 1, top + 1, w - 2, 1, '#c8925f');
-  for (const y of [5, 10]) rect(ctx, 1, top + y, w - 2, 1, '#8b5a3c');
-  rect(ctx, w - 3, top + 2, 2, 12, '#8b5a3c');
-  rect(ctx, 1, top + 14, w - 2, 1, '#5a3a2a');
-  // hojas con chinchetas
-  for (const [x, y, sw, sh, pin] of BOARD_SHEETS.slice(0, Math.max(1, groups))) {
-    rect(ctx, x + 1, top + y + 1, sw, sh, '#5a3a2a');
-    rect(ctx, x, top + y, sw, sh, '#f4f4f4');
-    for (let ly = y + 2; ly < y + sh - 1; ly += 2) rect(ctx, x + 1, top + ly, sw - 2, 1, '#94b0c2');
-    rect(ctx, x + Math.floor(sw / 2), top + y, 1, 1, pin);
-  }
+  for (const x of [2, w - 3]) for (const y of [2, 28]) rect(ctx, x, top + y, 1, 1, '#94b0c2');
+  BOARD_SHEETS.slice(0, Math.max(1, groups)).forEach(([sx, sy, sw, sh, pin], i) => {
+    const x = sx * 2, y = top + sy * 2, pw = sw * 2, ph = sh * 2;
+    rect(ctx, x + 1, y + 2, pw, ph, '#5a3a2a');
+    rect(ctx, x, y, pw, ph, '#fee3a0');
+    rect(ctx, x, y, pw - 1, 1, '#f4f4f4');
+    rect(ctx, x + pw - 2, y + ph - 2, 2, 2, '#c8925f');
+    rect(ctx, x + 2, y + 3, 3, 2, pin);
+    for (let ly = 7; ly < ph - 1; ly += 3) rect(ctx, x + 2, y + ly, pw - 4 - (ly + i) % 3, 1, '#8b5a3c');
+    rect(ctx, x + Math.floor(pw / 2), y, 2, 2, pin);
+    rect(ctx, x + Math.floor(pw / 2), y, 1, 1, '#f4f4f4');
+  });
   if (photo) {
-    rect(ctx, 16, top + 8, 5, 6, '#c28a3a');
-    rect(ctx, 16, top + 8, 5, 1, '#ffcd75');
-    rect(ctx, 17, top + 9, 1, 1, '#b13e53');
-    rect(ctx, 19, top + 9, 1, 1, '#38b764');
-    rect(ctx, 17, top + 10, 1, 1, '#f2b98c');
-    rect(ctx, 19, top + 10, 1, 1, '#f2b98c');
-    rect(ctx, 17, top + 11, 1, 2, '#f4f4f4');
-    rect(ctx, 19, top + 11, 1, 2, '#f4f4f4');
-    rect(ctx, 18, top + 9, 1, 4, '#41a6f6');
+    panel(ctx, 32, top + 16, 10, 12, '#c28a3a', '#ffcd75', '#8b5a3c');
+    rect(ctx, 33, top + 18, 8, 8, '#566c86');
+    for (const x of [34, 38]) {
+      rect(ctx, x, top + 18, 2, 2, x === 34 ? '#b13e53' : '#38b764');
+      rect(ctx, x, top + 20, 2, 2, '#f2b98c');
+      rect(ctx, x, top + 22, 2, 3, '#f4f4f4');
+      rect(ctx, x + 1, top + 20, 1, 1, INK);
+    }
   }
+  if (top) roof(ctx, w / 2, 0, w / 2, 10, true);
   return c;
 }
 
-/** fracción de mejoras compradas a partir de la cual el árbol viejo pasa a cada etapa (1–4) */
 const TREE_STAGES = [0.08, 0.3, 0.55, 0.8];
 const TREE_MAX_SUM = NODE_IDS.reduce((sum, id) => sum + TREE[id].max, 0);
-
-/** Etapa del árbol viejo (0–4) según cuántas mejoras se han comprado de todas las posibles. */
+/** Etapa 0–4 según la fracción de mejoras compradas. */
 export function oldTreeStage(s: GameState): number {
   const bought = NODE_IDS.reduce((sum, id) => sum + s.tree[id], 0) / TREE_MAX_SUM;
   return TREE_STAGES.filter(f => bought >= f).length;
 }
 
-/**
- * Árbol viejo con un hueco en el tronco y semillas doradas colgando entre las hojas.
- * Crece con las mejoras: 0 copa rala, 1 copa llena y más semillas, 2 flores y aún más semillas,
- * 3 farolillos colgando, 4 casita de pájaros con inquilino.
- */
+/** Copa de hojas agrupadas, corteza nudosa, flores, faroles y casita de pájaros. */
 export function drawOldTree(stage = 0): HTMLCanvasElement {
-  const { w, h } = OLD_TREE;
-  const c = makeCanvas(w, h);
-  const ctx = c.getContext('2d')!;
-  const blobs: [number, number, number, number][] = stage === 0
-    ? [[20, 17, 17, 13], [10, 23, 8, 6], [30, 23, 8, 6]]
-    : [[20, 16, 19, 14], [9, 22, 9, 7], [31, 22, 9, 7]];
-  if (stage >= 2) blobs.push([6, 17, 6, 7], [34, 17, 6, 7]);
-  const inCanopy = (x: number, y: number) => blobs.some(([cx, cy, rx, ry]) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1);
-
-  // tronco y raíces
-  const trunk = (x: number, y: number) => (x >= 15 && x <= 24 && y >= 26) || (y >= h - 4 && x >= 11 + (h - 1 - y) && x <= 28 - (h - 1 - y));
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!trunk(x, y)) continue;
-      const edge = !trunk(x - 1, y) || !trunk(x + 1, y) || !trunk(x, y + 1);
-      rect(ctx, x, y, 1, 1, edge ? '#1a1c2c' : x >= 21 ? '#5a3a2a' : '#8b5a3c');
+  const w = OLD_TREE.w * 2, h = OLD_TREE.h * 2, c = makeCanvas(w, h), ctx = c.getContext('2d')!;
+  const trunk = (x: number, y: number) => (x >= 30 && x <= 49 && y >= 50 && y < h)
+    || (y >= h - 8 && y < h && x >= 22 + h - 1 - y && x <= 57 - (h - 1 - y));
+  for (let y = 50; y < h; y++) for (let x = 20; x < 60; x++) {
+    if (!trunk(x, y)) continue;
+    const edge = !trunk(x - 1, y) || !trunk(x + 1, y) || !trunk(x, y + 1);
+    rect(ctx, x, y, 1, 1, edge ? INK : x >= 43 ? '#5a3a2a' : x < 35 ? '#c8925f' : '#8b5a3c');
+  }
+  for (let x = 33; x < 49; x += 4) {
+    rect(ctx, x, 57 + x % 4, 1, 24, '#5a3a2a');
+    rect(ctx, x + 1, 59 + x % 4, 1, 17, '#a8723f');
+  }
+  for (const [x, y] of [[34, 78], [45, 61], [40, 84]] as const) {
+    panel(ctx, x, y, 4, 6, '#8b5a3c', '#c8925f', '#5a3a2a');
+    rect(ctx, x + 2, y + 2, 1, 2, '#5a3a2a');
+  }
+  panel(ctx, 35, 66, 11, 14, '#5a3a2a', '#a8723f', INK);
+  rect(ctx, 37, 68, 7, 10, INK);
+  panel(ctx, 39, 72, 4, 5, '#ffcd75', '#fee3a0', '#ef7d57');
+  // Masas grandes para la silueta; cada hoja se dibuja con un nervio de un píxel.
+  const blobs = stage === 0
+    ? [[40, 34, 34, 26], [20, 46, 16, 12], [60, 46, 16, 12]]
+    : [[40, 32, 38, 28], [18, 44, 18, 14], [62, 44, 18, 14]];
+  if (stage >= 2) blobs.push([12, 34, 12, 14], [68, 34, 12, 14]);
+  const inside = (x: number, y: number) => blobs.some(([cx, cy, rx, ry]) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1);
+  for (let y = 0; y < 68; y++) for (let x = 0; x < w; x++) {
+    if (!inside(x, y)) continue;
+    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+    const light = ((x - 27) / 28) ** 2 + ((y - 23) / 23) ** 2 < 1;
+    rect(ctx, x, y, 1, 1, edge ? INK : y > 48 || x > 62 ? '#1f5e57' : light ? '#38b764' : '#257179');
+  }
+  for (let y = 9; y < 60; y += 7) for (let x = 5 + (y % 3) * 2; x < 76; x += 9) {
+    const color = x < 45 && y < 36 ? '#a7f070' : '#2e9a58';
+    for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 6; dx++) {
+      if (Math.abs(dx - 2) + Math.abs(dy - 1) > 3 || !inside(x + dx, y + dy) || !inside(x + dx + 1, y + dy + 1)) continue;
+      rect(ctx, x + dx, y + dy, 1, 1, dy === 3 ? '#1f5e57' : color);
     }
+    if (inside(x + 2, y + 2)) rect(ctx, x + 2, y + 2, 3, 1, '#38b764');
   }
-  rect(ctx, 16, 30, 1, h - 34, '#c8925f');
-  rect(ctx, 20, 30, 1, 4, '#5a3a2a');
-  rect(ctx, 18, h - 6, 2, 3, '#5a3a2a');
-  // hueco con farolillo
-  rect(ctx, 18, 33, 4, 6, '#1a1c2c');
-  rect(ctx, 17, 34, 1, 4, '#1a1c2c');
-  rect(ctx, 22, 34, 1, 4, '#1a1c2c');
-  rect(ctx, 19, 36, 2, 2, '#ffcd75');
-
-  // copa
-  for (let y = 0; y < 34; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!inCanopy(x, y)) continue;
-      const edge = !inCanopy(x - 1, y) || !inCanopy(x + 1, y) || !inCanopy(x, y - 1) || !inCanopy(x, y + 1);
-      let color = '#257179';
-      if (edge) color = '#1c3b33';
-      else if (((x - 14) / 13) ** 2 + ((y - 12) / 10) ** 2 < 1) color = '#38b764';
-      else if (y > 24 || x > 30) color = '#1f5e57';
-      else if (((x - 7) / 7) ** 2 + ((y - 20) / 5) ** 2 < 1) color = '#2e9a58';
-      rect(ctx, x, y, 1, 1, color);
-    }
+  if (stage >= 2) for (const [x, y] of [[22, 12], [52, 12], [8, 36], [70, 38], [40, 18], [60, 30], [16, 24]] as const) {
+    rect(ctx, x - 1, y, 5, 2, '#f4f4f4');
+    rect(ctx, x + 1, y - 2, 2, 6, '#f4f4f4');
+    rect(ctx, x + 2, y + 2, 2, 1, '#e8687d');
+    rect(ctx, x + 1, y, 2, 2, '#ffcd75');
   }
-  // Pequeñas masas de luz agrupadas en lugar de píxeles dispersos.
-  for (const [x, y, width] of [[12, 7, 4], [9, 9, 3], [5, 19, 3]] as const) {
-    for (let dx = 0; dx < width; dx++) if (inCanopy(x + dx, y)) rect(ctx, x + dx, y, 1, 1, '#a7f070');
-  }
-  // flores blancas entre las hojas
-  if (stage >= 2) {
-    for (const [x, y] of [[11, 6], [26, 6], [4, 18], [35, 19], [20, 9], [30, 15], [8, 12]] as const) {
-      rect(ctx, x, y, 1, 1, '#f4f4f4');
-      rect(ctx, x + 1, y, 1, 1, '#e8687d');
-    }
-  }
-  // semillas doradas colgando: el árbol da mejoras, y cuantas más se compran más da
-  const seeds: [number, number][] = [[12, 24], [25, 20], [32, 26], [18, 27], [6, 19], [28, 12], [15, 14]];
+  const seeds = [[24, 48], [50, 40], [64, 52], [36, 54], [12, 38], [56, 24], [30, 28]];
   for (const [x, y] of seeds.slice(0, [2, 4, 7, 7, 7][stage])) {
-    rect(ctx, x, y - 1, 1, 1, '#1c3b33');
-    rect(ctx, x, y, 2, 2, '#ffcd75');
-    rect(ctx, x + 1, y + 1, 1, 1, '#ef7d57');
+    rect(ctx, x + 1, y - 3, 1, 3, '#8b5a3c');
+    panel(ctx, x, y, 5, 5, '#ffcd75', '#fee3a0', '#c28a3a');
+    rect(ctx, x + 3, y + 2, 1, 2, '#ef7d57');
   }
-  // farolillos colgando de las ramas bajas
-  if (stage >= 3) {
-    for (const [x, y] of [[7, 29], [31, 29]] as const) {
-      rect(ctx, x + 1, y, 1, 2, '#1a1c2c');
-      rect(ctx, x, y + 2, 4, 5, '#1a1c2c');
-      rect(ctx, x + 1, y + 3, 2, 3, '#ffcd75');
-      rect(ctx, x + 1, y + 3, 2, 1, '#ef7d57');
-    }
+  if (stage >= 3) for (const [x, y] of [[14, 58], [62, 58]] as const) {
+    rect(ctx, x + 3, y, 1, 5, INK);
+    panel(ctx, x, y + 4, 8, 11, '#ffcd75', '#fee3a0', '#ef7d57');
+    rect(ctx, x + 1, y + 6, 6, 1, '#8b5a3c');
+    rect(ctx, x + 4, y + 6, 1, 7, '#c28a3a');
+    rect(ctx, x + 2, y + 15, 4, 1, INK);
   }
-  // casita de pájaros en lo alto, con su inquilino azul
   if (stage >= 4) {
-    rect(ctx, 30, 3, 3, 1, '#1a1c2c');
-    rect(ctx, 29, 4, 5, 1, '#1a1c2c');
-    rect(ctx, 30, 4, 3, 1, '#b13e53');
-    rect(ctx, 28, 5, 7, 1, '#1a1c2c');
-    rect(ctx, 29, 5, 5, 1, '#b13e53');
-    rect(ctx, 29, 6, 5, 5, '#1a1c2c');
-    rect(ctx, 30, 6, 3, 4, '#c8925f');
-    rect(ctx, 32, 6, 1, 4, '#a8723f');
-    rect(ctx, 31, 7, 1, 1, '#1a1c2c');
-    rect(ctx, 31, 9, 1, 1, '#5a3a2a');
-    rect(ctx, 30, 1, 2, 2, '#41a6f6');
-    rect(ctx, 29, 2, 1, 1, '#3b5dc9');
-    rect(ctx, 32, 1, 1, 1, '#ffcd75');
-    rect(ctx, 31, 1, 1, 1, '#1a1c2c');
+    panel(ctx, 58, 11, 11, 11, '#c8925f', '#e4b27a', '#8b5a3c');
+    roof(ctx, 63, 6, 8, 7, true);
+    panel(ctx, 62, 14, 4, 4, INK, '#5a3a2a', INK);
+    rect(ctx, 61, 20, 8, 1, '#5a3a2a');
+    rect(ctx, 63, 18, 1, 3, '#e4b27a');
+    panel(ctx, 60, 2, 5, 5, '#41a6f6', '#73eff7', '#3b5dc9');
+    rect(ctx, 58, 5, 3, 2, '#3b5dc9');
+    rect(ctx, 65, 3, 2, 1, '#ffcd75');
+    rect(ctx, 63, 3, 1, 1, INK);
   }
   return c;
 }
 
-/** Medidas de la casa-seta según lo ampliada que esté: choza, casita con chimenea y casa de dos pisos. */
+/** Medidas de las etapas de la casa, en unidades del mundo. */
 const HOUSE_TIERS = [
   { wallW: 14, wallH: 10, capW: 24, capH: 9 },
   { wallW: 18, wallH: 12, capW: 28, capH: 11 },
   { wallW: 20, wallH: 16, capW: 30, capH: 10 },
 ] as const;
-/** motas blancas del sombrero, en orden de aparición (dx desde el centro, dy desde lo alto del sombrero) */
-const CAP_SPOTS: [number, number][] = [[-6, 3], [4, 2], [-1, 5], [8, 5], [-10, 6], [1, 1], [-4, 7], [6, 7], [11, 7]];
+/** Motas: desplazamientos en unidades del mundo desde el centro y lo alto del sombrero. */
+const CAP_SPOTS = [[-6, 3], [4, 2], [-1, 5], [8, 5], [-10, 6], [1, 1], [-4, 7], [6, 7], [11, 7]];
 
-/**
- * Casa de gnomos con forma de seta, HOUSE.w de ancho y como mucho HOUSE.h de alto.
- * Niveles 0–2: choza; 3–5: más grande, con chimenea y ventana; 6–8: dos pisos y banderín.
- * Dentro de cada etapa, cada nivel añade una mota al sombrero y una flor junto a la puerta.
- * golden (talento «casa heredada»): pomo de oro grande y escalón dorado.
- * Se recorta por arriba: se coloca con la base en HOUSE.y + HOUSE.h.
- */
+/** Casa-seta: cada nivel añade motas y flores; cada etapa cambia su arquitectura. */
 export function drawHouse(level: number, golden = false): HTMLCanvasElement {
-  const { w, h } = HOUSE;
+  const w = HOUSE.w * 2, h = HOUSE.h * 2;
   const tier = level >= 6 ? 2 : level >= 3 ? 1 : 0;
-  const { wallW, wallH, capW, capH } = HOUSE_TIERS[tier];
-  const full = makeCanvas(w, h);
-  const ctx = full.getContext('2d')!;
-  const cx = w / 2;
-  const wx0 = cx - wallW / 2, wx1 = cx + wallW / 2 - 1;
-  const wallTop = h - 1 - wallH;
-  const capTop = wallTop - capH + 2;
-
-  // chimenea (detrás del sombrero, que tapa su base)
+  const dims = HOUSE_TIERS[tier], wallW = dims.wallW * 2, wallH = dims.wallH * 2;
+  const capW = dims.capW * 2, capH = dims.capH * 2;
+  const full = makeCanvas(w, h), ctx = full.getContext('2d')!, cx = w / 2;
+  const wx = cx - wallW / 2, wallTop = h - 2 - wallH, capTop = wallTop - capH + 4;
   if (tier >= 1) {
-    const chx = cx + 6, chTop = capTop - 2;
-    rect(ctx, chx, chTop, 4, 7, '#1a1c2c');
-    rect(ctx, chx + 1, chTop + 1, 2, 6, '#8b5a3c');
-    rect(ctx, chx + 1, chTop + 3, 2, 1, '#5a3a2a');
-    rect(ctx, chx + 1, chTop + 1, 1, 2, '#c8925f');
-    rect(ctx, chx + 2, chTop - 2, 1, 1, '#94b0c2');
-    rect(ctx, chx + 3, chTop - 3, 1, 1, '#94b0c2');
+    const x = cx + 12, y = capTop - 4;
+    panel(ctx, x, y, 8, 14, '#8b5a3c', '#c8925f', '#5a3a2a');
+    for (let by = 3; by < 13; by += 4) {
+      rect(ctx, x + 1, y + by, 6, 1, '#5a3a2a');
+      rect(ctx, x + (by % 8 === 3 ? 3 : 5), y + by - 2, 1, 2, '#5a3a2a');
+    }
+    panel(ctx, x - 1, y, 10, 3, '#a8723f', '#e4b27a', '#5a3a2a');
+    rect(ctx, x + 4, y - 4, 2, 2, '#94b0c2');
+    rect(ctx, x + 6, y - 6, 2, 1, '#c7cfcc');
   }
-  // banderín en lo alto
   if (tier === 2) {
-    rect(ctx, cx - 1, 0, 1, capTop + 1, '#5a3a2a');
-    rect(ctx, cx, 0, 4, 1, '#41a6f6');
-    rect(ctx, cx, 1, 2, 1, '#41a6f6');
-    rect(ctx, cx + 2, 1, 1, 1, '#3b5dc9');
-    rect(ctx, cx, 2, 1, 1, '#3b5dc9');
+    rect(ctx, cx - 2, 0, 2, capTop + 2, '#5a3a2a');
+    panel(ctx, cx, 0, 8, 4, '#41a6f6', '#73eff7', '#3b5dc9');
+    rect(ctx, cx, 4, 4, 2, '#3b5dc9');
   }
-
-  // paredes: el pie de la seta
-  rect(ctx, wx0, wallTop, wallW, wallH, '#1a1c2c');
-  rect(ctx, wx0 + 1, wallTop, wallW - 2, wallH - 1, '#f4f4f4');
-  rect(ctx, wx1 - 2, wallTop, 2, wallH - 1, '#94b0c2');
-  rect(ctx, wx0 + 1, wallTop + 1, wallW - 2, 2, '#94b0c2');
-  rect(ctx, wx1 - 3, wallTop + 3, 1, wallH - 4, '#94b0c2');
-  rect(ctx, wx0 + 1, h - 3, wallW - 2, 2, '#94b0c2');
-  rect(ctx, wx1 - 2, h - 3, 2, 2, '#566c86');
-  rect(ctx, wx0 - 1, h - 1, wallW + 2, 1, '#2e9a58');
-  // puerta redondeada con pomo
-  const doorH = tier === 0 ? 7 : 8;
-  const dx = cx - 3, dy = h - 1 - doorH;
-  rect(ctx, dx + 1, dy, 4, 1, '#1a1c2c');
-  rect(ctx, dx, dy + 1, 6, doorH, '#1a1c2c');
-  rect(ctx, dx + 1, dy + 1, 4, doorH - 1, '#8b5a3c');
-  rect(ctx, dx + 3, dy + 1, 2, doorH - 1, '#5a3a2a');
-  rect(ctx, dx + 1, dy + 1, 4, 1, '#5a3a2a');
-  rect(ctx, dx + 1, dy + 2, 1, doorH - 2, '#a8723f');
-  rect(ctx, dx + 3, dy + Math.floor(doorH / 2) + 1, 1, 1, '#ffcd75');
-  if (golden) {
-    rect(ctx, dx + 3, dy + Math.floor(doorH / 2), 2, 2, '#ffcd75');
-    rect(ctx, dx + 4, dy + Math.floor(doorH / 2) + 1, 1, 1, '#c28a3a');
+  panel(ctx, wx, wallTop, wallW, wallH, '#fee3a0', '#f4f4f4', '#94b0c2');
+  rect(ctx, wx + 1, wallTop + 1, wallW - 2, 4, '#94b0c2');
+  rect(ctx, wx + wallW - 5, wallTop + 5, 3, wallH - 6, '#c7cfcc');
+  for (let y = wallTop + 8; y < h - 5; y += 5) {
+    rect(ctx, wx + 2, y, 3, 1, '#e4b27a');
+    rect(ctx, wx + wallW - 8, y + 1, 4, 1, '#94b0c2');
   }
-  rect(ctx, dx - 1, h - 1, 8, 1, golden ? '#f4b41b' : '#94b0c2');
-  // flores junto a la puerta: una por nivel dentro de la etapa
-  const flowers = level % 3;
-  for (let i = 0; i < flowers; i++) {
-    const fx = i === 0 ? dx - 3 : dx + 8;
-    rect(ctx, fx, h - 3, 1, 2, '#257179');
-    rect(ctx, fx - 1, h - 4, 3, 1, i === 0 ? '#ef7d57' : '#ffcd75');
-    rect(ctx, fx, h - 5, 1, 1, i === 0 ? '#ef7d57' : '#ffcd75');
-    rect(ctx, fx, h - 4, 1, 1, '#f4f4f4');
+  const doorH = tier === 0 ? 14 : 16, dx = cx - 6, dy = h - 2 - doorH;
+  panel(ctx, dx, dy + 2, 12, doorH, '#8b5a3c', '#c8925f', '#5a3a2a');
+  panel(ctx, dx + 2, dy, 8, 5, '#8b5a3c', '#c8925f', '#5a3a2a');
+  rect(ctx, dx + 2, dy + 3, 8, 2, '#8b5a3c');
+  for (let x = dx + 3; x < dx + 10; x += 3) rect(ctx, x, dy + 4, 1, doorH - 3, '#5a3a2a');
+  for (const y of [dy + 5, dy + doorH - 2]) {
+    rect(ctx, dx + 1, y, 4, 1, INK);
+    rect(ctx, dx + 2, y, 1, 1, '#94b0c2');
   }
-  // ventanas con luz: una a cada lado desde la casita; dos más arriba en la de dos pisos
+  panel(ctx, dx + 7, dy + Math.floor(doorH / 2), golden ? 4 : 3, golden ? 4 : 3, '#ffcd75', '#fee3a0', '#c28a3a');
+  panel(ctx, dx - 2, h - 2, 16, 2, golden ? '#f4b41b' : '#94b0c2', golden ? '#fee3a0' : '#f4f4f4', '#566c86');
+  for (let i = 0; i < level % 3; i++) {
+    const x = i === 0 ? dx - 6 : dx + 16;
+    rect(ctx, x, h - 7, 1, 5, '#257179');
+    rect(ctx, x - 2, h - 5, 2, 1, '#38b764');
+    rect(ctx, x - 2, h - 9, 5, 3, i === 0 ? '#ef7d57' : '#ffcd75');
+    rect(ctx, x, h - 10, 1, 5, i === 0 ? '#ef7d57' : '#ffcd75');
+    rect(ctx, x, h - 8, 1, 1, '#f4f4f4');
+  }
   const windows: [number, number][] = [];
-  if (tier >= 1) windows.push([wx0 + 1, h - 9], [wx1 - 4, h - 9]);
+  if (tier >= 1) windows.push([wx + 2, h - 18], [wx + wallW - 10, h - 18]);
   if (tier === 2) {
-    windows.push([wx0 + 3, wallTop + 2], [wx1 - 6, wallTop + 2]);
-    rect(ctx, wx0 + 1, wallTop + 7, wallW - 2, 1, '#94b0c2');
+    windows.push([wx + 6, wallTop + 4], [wx + wallW - 14, wallTop + 4]);
+    rect(ctx, wx + 1, wallTop + 14, wallW - 2, 1, '#94b0c2');
   }
   for (const [x, y] of windows) {
-    rect(ctx, x, y, 4, 4, '#1a1c2c');
-    rect(ctx, x + 1, y + 1, 2, 2, '#ffcd75');
-    rect(ctx, x + 2, y + 2, 1, 1, '#ef7d57');
-    rect(ctx, x, y + 4, 4, 1, '#94b0c2');
+    panel(ctx, x, y, 8, 8, '#ffcd75', '#fee3a0', '#ef7d57');
+    rect(ctx, x + 4, y + 1, 1, 6, '#8b5a3c');
+    rect(ctx, x + 1, y + 4, 6, 1, '#8b5a3c');
+    rect(ctx, x - 1, y + 8, 10, 2, '#94b0c2');
   }
-
-  // sombrero rojo con motas
-  const inCap = (x: number, y: number) => {
-    if (y < capTop || y >= capTop + capH) return false;
-    const dy = (capTop + capH - 0.5 - y) / capH;
-    return ((x + 0.5 - cx) / (capW / 2)) ** 2 + dy * dy <= 1;
-  };
-  for (let y = capTop; y < capTop + capH; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!inCap(x, y)) continue;
-      const edge = !inCap(x - 1, y) || !inCap(x + 1, y) || !inCap(x, y - 1) || y === capTop + capH - 1;
-      let color = '#b13e53';
-      if (edge) color = '#1a1c2c';
-      else if (y >= capTop + capH - 3 || x > cx + capW / 4) color = '#93324a';
-      else if (((x - (cx - capW / 6)) / (capW / 3)) ** 2 + ((y - (capTop + capH / 3)) / (capH / 2)) ** 2 < 1) color = '#e8687d';
-      rect(ctx, x, y, 1, 1, color);
-    }
+  const inCap = (x: number, y: number) => y >= capTop && y < capTop + capH
+    && ((x + 0.5 - cx) / (capW / 2)) ** 2 + ((capTop + capH - 0.5 - y) / capH) ** 2 <= 1;
+  for (let y = capTop; y < capTop + capH; y++) for (let x = 0; x < w; x++) {
+    if (!inCap(x, y)) continue;
+    const edge = !inCap(x - 1, y) || !inCap(x + 1, y) || !inCap(x, y - 1) || y === capTop + capH - 1;
+    let color = '#b13e53';
+    if (edge) color = INK;
+    else if (y > capTop + capH - 5 || x > cx + capW / 4) color = '#93324a';
+    else if (((x - cx + capW / 6) / (capW / 3)) ** 2 + ((y - capTop - capH / 3) / (capH / 2)) ** 2 < 1) color = '#e8687d';
+    if (!edge && y === capTop + capH - 3 && x % 4 === 0) color = '#ef7d57';
+    rect(ctx, x, y, 1, 1, color);
   }
   for (const [sx, sy] of CAP_SPOTS.slice(0, 1 + level)) {
-    const x = Math.round(cx + sx), y = capTop + sy;
-    if (y >= capTop + capH - 2 || !inCap(x - 1, y) || !inCap(x + 2, y)) continue;
-    rect(ctx, x, y, 2, 1, '#f4f4f4');
+    const x = cx + sx * 2, y = capTop + sy * 2;
+    if (y >= capTop + capH - 4 || !inCap(x - 1, y) || !inCap(x + 4, y + 2)) continue;
+    rect(ctx, x, y, 4, 2, '#f4f4f4');
+    rect(ctx, x + 1, y - 1, 2, 1, '#fee3a0');
+    rect(ctx, x + 1, y + 2, 3, 1, '#c7cfcc');
   }
-
-  // recorta lo vacío de arriba para que la caja de la casa se ajuste a lo dibujado
-  const top = tier === 2 ? 0 : Math.max(0, tier === 1 ? capTop - 5 : capTop);
+  // Recorte idéntico al original en unidades del mundo, convertido a píxeles de arte.
+  const top = tier === 2 ? 0 : Math.max(0, tier === 1 ? capTop - 10 : capTop);
   const c = makeCanvas(w, h - top);
   c.getContext('2d')!.drawImage(full, 0, -top);
   return c;
 }
 
-/** ancho del dibujo de la estatua; se centra en STATUE */
+/** Ancho del monumento en unidades del mundo, NO en píxeles de arte. */
 export const STATUE_DRAW_W = 20;
-
-/** Etapa de la estatua según la temporada: 0 la primera, 1 la 2.ª y 3.ª, 2 de la 4.ª en adelante. */
 export const statueTier = (season: number) => (season >= 4 ? 2 : season >= 2 ? 1 : 0);
 
-/**
- * Estatua del Gnomo Dorado, STATUE_DRAW_W de ancho, apoyada con la base en STATUE.y + STATUE.h.
- * tier 0: pedestal bajo; 1: pedestal alto con cornisa y placa; 2: además laurel junto a la placa y rayos de oro.
- */
+/** Pedestal de piedra, figura dorada saludando y, desde la última etapa, laurel y aureola. */
 export function drawStatue(tier: number): HTMLCanvasElement {
-  const w = STATUE_DRAW_W;
-  const pedH = tier === 0 ? 5 : 9;
-  const rays = tier === 2 ? 2 : 0;
-  const h = rays + 17 + pedH;
-  const c = makeCanvas(w, h);
-  const ctx = c.getContext('2d')!;
-  const top = h - pedH;
-  // bloque de piedra con contorno, luz arriba y sombra a la derecha
+  const w = STATUE_DRAW_W * 2, pedH = tier === 0 ? 10 : 18, rays = tier === 2 ? 4 : 0;
+  const h = rays + 34 + pedH, top = h - pedH;
+  const c = makeCanvas(w, h), ctx = c.getContext('2d')!;
   const block = (x: number, y: number, bw: number, bh: number) => {
-    rect(ctx, x, y, bw, bh, '#1a1c2c');
-    rect(ctx, x + 1, y + 1, bw - 2, bh - 2, '#94b0c2');
-    rect(ctx, x + bw - 2, y + 1, 1, bh - 2, '#566c86');
-    rect(ctx, x + 1, y + 1, bw - 3, 1, '#f4f4f4');
+    panel(ctx, x, y, bw, bh, '#94b0c2', '#f4f4f4', '#566c86');
+    rect(ctx, x + bw - 4, y + 2, 2, Math.max(1, bh - 4), '#566c86');
+    if (bw > 24) rect(ctx, x + 5, y + bh - 2, 4, 1, '#c7cfcc');
   };
   if (tier === 0) {
-    block(2, top + 2, 16, 3);
-    block(3, top, 14, 3);
+    block(4, top + 4, 32, 6);
+    block(6, top, 28, 6);
   } else {
-    block(1, top + 6, 18, 3);
-    block(3, top + 2, 14, 5);
-    block(1, top, 18, 3);
-    // placa de oro con dos renglones grabados
-    const px = tier === 2 ? 7 : 6, pw = tier === 2 ? 6 : 8;
-    rect(ctx, px, top + 3, pw, 3, '#f4b41b');
-    rect(ctx, px, top + 3, pw, 1, '#ffcd75');
-    rect(ctx, px + 1, top + 4, pw - 3, 1, '#c28a3a');
-    if (tier === 2) {
-      // ramas de laurel a los lados de la placa
-      for (const [x, y, color] of [
-        [4, top + 5, '#257179'], [4, top + 4, '#38b764'], [5, top + 3, '#38b764'], [5, top + 5, '#38b764'],
-        [15, top + 5, '#257179'], [15, top + 4, '#38b764'], [14, top + 3, '#38b764'], [14, top + 5, '#38b764'],
-      ] as const) rect(ctx, x, y, 1, 1, color);
+    block(2, top + 12, 36, 6);
+    block(6, top + 4, 28, 10);
+    block(2, top, 36, 6);
+    for (const x of [8, 30]) rect(ctx, x, top + 6, 1, 6, '#566c86');
+    const px = tier === 2 ? 14 : 12, pw = tier === 2 ? 12 : 16;
+    panel(ctx, px, top + 6, pw, 6, '#f4b41b', '#fee3a0', '#c28a3a');
+    rect(ctx, px + 2, top + 8, pw - 4, 1, '#8b5a3c');
+    rect(ctx, px + 3, top + 10, pw - 6, 1, '#c28a3a');
+    if (tier === 2) for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const x = side < 0 ? 9 + i % 2 : 29 - i % 2, y = top + 11 - i * 2;
+        rect(ctx, x, y, 1, 3, '#257179');
+        rect(ctx, x + side, y - 1, 2, 2, '#38b764');
+        rect(ctx, x + side, y - 1, 1, 1, '#a7f070');
+      }
     }
   }
-  ctx.drawImage(statueCanvas(), 2, top - 17);
-  // rayos de oro alrededor de la cabeza
-  if (rays) for (const [x, y] of [[9, 0], [10, 0], [3, 3], [16, 2], [1, 8]]) rect(ctx, x, y, 1, 1, '#ffcd75');
+  // Aureola detrás del gorro: contorno pixelado, sin transparencia ni degradados.
+  if (rays) {
+    for (let y = 1; y < 23; y++) for (let x = 7; x < 33; x++) {
+      const d = ((x - 20) / 11) ** 2 + ((y - 12) / 10) ** 2;
+      if (d > 0.77 && d <= 1) rect(ctx, x, y, 1, 1, x < 20 ? '#ffcd75' : '#c28a3a');
+    }
+  }
+  ctx.drawImage(statueGnomeCanvas(), 4, top - 34);
+  if (rays) for (const [x, y, rw, rh] of [[18, 0, 1, 3], [21, 0, 1, 2], [6, 6, 2, 1], [32, 4, 1, 3], [2, 16, 3, 1], [35, 14, 2, 1]]) {
+    rect(ctx, x, y, rw, rh, '#ffcd75');
+  }
   return c;
 }
 
-/** Silueta de un color de lo opaco: el destello dorado de la estatua al empezar temporada. */
+/** Silueta de un color; conserva exactamente el tamaño del lienzo de arte recibido. */
 export function silhouette(src: HTMLCanvasElement, color: string): HTMLCanvasElement {
-  const c = makeCanvas(src.width, src.height);
-  const ctx = c.getContext('2d')!;
+  const c = makeCanvas(src.width, src.height), ctx = c.getContext('2d')!;
   ctx.drawImage(src, 0, 0);
   ctx.globalCompositeOperation = 'source-in';
   rect(ctx, 0, 0, c.width, c.height, color);
   return c;
 }
 
-/** Copia con un contorno de 1 px alrededor de lo opaco, para el resalte al pasar el ratón. */
+/** Contorno de un píxel de arte; margen de dos por lado para conservar el desplazamiento de un mundo. */
 export function outlined(src: HTMLCanvasElement, color = '#f4f4f4'): HTMLCanvasElement {
-  const w = src.width + 2, h = src.height + 2;
-  const c = makeCanvas(w, h);
-  const ctx = c.getContext('2d')!;
-  ctx.drawImage(src, 1, 1);
+  const w = src.width + 4, h = src.height + 4, c = makeCanvas(w, h), ctx = c.getContext('2d')!;
+  ctx.drawImage(src, 2, 2);
   const data = ctx.getImageData(0, 0, w, h).data;
   const opaque = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && data[(y * w + x) * 4 + 3] > 0;
   ctx.fillStyle = color;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (opaque(x, y)) continue;
-      if (opaque(x - 1, y) || opaque(x + 1, y) || opaque(x, y - 1) || opaque(x, y + 1)) ctx.fillRect(x, y, 1, 1);
-    }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!opaque(x, y) && (opaque(x - 1, y) || opaque(x + 1, y) || opaque(x, y - 1) || opaque(x, y + 1))) ctx.fillRect(x, y, 1, 1);
   }
   return c;
 }
