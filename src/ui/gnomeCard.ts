@@ -1,5 +1,5 @@
 // Ficha de un gnomo: panel estrecho en una esquina, plegable, para no tapar el huerto. Mientras está abierta, la cámara lo sigue.
-import { GROUP_PALETTE } from '../sim/config';
+import { FRIENDS, GROUP_PALETTE } from '../sim/config';
 import type { GameState, Gnome } from '../sim/types';
 import { crownIcon, jobIcons, legendIcon, traitIcons } from '../render/icons';
 import { CULTIVOS, FICHA, LEGENDARIO, OFICIOS, RANKING, RASGOS } from '../textos';
@@ -137,6 +137,11 @@ export function createGnomeCard(
   foldBtn.addEventListener('click', () => setFolded(!el.classList.contains('folded')));
 
   el.querySelector('[data-close]')!.addEventListener('click', () => close());
+  // el nombre del amigo abre su ficha
+  body.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-friend]');
+    if (btn) open(Number(btn.dataset.friend));
+  });
   move.addEventListener('change', () => {
     if (current !== null) actions.moveGnome(current, Number(move.value));
     move.blur();
@@ -166,6 +171,7 @@ export function createGnomeCard(
     const group = s.groups.find(gr => gr.id === g.group);
     const oficio = OFICIOS[g.job].nombre;
     const crowned = s.crowns[g.job] === g.id;
+    const friend = g.friend === null ? null : s.gnomes.find(o => o.id === g.friend) ?? null;
     head.innerHTML = `
       ${pixelImg(jobIcons[g.job], 'px card-job')}
       <div>
@@ -180,6 +186,10 @@ export function createGnomeCard(
         <dd><i class="dot" style="background:${group ? GROUP_PALETTE[group.color] : 'transparent'}"></i>${esc(group?.name ?? '')}</dd>
         <dt>${FICHA.rasgo}</dt>
         <dd>${pixelImg(traitIcons[g.trait], 'px trait-icon')}<b>${RASGOS[g.trait].nombre}</b> <span class="muted">${RASGOS[g.trait].desc}</span></dd>
+        <dt>${FICHA.amigo}</dt>
+        <dd>${friend
+          ? `<button type="button" class="link" data-friend="${friend.id}">♥ ${esc(friend.name)}</button> <span class="muted">${FICHA.amigoAyuda(Math.round(FRIENDS.bonus * 100))}</span>`
+          : `<span class="muted">${FICHA.sinAmigo}</span>`}</dd>
       </dl>
       <ul class="card-stats">
         ${STATS.map(k => `<li><b>${statValue(g, k)}</b> ${FICHA.stats[k]}</li>`).join('')}
@@ -201,7 +211,7 @@ export function createGnomeCard(
       if (!g) return close();
 
       const next = JSON.stringify([
-        g.name, g.job, g.group, g.trait, g.legendary, s.crowns[g.job] === g.id, doing(s, g),
+        g.name, g.job, g.group, g.trait, g.legendary, g.friend, s.crowns[g.job] === g.id, doing(s, g),
         STATS.map(k => statValue(g, k)), Math.floor(Date.now() / 60000),
         s.groups.find(gr => gr.id === g.group),
       ]);

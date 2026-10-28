@@ -223,8 +223,8 @@ export const LOG = {
     'Arenga del capataz: «¡Quien acabe antes elige la siesta!». Hay estampida.',
     'El capataz toca el silbato tres veces. Nadie sabe qué significa, pero todos corren.',
   ],
-  encargo: (quien: string, n: number, plural: string) => `Encargo: ${quien} quiere ${n} de ${plural}. Si llegan a tiempo, paga el doble.`,
-  encargoCumplido: (quien: string, monedas: number) => `¡Encargo cumplido! ${quien} paga ${monedas} monedas y se va silbando.`,
+  encargo: (quien: string, n: number, plural: string) => `Encargo: ${quien} quiere ${n} de ${plural}. Si llegan a tiempo, da propina.`,
+  encargoCumplido: (quien: string, monedas: number) => `¡Encargo cumplido! ${quien} da ${monedas} monedas de propina y se va silbando.`,
   encargoPerdido: (quien: string) => `${quien} se cansa de esperar y se va. Volverá otro día, no pasa nada.`,
   encargoRechazado: (quien: string) => `Le decís a ${quien} que hoy no puede ser. Lo entiende perfectamente.`,
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
@@ -238,6 +238,7 @@ export const LOG = {
   tropiezo: (n: string) => `${n} se ha tropezado con sus propias botas. Asegura que la tierra se ha movido.`,
   charla: (a: string, b: string) => `${a} y ${b} se paran a comentar lo mucho que trabajan.`,
   cartas: (a: string, b: string) => `${a} y ${b} juegan a las cartas. Nadie se acuerda de las reglas.`,
+  amistad: (a: string, b: string) => `${a} y ${b} ya son inseparables. Juran que trabajan mejor juntos, y es verdad.`,
   sentarse: (n: string) => `${n} se sienta en la hierba a ver crecer las cosas.`,
   mariposa: (n: string) => `${n} persigue una mariposa. La mariposa va ganando.`,
   cuervo: 'Un cuervo aterriza en el bancal y mira las cosechas con mucho interés.',
@@ -322,7 +323,7 @@ export const ENCARGOS = {
   clientes: ['La abuela Remedios', 'El cartero Anselmo', 'La panadera Pura', 'El alcalde Ceferino', 'La maestra Rosario', 'El herrero Bonifacio'],
   titulo: 'Encargo',
   pide: (quien: string, n: number, plural: string) => `${quien} quiere ${n} de ${plural}`,
-  paga: (monedas: number) => `Paga ${monedas} monedas`,
+  paga: (monedas: number) => `Propina: +${monedas} monedas`,
   no: 'Hoy no',
   noAyuda: 'Decir que no: se va sin más, no pasa nada.',
 };
@@ -332,6 +333,14 @@ export const MAESTRIA = {
   nivel: (n: number) => `Maestría ${n}`,
   progreso: (n: number, next: number) => `${n} / ${next} cosechas para el siguiente nivel`,
   maximo: 'maestría completa',
+};
+
+/** Estaciones (G10): cada temporada es una estación con su cultivo favorito. */
+export const ESTACIONES = {
+  nombres: { primavera: 'Primavera', verano: 'Verano', otono: 'Otoño', invierno: 'Invierno' },
+  favorito: (pct: number) => `+${pct} %`,
+  ayuda: (estacion: string, cultivo: string, pct: number) =>
+    `${estacion}: esta temporada, cada cosecha de ${cultivo.toLowerCase()} vale un ${pct} % más. Al terminar la temporada llega la estación siguiente.`,
 };
 
 /** Ficha de un gnomo: se abre al pulsarlo en el huerto, en el tablón o en el ranking. */
@@ -345,6 +354,9 @@ export const FICHA = {
   ayudaTablon: 'Doble clic en un gnomo para ver su ficha.',
   grupo: 'Grupo',
   rasgo: 'Carácter',
+  amigo: 'Amigo',
+  amigoAyuda: (pct: number) => `Si están en el mismo grupo, trabajan un ${pct} % más rápido.`,
+  sinAmigo: 'Todavía ninguno. Se hacen amigos saludándose, charlando y jugando a las cartas.',
   ahora: 'Ahora',
   mover: 'Mover a…',
   frase: 'Frase del día',

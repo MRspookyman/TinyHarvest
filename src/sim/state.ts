@@ -20,7 +20,7 @@ export function makeGnome(
   return {
     id, name, job, group, x, y, tx: x, ty: y,
     state: 'think', task: null, pose: 'idle', timer: 0, t: 0, flip: false, carry: [], bubble: null, stats: emptyStats(),
-    trait, legendary,
+    trait, legendary, friend: null,
   };
 }
 
@@ -112,7 +112,7 @@ export interface SaveData {
   plots: { crop: CropId; stage: number; t: number; wet: number; golden?: boolean }[];
   gnomes: {
     id: number; name: string; job: JobId; group: number; x: number; y: number; carry: CropId[]; stats: GnomeStats;
-    trait: TraitId; legendary: boolean;
+    trait: TraitId; legendary: boolean; friend?: number | null;
   }[];
   log: string[];
 }
@@ -139,7 +139,7 @@ export function serialize(s: GameState): SaveData {
     crowns: { ...s.crowns },
     gnomes: s.gnomes.map(g => ({
       id: g.id, name: g.name, job: g.job, group: g.group, x: g.x, y: g.y, carry: [...g.carry], stats: { ...g.stats },
-      trait: g.trait, legendary: g.legendary,
+      trait: g.trait, legendary: g.legendary, friend: g.friend,
     })),
     log: s.log.slice(0, 15),
   };
@@ -248,8 +248,13 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
         const gn = makeGnome(id, g.name, g.job, group, num(g.x, 70), num(g.y, 120), trait, g.legendary === true);
         gn.carry = Array.isArray(g.carry) ? g.carry.filter(isCrop) : [];
         for (const k of STAT_KEYS) gn.stats[k] = Math.max(0, num(g.stats?.[k], 0));
+        gn.friend = typeof g.friend === 'number' ? g.friend : null;
         return gn;
       });
+    // una amistad solo vale si es de ida y vuelta entre dos gnomos que siguen aquí
+    for (const g of s.gnomes) {
+      if (g.friend !== null && s.gnomes.find(o => o.id === g.friend)?.friend !== g.id) g.friend = null;
+    }
     s.nextId = Math.max(s.nextId, ...s.gnomes.map(g => g.id + 1));
   }
   // las partidas de antes de la casa pueden tener más gnomos que camas: la casa crece hasta que quepan

@@ -5,7 +5,7 @@ import {
   HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
   MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
   TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS, MASTERY, ALBUM,
-  RALLY, ORDERS,
+  RALLY, ORDERS, FRIENDS, SEASON_IDS, SEASONS, type SeasonId,
 } from './config';
 import { ALBUM_PAGES, pageRewardId, stickerId, type AlbumPage } from './album';
 import { createState, makeGnome, randomTrait } from './state';
@@ -97,7 +97,7 @@ export const gnomeWalkSpeed = (s: GameState, g: Gnome) =>
   * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1) * (1 + turfBonus(s, g)) * rallyBoost(s);
 /** multiplicador del tiempo de trabajo de un gnomo concreto (menos = más rápido) */
 export const gnomeWorkMult = (s: GameState, g: Gnome) =>
-  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g)) / rallyBoost(s);
+  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g) + friendBonus(s, g)) / rallyBoost(s);
 /** la arenga del capataz (G7) acelera a todos mientras dura */
 export const rallyBoost = (s: GameState) => (s.rally.t > 0 ? 1 + RALLY.mult : 1);
 
@@ -128,7 +128,12 @@ export const hasPorters = (s: GameState) => s.gnomes.some(g => g.job === 'portea
 export const cropValue = (s: GameState, crop: CropId) =>
   CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado)
   * (1 + TALENT_EFFECT.mercadoDorado * s.prestige.talents.mercadoDorado)
-  * (1 + MASTERY.bonus * masteryLevel(s, crop)) * s.org.mult;
+  * (1 + MASTERY.bonus * masteryLevel(s, crop)) * (crop === favoriteCrop(s) ? 1 + SEASONS.bonus : 1) * s.org.mult;
+
+/** estación de la temporada en curso (G10): primavera, verano, otoño, invierno y vuelta a empezar */
+export const seasonOf = (s: GameState): SeasonId => SEASON_IDS[(s.prestige.season - 1) % SEASON_IDS.length];
+/** el cultivo de la estación se vende más caro */
+export const favoriteCrop = (s: GameState): CropId => SEASONS.favorite[seasonOf(s)];
 
 // ---------- Maestría (G5) y álbum (G6) ----------
 
@@ -934,6 +939,7 @@ function startTogether(s: GameState, a: Gnome, b: Gnome, kind: 'cards' | 'chat',
   say(b, kind, Infinity);
   moment(s, kind === 'cards' ? 'cartas' : 'charla', (a.x + b.x) / 2, (a.y + b.y) / 2);
   if (rng() < 0.25) log(s, (kind === 'cards' ? LOG.cartas : LOG.charla)(a.name, b.name));
+  befriend(s, a, b, kind === 'cards' ? FRIENDS.cards : FRIENDS.chat);
 }
 
 function chaseButterfly(s: GameState, g: Gnome, rng: Rng) {
@@ -1013,12 +1019,41 @@ function react(s: GameState, a: Gnome, b: Gnome, rng: Rng) {
     return startTogether(s, a, b, 'chat', rng);
   }
   if (rng() >= LIFE.greet) return;
+  const friends = a.friend === b.id;
   for (const g of [a, b]) {
-    say(g, 'wave', 1.5);
+    // dos amigos se saludan con corazones
+    say(g, friends ? 'heart' : 'wave', 1.5);
     // los que pasean se paran a saludar; los que trabajan saludan sin parar
     if (g.task?.kind === 'wander') work(g, 0.8, 'wave', { kind: 'greet', other: g === a ? b.id : a.id });
   }
   moment(s, 'saludo', (a.x + b.x) / 2, (a.y + b.y) / 2);
+  befriend(s, a, b, FRIENDS.greet);
+}
+
+/** afinidad entre cada par de gnomos (G9); se olvida al cargar, las amistades no */
+const bonds = new WeakMap<GameState, Map<string, number>>();
+
+/** Suma afinidad; al llegar a FRIENDS.need, si ninguno tiene ya amigo, se hacen amigos para siempre. */
+function befriend(s: GameState, a: Gnome, b: Gnome, points: number) {
+  if (a.friend !== null || b.friend !== null) return;
+  let map = bonds.get(s);
+  if (!map) bonds.set(s, (map = new Map()));
+  const key = a.id < b.id ? `${a.id}-${b.id}` : `${b.id}-${a.id}`;
+  const v = (map.get(key) ?? 0) + points;
+  map.set(key, v);
+  if (v < FRIENDS.need) return;
+  a.friend = b.id;
+  b.friend = a.id;
+  map.delete(key);
+  moment(s, 'amistad', (a.x + b.x) / 2, (a.y + b.y) / 2);
+  log(s, LOG.amistad(a.name, b.name));
+}
+
+/** dos amigos del mismo grupo trabajan algo más rápido (G9) */
+export function friendBonus(s: GameState, g: Gnome): number {
+  if (g.friend === null) return 0;
+  const f = s.gnomes.find(o => o.id === g.friend);
+  return f && f.group === g.group ? FRIENDS.bonus : 0;
 }
 
 // ---------- Llegar y acabar ----------

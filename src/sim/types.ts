@@ -152,6 +152,8 @@ export interface Gnome {
   trait: TraitId;
   /** gnomo legendario: raro, gorro dorado, trabaja mejor */
   legendary: boolean;
+  /** su mejor amigo (G9): id de otro gnomo, o null. Si están en el mismo grupo trabajan algo más rápido. */
+  friend: number | null;
 }
 
 /**
@@ -162,7 +164,9 @@ export type MomentKind =
   | 'saludo' | 'tropiezo' | 'disputa' | 'siesta' | 'queja' | 'sentarse' | 'cartas' | 'mariposa' | 'charla' | 'pensar'
   | 'comer' | 'corona' | 'cuervo' | 'caracol' | 'topo' | 'ranas' | 'sindicato' | 'espantapajaros' | 'legendario'
   // iteración 7: el guardián espanta a un bicho a tiempo
-  | 'vigilancia';
+  | 'vigilancia'
+  // iteración 10: dos gnomos se hacen amigos
+  | 'amistad';
 
 /** Salida de la simulación para el render; se vacía en cada fotograma. */
 export type SimEvent =

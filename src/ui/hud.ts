@@ -1,10 +1,10 @@
 // Lo que está siempre en pantalla: monedas y organización arriba, barra de accesos y semillas abajo, y el último aviso del diario.
-import { CROP_IDS, RALLY } from '../sim/config';
-import { cropUnlocked, cropValue, masteryLevel, masteryNext, nextGoal } from '../sim/sim';
+import { CROP_IDS, RALLY, SEASONS } from '../sim/config';
+import { cropUnlocked, cropValue, favoriteCrop, masteryLevel, masteryNext, nextGoal, seasonOf } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
 import { cropIcons, goldenSeedIcon, menuIcons, rallyIcon } from '../render/icons';
 import type { Sound } from '../render/sound';
-import { ARBOL, CULTIVOS, ENCARGOS, MAESTRIA, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
+import { ARBOL, CULTIVOS, ENCARGOS, ESTACIONES, MAESTRIA, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
@@ -43,6 +43,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         </div>
       </div>
       <span class="stat"><b data-gnomes>0</b> ${UI.gnomos}</span>
+      <span class="stat estacion" data-estacion><span data-estacion-name></span> · <img class="px" alt="" data-estacion-icon><span data-estacion-fav></span></span>
       <span class="stat" data-prestige hidden title="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold>0</b> · <span data-season></span></span>
       <button type="button" class="sound-btn" data-sound aria-pressed="false"><i aria-hidden="true"></i></button>
     </div>`;
@@ -167,6 +168,17 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       prestige.hidden = goldenSeeds === 0 && season === 1;
       setText(prestige.querySelector('[data-gold]'), String(goldenSeeds));
       setText(prestige.querySelector('[data-season]'), TEMPORADA.temporada(season));
+      // estación (G10) y su cultivo favorito
+      const estacion = ESTACIONES.nombres[seasonOf(s)];
+      const fav = favoriteCrop(s);
+      const pct = Math.round(SEASONS.bonus * 100);
+      const seasonEl = topbar.querySelector<HTMLElement>('[data-estacion]')!;
+      setText(seasonEl.querySelector('[data-estacion-name]'), estacion);
+      setText(seasonEl.querySelector('[data-estacion-fav]'), ESTACIONES.favorito(pct));
+      const favIcon = seasonEl.querySelector<HTMLImageElement>('[data-estacion-icon]')!;
+      if (favIcon.getAttribute('src') !== cropIcons[fav]) favIcon.src = cropIcons[fav];
+      const seasonHelp = ESTACIONES.ayuda(estacion, CULTIVOS[fav].nombre, pct);
+      if (seasonEl.title !== seasonHelp) seasonEl.title = seasonHelp;
 
       // organización: el multiplicador coloreado por la media de las partes, y pista para la peor
       const parts = s.org.parts;

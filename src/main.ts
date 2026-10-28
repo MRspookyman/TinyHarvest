@@ -225,6 +225,7 @@ async function start() {
       else if (e.type === 'mastery') sound.play('mastery');
       else if (e.type === 'sticker') sound.play('album');
       else if (e.type === 'order') sound.play(e.done ? 'orderDone' : 'order');
+      else if (e.type === 'moment' && e.kind === 'amistad') sound.play('orderDone');
       else if (e.type === 'golden') {
         sound.play('golden');
         flyCoins(scene.pageOf(e.x, e.y), coinStat, 6);

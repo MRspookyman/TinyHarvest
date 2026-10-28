@@ -1,7 +1,7 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, STATUE, WELL, WILT_WARNING, WORLD } from '../sim/config';
-import { basketMax, canEndSeason, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, waterTime } from '../sim/sim';
+import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, STATUE, WELL, WILT_WARNING, WORLD, type SeasonId } from '../sim/config';
+import { basketMax, canEndSeason, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, seasonOf, waterTime } from '../sim/sim';
 import type { Critter, GameState, Gnome, Pose } from '../sim/types';
 import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
@@ -103,6 +103,17 @@ interface Particle {
   flutter?: number;
 }
 
+/**
+ * Cómo se ve cada estación (G10): tinte de la hierba y lo que cae. `every`: segundos entre partículas;
+ * `fall`: velocidad de caída (px/s).
+ */
+const SEASON_LOOK: Record<SeasonId, { tint: number; kind: 'petals' | 'fireflies' | 'leaves' | 'snow'; particle: number; every: number; fall: number }> = {
+  primavera: { tint: 0xffffff, kind: 'petals', particle: 0xffb8d0, every: 1.1, fall: 14 },
+  verano: { tint: 0xfff0b8, kind: 'fireflies', particle: 0xfff3a0, every: 1.4, fall: 0 },
+  otono: { tint: 0xeac48a, kind: 'leaves', particle: 0xe8873a, every: 0.8, fall: 18 },
+  invierno: { tint: 0xc4d8ff, kind: 'snow', particle: 0xffffff, every: 0.35, fall: 12 },
+};
+
 export class SceneView {
   onPlotClick: (id: number) => void = () => {};
   onOpenMenu: (menu: MenuId) => void = () => {};
@@ -111,6 +122,10 @@ export class SceneView {
   private world = new Container();
   /** hierba que rellena la pantalla alrededor del mundo */
   private grass = new TilingSprite({ texture: Texture.from(drawGrassTile()), width: 1, height: 1 });
+  /** fondo del mundo (hierba, caminos); se tiñe con la estación */
+  private ground = new Sprite(Texture.from(drawBackground()));
+  /** segundos hasta la próxima partícula de la estación */
+  private seasonT = 0;
   private field = new Sprite();
   private entities = new Container();
   private marks = new Graphics();
@@ -177,7 +192,7 @@ export class SceneView {
   private insets = { right: 0, bottom: 0 };
 
   constructor(private app: Application, private atlas: Atlas) {
-    this.world.addChild(new Sprite(Texture.from(drawBackground())));
+    this.world.addChild(this.ground);
     this.field.position.set(FIELD.x - 2, FIELD.y - 2);
     this.entities.sortableChildren = true;
     this.marker = new Sprite(atlas.arrow);
@@ -326,6 +341,7 @@ export class SceneView {
     this.syncEvents(s, dt);
     this.syncBarnDoor(dt);
     this.syncRain(s);
+    this.syncSeason(s, dt);
     this.syncMarker(s);
     this.syncHover(s);
   }
@@ -338,6 +354,29 @@ export class SceneView {
     const old = this.field.texture;
     this.field.texture = Texture.from(drawField(f.cols, f.rows, s.tree.abono, s.prestige.talents.abonoDorado));
     if (old !== Texture.EMPTY) old.destroy(true);
+  }
+
+  /**
+   * Estación (G10): la hierba cambia de tono y cae algo propio de cada una (pétalos, luciérnagas, hojas, nieve).
+   * Poco y lento, para que acompañe sin distraer.
+   */
+  private syncSeason(s: GameState, dt: number) {
+    const look = SEASON_LOOK[seasonOf(s)];
+    if (this.ground.tint !== look.tint) {
+      this.ground.tint = look.tint;
+      this.grass.tint = look.tint;
+    }
+    this.seasonT -= dt;
+    if (this.seasonT > 0) return;
+    this.seasonT = look.every * (0.6 + Math.random() * 0.8);
+    const x = Math.random() * WORLD.w;
+    if (look.kind === 'fireflies') {
+      // luciérnagas: suben despacio desde la hierba
+      this.addParticle(this.atlas.sparkle, x, WORLD.h * (0.3 + Math.random() * 0.7), (Math.random() - 0.5) * 6, -6, 0, 2.5, 3, look.particle);
+    } else {
+      const tex = look.kind === 'snow' ? this.atlas.dust : this.atlas.confetti[Math.floor(Math.random() * this.atlas.confetti.length)];
+      this.addParticle(tex, x, -6, 3 + Math.random() * 6, look.fall + Math.random() * 8, 0, WORLD.h / look.fall + 1, 5, look.particle);
+    }
   }
 
   /** Dibujo de la casa según su nivel y el pomo dorado (cada uno se dibuja una vez) y cartel de camas ocupadas. */
@@ -852,9 +891,10 @@ export class SceneView {
     }
   }
 
-  private addParticle(texture: Texture, x: number, y: number, vx: number, vy: number, g: number, life: number, flutter?: number) {
+  private addParticle(texture: Texture, x: number, y: number, vx: number, vy: number, g: number, life: number, flutter?: number, tint?: number) {
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5);
+    if (tint !== undefined) sprite.tint = tint;
     this.fx.addChild(sprite);
     this.particles.push({ sprite, x, y, vx, vy, g, t: 0, life, flutter });
   }
@@ -891,6 +931,9 @@ export class SceneView {
             for (let i = 0; i < 5; i++) this.addParticle(this.atlas.dust, e.x + (i - 2) * 2, e.y - 1, (i - 2) * 10, -8 - Math.random() * 8, 40, 0.45);
           } else if (e.kind === 'saludo') {
             for (let i = 0; i < 2; i++) this.addParticle(this.atlas.heart, e.x - 3 + i * 6, e.y - 18 - i * 3, (i - 0.5) * 4, -10, 0, 0.9);
+          } else if (e.kind === 'amistad') {
+            // dos gnomos se hacen amigos: lluvia de corazones hacia arriba
+            for (let i = 0; i < 8; i++) this.addParticle(this.atlas.heart, e.x - 8 + i * 2, e.y - 14 - (i % 3) * 3, (i - 3.5) * 6, -18 - (i % 2) * 6, 0, 1.4);
           } else if (e.kind === 'legendario') {
             for (let i = 0; i < 6; i++) {
               const ang = (i / 6) * Math.PI * 2;

@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.15 · **Última actualización:** 2026-10-28
+> **Estado:** borrador v0.16 · **Última actualización:** 2026-10-28
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -557,7 +557,39 @@ Las partidas anteriores siguen valiendo: los grupos sin zona trabajan en todo el
 
 - **Las zonas ahorran paseo (un 14–17 % menos de pasos), pero no dan más monedas.** Partir la plantilla quita flexibilidad: con un solo grupo, los que no tienen calabazas que recoger ayudan con las zanahorias. En pruebas aparte (fresa con zanahoria; melón o tomate con los regadores en su zona; calabaza con solo ⅙ de la plantilla) pasó lo mismo: un grupo «valioso» gana entre un 3 % y un 43 % más.
 - **Para qué sirven ahora:** para controlar el huerto. Con la semilla por grupo, sin zonas un grupo acaba plantando su semilla en todo el bancal; con zonas, se puede mantener un bancal mezclado (calabaza a un lado, zanahoria al otro) sin clics.
-- **Pendiente de decidir** (pregunta abierta): si las zonas deben dar alguna ventaja propia para que organizar por zonas también compense en monedas.
+- **Resuelto en la iteración 10 (G1):** las zonas dan ahora una ventaja propia.
+
+### Iteración 10: enganche (hecha y probada)
+
+A partir del estudio de la sección 10. Cada cambio se nota en pantalla y ninguno castiga por no estar.
+
+| Cambio | Detalle |
+|---|---|
+| **Ventaja de zona** (G1) | Los recolectores, sembradores y regadores de un grupo con zona «se conocen el terreno»: van más rápido en todo su ciclo, hasta un 40 %. Cuanto más pequeña es la zona, más ventaja; una zona de todo el bancal no da nada. |
+| **Sonido y jugo** (G2) | Sonidos suaves hechos por código (sin archivos): plantar, recoger, cobrar, comprar, contratar, corona, cosecha dorada, maestría, cromo, arenga y encargos, con límite de voces para que 40 gnomos no hagan ruido. Botón de silencio en la barra de arriba, que se recuerda. El contador de monedas da un saltito al subir y, al recoger a mano o con una cosecha dorada, las monedas vuelan hasta él. |
+| **Próximo objetivo** (G3) | En la barra de arriba, la mejora más barata que ya se puede comprar, con su barra («40 / 90»). Cuando se puede, brilla y dice «¡Ya puedes!». Con el árbol completo, la siguiente semilla dorada. Se pulsa para abrir el árbol (o la estatua). |
+| **Cosecha dorada** (G4) | Una de cada 125 plantas madura dorada, con destellos. Vale ×10 (el gnomo cobra lo de más en el acto). Si se pudre, se pierde. |
+| **Maestría de cultivo** (G5) | 25, 75, 200, 500 y 1.200 cosechas de un cultivo en la temporada dan niveles 1–5, cada uno con +2 % a lo que vale. Estrellas en el botón de semilla, con el progreso en el título. |
+| **Álbum del huerto** (G6) | Seis páginas, 35 cromos: oficios (5), caracteres, leyendas, sucesos, cosechas doradas y maestrías (nivel 3), 6 de cada. Lo que falta sale en silueta con una pista. Se queda para siempre; cada página completa da una semilla dorada, una sola vez. Botón *Álbum* en la barra, con un punto rojo si hay cromo nuevo. |
+| **Arenga del capataz** (G7) | Botón en la barra: todos andan y trabajan un 50 % más rápido durante 30 s; se recarga en 5 min (la recarga se ve como una barra que se llena). |
+| **Encargos del pueblo** (G8) | Cada 2,5–5 min, un vecino pide unos cuantos de un cultivo sembrado en 3 min, en una tarjeta arriba a la izquierda. Lo que pide sale de lo que el bancal y los recolectores pueden dar, con algo de esfuerzo. Lo cosechado se vende igual y, si se cumple, da una propina de la mitad de lo que vale. Si no, se va sin más; también se puede decir «Hoy no». |
+| **Amistades** (G9) | Saludarse, charlar y jugar a las cartas suman afinidad. Al llegar a un punto, dos gnomos sin amigo se hacen amigos para siempre: lluvia de corazones, se saludan con corazones y, en el mismo grupo, trabajan un 5 % más rápido. Se ve en la ficha, y el nombre del amigo abre la suya. |
+| **Estaciones** (G10) | La temporada 1 es primavera, la 2 verano, la 3 otoño, la 4 invierno y vuelta a empezar. La hierba cambia de tono y cae algo propio de cada una (pétalos, luciérnagas, hojas, nieve). Su cultivo favorito (fresa, melón, calabaza, zanahoria) vale un 10 % más; se ve en la barra de arriba. |
+
+Las partidas anteriores siguen valiendo: los campos nuevos tienen valores por defecto (sin maestría, álbum vacío, sin amigos ni arenga).
+
+**Prueba (2026-10-28):** `tsc`, los 71 tests (9 nuevos) y `npm run build` pasan. En Chrome a 1280×800, sin errores en la consola: cosechas doradas (planta en oro, destellos, cifra grande y monedas volando), el próximo objetivo con «¡Ya puedes!», el álbum con cromos y siluetas, estrellas de maestría, la arenga activa con los gnomos animados, la tarjeta del encargo y las estaciones de otoño e invierno.
+
+**Ajuste de equilibrio.** Con los primeros valores (maestría +5 %, propina ×2, amistad +8 %, estación +20 %) el árbol se completaba en 41 min en lugar de 64. Probando cada novedad por separado con el bot, la maestría y los encargos quitaban 13–14 min cada una y la estación 7. Con los valores de arriba:
+
+| Medida | Antes (it. 9) | Ahora |
+|---|---|---|
+| Árbol completo, activo / tranquilo | 64 / 70 min | **48 / 52 min** |
+| Temporadas 1 → 2 → 3 (bot activo) | 64 → 48 → 39 min | 48 → 35 → 31 min |
+| Monedas/s en el min 30 (activo) | 31 | 52 |
+
+- Queda dentro del objetivo de la iteración 5 (árbol completo en 45–60 min). El bot no usa la arenga, ni las zonas, ni cumple encargos a propósito: un jugador que las use irá algo más rápido, y es lo que se busca.
+- **Zonas (sección j):** bien usadas ya compensan. Con un solo cultivo repartido en tres franjas, +7 % (zanahoria) y +3 % (tomate) frente a un solo grupo. Mal repartidas siguen perdiendo: con 1 gnomo de cada oficio para 24 calabazas, que maduran a la vez, se pierde un 22–36 %.
 
 ---
 
@@ -631,7 +663,7 @@ Las partidas anteriores siguen valiendo: los grupos sin zona trabajan en todo el
 | F1 | **Repositorio git** | S | Alto (seguridad) | — | ✅ It4 |
 | F2 | **Migrar partidas guardadas** (lista de migraciones desde la versión 3) | S | Medio | — | ✅ It6 |
 | F3 | **Plantas más detalladas y balanceo suave** | M | Medio | — | Hecho (2026-10-28) |
-| F4 | **Sonido** | M | Medio | — | Más adelante |
+| F4 | **Sonido** (efectos hechos por código, con botón de silencio; sin música todavía) | M | Medio | — | ✅ It10 (G2) |
 | F5 | **Pequeño tutorial** al empezar (seis pistas que avanzan al hacer la cosa) | S–M | Medio | — | ✅ It8 |
 | F6 | **Táctil y móvil** | M | Bajo por ahora | — | Más adelante |
 | F7 | **Robustez:** copia de partidas ilegibles, aviso de «sin guardar», parada segura ante errores | S | Alto (seguridad) | — | ✅ It9 |
@@ -640,16 +672,16 @@ Las partidas anteriores siguen valiendo: los grupos sin zona trabajan en todo el
 
 | # | Tarea | Tamaño | Impacto | Depende de | Estado |
 |---|---|---|---|---|---|
-| G1 | **Ventaja de las zonas** («se conocen el terreno»): que organizar por zonas también compense en monedas | S | Alto | A5 | Siguiente |
-| G2 | **Sonido y más «jugo»** (F4): sonidos suaves al recoger, cobrar y contratar; monedas que vuelan al contador; botón de silencio | M | Alto | — | Siguiente |
-| G3 | **Próximo objetivo siempre a la vista**, con barra de progreso en la barra de arriba («Trigo: 42 / 60») | S | Alto | — | Propuesta |
-| G4 | **Cosecha dorada**: muy de vez en cuando una planta sale dorada, brilla y vale ×10 | S | Medio | — | Propuesta |
-| G5 | **Maestría de cultivo**: cada N cosechas de un cultivo, +5 % a ese cultivo, con medalla en el cartel | M | Alto | — | Propuesta |
-| G6 | **Álbum del huerto**: rasgos, legendarios, sucesos y cosechas doradas vistos; lo que falta sale como silueta «???» | M | Alto | — | Propuesta |
-| G7 | **Arenga del capataz**: botón con recarga (p. ej. +50 % de ritmo durante 30 s, cada 5 min) | S–M | Medio | — | Propuesta |
-| G8 | **Encargos del pueblo**: pedidos voluntarios y cortos («20 fresas en 3 min»), sin castigo si no se cumplen | M | Medio | — | Propuesta |
-| G9 | **Amistades entre gnomos**: los que trabajan juntos se hacen amigos, se ayudan y se echan de menos; se ve en la ficha | M | Medio | D7 | Propuesta |
-| G10 | **Estaciones**: cada temporada del prestigio es una estación con su paleta, su clima y su cultivo favorito | M | Medio | E1 | Propuesta |
+| G1 | **Ventaja de las zonas** («se conocen el terreno»): que organizar por zonas también compense en monedas | S | Alto | A5 | ✅ It10 |
+| G2 | **Sonido y más «jugo»** (F4): sonidos suaves al recoger, cobrar y contratar; monedas que vuelan al contador; botón de silencio | M | Alto | — | ✅ It10 |
+| G3 | **Próximo objetivo siempre a la vista**, con barra de progreso en la barra de arriba («Trigo: 42 / 60») | S | Alto | — | ✅ It10 |
+| G4 | **Cosecha dorada**: muy de vez en cuando una planta sale dorada, brilla y vale ×10 | S | Medio | — | ✅ It10 |
+| G5 | **Maestría de cultivo**: niveles por cosechas de la temporada, +2 % por nivel, con estrellas en la semilla | M | Alto | — | ✅ It10 |
+| G6 | **Álbum del huerto**: rasgos, legendarios, sucesos y cosechas doradas vistos; lo que falta sale como silueta «???» | M | Alto | — | ✅ It10 |
+| G7 | **Arenga del capataz**: botón con recarga (+50 % de ritmo durante 30 s, cada 5 min) | S–M | Medio | — | ✅ It10 |
+| G8 | **Encargos del pueblo**: pedidos voluntarios y cortos, con propina, sin castigo si no se cumplen | M | Medio | — | ✅ It10 |
+| G9 | **Amistades entre gnomos**: se hacen amigos tratándose y trabajan mejor juntos; se ve en la ficha | M | Medio | D7 | ✅ It10 |
+| G10 | **Estaciones**: cada temporada del prestigio es una estación con su tono, lo que cae del cielo y su cultivo favorito | M | Medio | E1 | ✅ It10 |
 | G11 | **Bienvenida al volver**: resumen de la última sesión y, si se decide, un pequeño regalo por volver (revisar la decisión 7) | S | Medio | — | Por decidir |
 
 ### 9.2 Hoja de ruta (opción A: mecánica antes que números)
@@ -661,7 +693,8 @@ flowchart LR
   I6 --> I7["It7 · Contenido<br/>C1 C2 C3 B6"]
   I7 --> I8["It8 · Prestigio<br/>E1 F5"]
   I8 --> I9["It9 · Zonas y robustez<br/>A5 F7"]
-  I9 --> L["Después<br/>F4 D11 C5 E2 C4 F6"]
+  I9 --> I10["It10 · Enganche<br/>G1–G10"]
+  I10 --> L["Después<br/>G11 D11 C5 E2 C4 F6"]
 ```
 
 | Iteración | Objetivo | Se da por buena cuando… |
@@ -672,6 +705,7 @@ flowchart LR
 | **7 · Contenido** | Un oficio nuevo, una amenaza y más cultivos | Regador y guardián con un papel claro; fresa y melón tienen sus propias ventajas y costes |
 | **8 · Prestigio** | Que la partida tenga un final y vuelva a empezar | Reiniciar tras 1–2 h da semillas doradas que se notan en la siguiente temporada |
 | **9 · Zonas y robustez** | Organizar también por sitio, y no perder partidas | Un grupo con zona no sale de ella; las zonas se ven en el huerto; una partida dañada no se pierde nunca sin avisar |
+| **10 · Enganche** | Que apetezca volver y seguir un rato más | Siempre hay un objetivo a la vista; pasan cosas raras y bonitas (doradas, encargos, amistades); hay algo que coleccionar; todo suena; el ritmo sigue en 45–60 min |
 
 **Por qué este orden:**
 - **Mecánica antes que números.** Ajustar el ritmo antes de tener podredumbre y ventajas por cultivo obliga a ajustarlo dos veces.
@@ -702,8 +736,8 @@ flowchart LR
 ## ❓ Preguntas abiertas
 
 - [ ] Cuando el autor pueda jugar: ¿es entretenido dejarlo un minuto y solo mirar? (último criterio de la demo)
-- [ ] ¿Deben las zonas dar alguna ventaja propia? Según el bot (sección j), ahorran un 14–17 % de pasos pero rinden menos que un solo grupo «valioso». Una opción: un pequeño extra de trabajo para los gnomos que trabajan dentro de su zona («se conocen el terreno»).
-- [ ] ¿Qué viene después de la iteración 9? Orden propuesto: sonido (F4), día y noche (D11), molino y mercado (C5), biomas (E2), calabaza 2×2 (C4) y táctil y móvil (F6). Antes conviene publicar la demo en itch.io y que alguien la juegue.
+- [ ] ¿Damos algo al volver (G11)? Ahora, con el juego cerrado no pasa nada (decisión 7). Opciones: solo un resumen de la última sesión, o además un pequeño regalo por volver.
+- [ ] ¿Qué viene después de la iteración 10? Orden propuesto: publicar la demo en itch.io y que alguien la juegue; después día y noche (D11), molino y mercado (C5), biomas (E2), calabaza 2×2 (C4) y táctil y móvil (F6).
 
 ---
 
@@ -731,13 +765,15 @@ flowchart LR
 | 18 | Podredumbre | Aguantes sin cambios (20–90 s). Aviso con sprites propios (amarillea a mitad del aguante, gris de moho al echarse a perder) |
 | 19 | Corona | Una por oficio, solo fama, sin premio: un premio hace que el coronado no la pierda nunca |
 | 20 | Duración sin prestigio | ~1 h (árbol completo en 45–60 min); 1–2 h cuando exista el prestigio. Punto de partida: ×1,30 por gnomo y árbol ×3 |
-| 21 | Zonas | Un rectángulo por grupo (dos esquinas en el tablón), solo para recolectores, sembradores y regadores; sin zona = todo el bancal. Sin ventaja propia de momento |
+| 21 | Zonas | Un rectángulo por grupo (dos esquinas en el tablón), solo para recolectores, sembradores y regadores; sin zona = todo el bancal. Ventaja de hasta un 40 % según lo pequeña que sea (G1) |
 | 22 | Partidas ilegibles | Nunca se sobrescriben sin copia: se apartan en otra clave y se avisa; sin sitio para la copia, no se guarda hasta que el jugador decida |
+| 23 | Enganche | Recompensas que se ven y no castigan: nada se pierde por no entrar ni por no cumplir un encargo, sin pagos ni cuentas atrás para comprar. Los extras pasivos son pequeños para mantener el árbol en 45–60 min |
 
 ---
 
 ## 📝 Historial de cambios
 
+- **v0.16 (2026-10-28):** iteración 10, «enganche». Ventaja de zona, sonido hecho por código y monedas que vuelan, próximo objetivo en la barra, cosecha dorada, maestría de cultivo, álbum de 35 cromos con páginas premiadas, arenga del capataz, encargos del pueblo con propina, amistades entre gnomos y estaciones. Equilibrado con el bot: árbol completo en 48–52 min.
 - **v0.15 (2026-10-28):** iteración 9, «zonas y robustez». Zonas por grupo marcadas en el tablón y visibles en el bancal, copia de las partidas ilegibles, aviso de «sin guardar» y parada segura ante errores. Medido el rendimiento con 40 gnomos (≤ 3,5 ms por fotograma) y añadida la sección j) del bot: las zonas ahorran paseo pero de momento no dan más monedas.
 - **2026-10-28 · Pulido visual:** terreno menos ruidoso, camino irregular y sombras de contacto; volumen en granero, casas, tablón, árbol y pedestales sin cambiar tamaños ni mejoras. Barra y ventanas más claras, árbol con marcas de estado y etiquetas accesibles, y distribución adaptable a pantallas estrechas. Corregido el desajuste del lienzo cuando la barra superior cambia de altura. Sin cambios de mecánicas, equilibrio ni guardados.
 - **2026-10-28 · F3:** redibujadas las cinco fases de los seis cultivos con semillas propias, hojas sombreadas, frutos y espigas. Se conservan los avisos de deterioro y los iconos heredan el nuevo arte. Balanceo ocasional de 1 px mediante texturas precalculadas, con base fija y sin animar semillas ni plantas echadas a perder. Sin cambios de equilibrio, simulación ni partidas guardadas.

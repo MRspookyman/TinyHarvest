@@ -289,7 +289,7 @@ export const LIFE = {
 // ---------- Enganche (iteración 10) ----------
 
 /**
- * Zonas (G1): los gnomos que van a una parcela de la zona de su grupo «se conocen el terreno»: andan y trabajan
+ * Zonas (G1): los recolectores, sembradores y regadores de un grupo con zona «se conocen el terreno»: andan y trabajan
  * hasta un ZONE_BONUS más rápido. La ventaja crece cuanto más pequeña es la zona (una zona de todo el bancal no da nada).
  * Ajustado con `npm run balance` (apartado j).
  */
@@ -297,7 +297,7 @@ export const ZONE_BONUS = 0.4;
 /** Cosecha dorada (G4): al madurar, una planta de cada tantas sale dorada y vale `mult` veces más. */
 export const GOLDEN = { chance: 0.008, mult: 10 } as const;
 /** Maestría de cultivo (G5): cosechas de un cultivo en la temporada para cada nivel; cada nivel, +bonus a lo que vale. */
-export const MASTERY = { steps: [25, 75, 200, 500, 1200], bonus: 0.05 } as const;
+export const MASTERY = { steps: [25, 75, 200, 500, 1200], bonus: 0.02 } as const;
 /** Álbum (G6): completar una página da estas semillas doradas; el cromo de maestría sale a partir de este nivel. */
 export const ALBUM = { pageSeeds: 1, masteryLevel: 3 } as const;
 /** Arenga del capataz (G7): durante `duration` s todos andan y trabajan un `mult` más rápido; se recarga en `cooldown` s. */
@@ -305,6 +305,22 @@ export const RALLY = { mult: 0.5, duration: 30, cooldown: 300 } as const;
 /**
  * Encargos del pueblo (G8): llegan cada `gap` s (el primero a los `first`), duran `time` s y piden lo que el bancal
  * y los recolectores pueden dar en ese tiempo con algo de esfuerzo (`effort`). Para calcularlo, un viaje de recolector
- * dura unos `trip` s y a mano se recogen unos `byHand` más. Pagan `reward` veces lo que valen.
+ * dura unos `trip` s y a mano se recogen unos `byHand` más. Lo cosechado se vende igual; el encargo paga además un
+ * premio de `reward` veces lo que vale.
  */
-export const ORDERS = { first: 90, gap: { min: 150, max: 300 }, time: 180, effort: 0.6, trip: 8, byHand: 15, min: 5, max: 80, reward: 2 } as const;
+export const ORDERS = { first: 90, gap: { min: 150, max: 300 }, time: 180, effort: 0.6, trip: 8, byHand: 15, min: 5, max: 80, reward: 0.5 } as const;
+/**
+ * Amistades (G9): saludarse, charlar y jugar a las cartas suman afinidad; al llegar a `need`, si ninguno tiene ya amigo,
+ * se hacen amigos. Dos amigos del mismo grupo trabajan un `bonus` más rápido.
+ */
+export const FRIENDS = { greet: 1, chat: 3, cards: 4, need: 12, bonus: 0.05 } as const;
+/**
+ * Estaciones (G10): cada temporada del prestigio es una estación, por orden y en bucle. Cada una tiene su cultivo
+ * favorito, que se vende un `bonus` más caro mientras dura.
+ */
+export const SEASON_IDS = ['primavera', 'verano', 'otono', 'invierno'] as const;
+export type SeasonId = (typeof SEASON_IDS)[number];
+export const SEASONS: { favorite: Record<SeasonId, CropId>; bonus: number } = {
+  favorite: { primavera: 'fresa', verano: 'melon', otono: 'calabaza', invierno: 'zanahoria' },
+  bonus: 0.1,
+};

@@ -83,6 +83,9 @@ img.px { image-rendering: pixelated; display: block; }
 .order-card footer { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; font-weight: 700; color: var(--gold-dark); }
 .order-card.hurry header span { color: var(--red); font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .tool.rally.active, .tool.new::after { animation: none; } }
+/* estación (G10): nombre y cultivo favorito con su icono */
+.stat.estacion { font-size: 0.9rem; }
+.stat.estacion img { width: 18px; height: 16px; }
 
 /* organización: multiplicador junto a las monedas; el color dice lo bien que va */
 .org { position: relative; display: flex; }

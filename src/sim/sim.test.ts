@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS,
+  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN,
   MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS, MASTERY, ALBUM,
-  RALLY, ORDERS,
+  RALLY, ORDERS, FRIENDS, SEASONS,
 } from './config';
 import {
   basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
   hire, hireCost, houseCapacity, isOpen, masteryLevel, moveGnome, nextGoal, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
   seedsCoinsNeeded, setGroupColor, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, turfBonus, waterTime,
-  rally, gnomeWalkSpeed, gnomeWorkMult,
+  rally, gnomeWalkSpeed, gnomeWorkMult, seasonOf, favoriteCrop,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
 import type { GameState, JobId, Rng, TraitId } from './types';
@@ -624,6 +624,42 @@ describe('enganche', () => {
     tick(s, 0.1, rng);
     expect(s.order).toBe(null);
     expect(s.coins).toBeGreaterThanOrEqual(before);
+  });
+
+  it('dos gnomos que se tratan se hacen amigos, y en el mismo grupo trabajan más rápido; se guarda', () => {
+    const rng = seeded(47);
+    const s = createState(rng);
+    const a = hireFree(s, 'recolector', rng, 'cotilla');
+    const b = hireFree(s, 'recolector', rng);
+    const work = gnomeWorkMult(s, a);
+    // se cruzan una y otra vez paseando hasta hacerse amigos
+    for (let i = 0; i < 40 && a.friend === null; i++) {
+      for (const g of [a, b]) Object.assign(g, { state: 'walk', task: { kind: 'wander' }, x: 60, y: 120, tx: 90, ty: 120 });
+      tick(s, 0.05, rng);
+      a.bubble = b.bubble = null;
+      // sin esperar la pausa entre encuentros: el reloj propio de cada gnomo pasa de golpe
+      for (const g of [a, b]) g.t += MEET_COOLDOWN;
+    }
+    expect(a.friend).toBe(b.id);
+    expect(b.friend).toBe(a.id);
+    expect(gnomeWorkMult(s, a)).toBeCloseTo(work / (1 + FRIENDS.bonus));
+    const c = createGroup(s)!;
+    moveGnome(s, b.id, c.id);
+    expect(gnomeWorkMult(s, a)).toBeCloseTo(work);
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    expect(loaded.gnomes.find(g => g.id === a.id)!.friend).toBe(b.id);
+  });
+
+  it('cada temporada es una estación con su cultivo favorito, que vale más', () => {
+    const s = createState(seeded(48));
+    expect(seasonOf(s)).toBe('primavera');
+    const fav = favoriteCrop(s);
+    expect(cropValue(s, fav)).toBeCloseTo(CROPS[fav].value * (1 + SEASONS.bonus) * s.org.mult);
+    s.prestige.season = 2;
+    expect(seasonOf(s)).toBe('verano');
+    expect(cropValue(s, fav)).toBeCloseTo(CROPS[fav].value * s.org.mult);
+    s.prestige.season = 5;
+    expect(seasonOf(s)).toBe('primavera');
   });
 
   it('el próximo objetivo es la mejora más barata que ya se puede comprar; con el árbol completo, la siguiente semilla', () => {
