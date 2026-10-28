@@ -4,10 +4,11 @@ import {
   CROW_EAT, CROW_NOTICE, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, GUARD, HAPPENING_EVERY, HAPPENING_TIME,
   HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
   MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
-  TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS,
+  TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS, MASTERY, ALBUM,
 } from './config';
+import { ALBUM_PAGES, pageRewardId, stickerId, type AlbumPage } from './album';
 import { createState, makeGnome, randomTrait } from './state';
-import { APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
+import { ALBUM_TEXTOS, APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
 import type {
   BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, Plot, Pose,
   Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, Zone,
@@ -110,10 +111,48 @@ export const waterWork = (s: GameState) => WATER.work * (1 - WATER.regaderaWork 
 /** hasta dónde ve el guardián (px del mundo), con el silbato */
 export const guardRange = (s: GameState) => GUARD.sight + GUARD.silbatoSight * s.tree.silbato;
 export const hasPorters = (s: GameState) => s.gnomes.some(g => g.job === 'porteador');
-/** monedas que da un cultivo al venderse, con el mercado, el mercado dorado y el multiplicador de organización */
+/** monedas que da un cultivo al venderse, con el mercado, el mercado dorado, su maestría y el multiplicador de organización */
 export const cropValue = (s: GameState, crop: CropId) =>
   CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado)
-  * (1 + TALENT_EFFECT.mercadoDorado * s.prestige.talents.mercadoDorado) * s.org.mult;
+  * (1 + TALENT_EFFECT.mercadoDorado * s.prestige.talents.mercadoDorado)
+  * (1 + MASTERY.bonus * masteryLevel(s, crop)) * s.org.mult;
+
+// ---------- Maestría (G5) y álbum (G6) ----------
+
+/** nivel de maestría de un cultivo en esta temporada (0 = ninguno) */
+export const masteryLevel = (s: GameState, crop: CropId) => MASTERY.steps.filter(n => s.mastery[crop] >= n).length;
+/** cosechas que faltan para el siguiente nivel, o null en el máximo */
+export const masteryNext = (s: GameState, crop: CropId): number | null => MASTERY.steps[masteryLevel(s, crop)] ?? null;
+
+/** Cuenta una cosecha para la maestría; al subir de nivel lo celebra y, desde ALBUM.masteryLevel, da su cromo. */
+function countHarvest(s: GameState, crop: CropId) {
+  const before = masteryLevel(s, crop);
+  s.mastery[crop]++;
+  const level = masteryLevel(s, crop);
+  if (level === before) return;
+  s.events.push({ type: 'mastery', crop, level });
+  log(s, LOG.maestria(CULTIVOS[crop].plural, level, Math.round(MASTERY.bonus * level * 100)));
+  if (level >= ALBUM.masteryLevel) collect(s, 'maestrias', crop);
+}
+
+/** Pega un cromo en el álbum si es nuevo; si completa la página, da sus semillas doradas (una sola vez). */
+export function collect(s: GameState, page: AlbumPage, key: string) {
+  const album = s.prestige.album;
+  const id = stickerId(page, key);
+  if (album.includes(id)) return;
+  album.push(id);
+  const done = ALBUM_PAGES[page].every(k => album.includes(stickerId(page, k)));
+  const reward = pageRewardId(page);
+  if (done && !album.includes(reward)) {
+    album.push(reward);
+    s.prestige.goldenSeeds += ALBUM.pageSeeds;
+    s.events.push({ type: 'sticker', id, page });
+    log(s, LOG.paginaAlbum(ALBUM_TEXTOS.paginas[page].titulo, ALBUM.pageSeeds));
+  } else {
+    s.events.push({ type: 'sticker', id });
+    log(s, LOG.cromo(ALBUM_TEXTOS.paginas[page].titulo));
+  }
+}
 /** segundos que aguanta madura, con las conservas */
 export const keepTime = (s: GameState, crop: CropId) => CROPS[crop].keep * (1 + CONSERVAS_PER_LEVEL * s.tree.conservas);
 /** cultivos que se lleva un porteador de la cesta en cada viaje, con la carretilla */
@@ -218,10 +257,14 @@ function addGnome(s: GameState, job: JobId, rng: Rng, who?: Pick<Veteran, 'name'
   const x = DOOR.x + rng() * 8 - 4;
   const trait = who?.trait ?? randomTrait(rng);
   const legendary = who ? who.legendary : rng() < legendaryChance(s);
-  const full = !who && legendary ? `${name} ${pick(rng, LEGENDARIO.titulos)}` : name;
+  const title = !who && legendary ? Math.floor(rng() * LEGENDARIO.titulos.length) : -1;
+  const full = title >= 0 ? `${name} ${LEGENDARIO.titulos[title]}` : name;
   const g = makeGnome(s.nextId++, full, job, s.groups[0].id, x, DOOR.y + 2, trait, legendary);
   s.gnomes.push(g);
   if (legendary) moment(s, 'legendario', g.x, g.y);
+  collect(s, 'oficios', job);
+  collect(s, 'rasgos', trait);
+  if (title >= 0) collect(s, 'leyendas', String(title));
   return g;
 }
 
@@ -340,10 +383,12 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
     s.totalEarned += v;
     const o = plotOrigin(p);
     const manual = s.manualHarvests++ % 5 === 0;
+    countHarvest(s, p.crop);
     if (golden) {
       p.golden = false;
       s.events.push({ type: 'golden', crop: p.crop, x: o.x + 9, y: o.y + 6, amount: Math.round(v) });
       log(s, LOG.doradaMano(CULTIVOS[p.crop].uno, Math.round(v)));
+      collect(s, 'doradas', p.crop);
     } else {
       s.events.push({ type: 'coins', x: o.x + 9, y: o.y + 2, amount: Math.round(v) });
       if (manual) log(s, LOG.manual(CULTIVOS[p.crop].uno));
@@ -1024,6 +1069,7 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
     g.stats.tasks++;
     const o = plotOrigin(p);
     s.events.push({ type: 'harvest', gnome: g.id, crop, x: o.x + 9, y: o.y + 9 });
+    countHarvest(s, crop);
     if (golden) {
       // lo dorado se cobra en el acto: lo que vale de más; el cultivo normal sigue al saco
       const extra = cropValue(s, crop) * (GOLDEN.mult - 1);
@@ -1033,6 +1079,7 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
       s.events.push({ type: 'golden', crop, x: o.x + 9, y: o.y + 6, amount: Math.round(extra) });
       say(g, 'heart', 1.5);
       log(s, LOG.dorada(g.name, CULTIVOS[crop].uno, Math.round(extra)));
+      collect(s, 'doradas', crop);
     } else if (g.trait === 'gloton' && crop === 'zanahoria' && rng() < LIFE.glutton) {
       // el glotón se come alguna zanahoria recién recogida (las doradas, no: se las queda mirando)
       say(g, 'yum', Infinity);
@@ -1272,6 +1319,12 @@ function updateEvents(s: GameState, dt: number, rng: Rng) {
 
 /** Empieza un suceso. Devuelve false si ahora no puede pasar (nada maduro para el cuervo, otro suceso raro en curso…). */
 export function startEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
+  if (!beginEvent(s, kind, rng)) return false;
+  collect(s, 'sucesos', kind);
+  return true;
+}
+
+function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
   const open = s.plots.filter(p => isOpen(s, p));
   if (kind === 'cuervo') {
     if (s.happening?.kind === 'espantapajaros') return false;
@@ -1404,6 +1457,7 @@ export function endSeason(s: GameState, rng: Rng): GameState {
     history: [record, ...old.history].slice(0, PRESTIGE.historyMax),
     veterans,
     lifetimeEarned: old.lifetimeEarned + s.totalEarned,
+    album: [...old.album],
   };
   const t = n.prestige.talents;
   n.log = [];

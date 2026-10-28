@@ -7,6 +7,7 @@ import type {
   CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Prestige, Priority, Rng, SeasonRecord, TalentId,
   TraitId, Veteran, Zone,
 } from './types';
+import { ALBUM_IDS } from './album';
 
 const STAT_KEYS: (keyof GnomeStats)[] = ['tasks', 'harvests', 'value', 'plants', 'delivered', 'walked', 'naps', 'complaints'];
 const emptyStats = (): GnomeStats => ({ tasks: 0, harvests: 0, value: 0, plants: 0, delivered: 0, walked: 0, naps: 0, complaints: 0 });
@@ -32,6 +33,7 @@ export function freshPrestige(): Prestige {
     history: [],
     veterans: [],
     lifetimeEarned: 0,
+    album: [],
   };
 }
 
@@ -69,6 +71,7 @@ export function createState(rng: Rng): GameState {
     nextCritterId: 1,
     nextEventIn: EVENT_GAP.first,
     happening: null,
+    mastery: Object.fromEntries(CROP_IDS.map(c => [c, 0])) as Record<CropId, number>,
     log: [LOG.inicio],
     events: [],
   };
@@ -99,6 +102,7 @@ export interface SaveData {
   rotted: number;
   house: number;
   seasonTime: number;
+  mastery?: Record<CropId, number>;
   prestige: Prestige;
   crowns: Record<JobId, number | null>;
   plots: { crop: CropId; stage: number; t: number; wet: number; golden?: boolean }[];
@@ -124,6 +128,7 @@ export function serialize(s: GameState): SaveData {
     rotted: s.rotted,
     house: s.house,
     seasonTime: s.seasonTime,
+    mastery: { ...s.mastery },
     prestige: structuredClone(s.prestige),
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet, golden: p.golden })),
     crowns: { ...s.crowns },
@@ -194,6 +199,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   s.house = int(d.house, 0, 0, HOUSE.max);
   for (const j of JOB_IDS) s.hired[j] = int(d.hired?.[j], 0, 0, 999);
   s.seasonTime = Math.max(0, num(d.seasonTime, 0));
+  for (const c of CROP_IDS) s.mastery[c] = int(d.mastery?.[c], 0, 0, 1e9);
   s.prestige = loadPrestige(d.prestige);
 
   if (Array.isArray(d.groups)) {
@@ -281,5 +287,6 @@ function loadPrestige(raw: Partial<Prestige> | undefined): Prestige {
         seasons: int(v.seasons, 1, 1, 1e6),
       }));
   }
+  if (Array.isArray(raw.album)) p.album = [...new Set(raw.album.filter(id => typeof id === 'string' && ALBUM_IDS.has(id)))];
   return p;
 }

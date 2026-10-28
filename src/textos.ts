@@ -65,6 +65,7 @@ export const MENUS = {
   diario: { titulo: 'Diario del huerto', sub: 'Lo que ha pasado', lugar: 'Diario', boton: 'Diario' },
   ranking: { titulo: 'Gnomos del mes', sub: 'Quién destaca en el huerto', lugar: 'Ranking', boton: 'Ranking' },
   temporada: { titulo: 'Estatua del Gnomo Dorado', sub: 'Temporada y talentos', lugar: 'Estatua del Gnomo Dorado', boton: 'Estatua' },
+  album: { titulo: 'Álbum del huerto', sub: 'Cromos de todas las temporadas', lugar: 'Álbum', boton: 'Álbum' },
 } as const;
 export type MenuId = keyof typeof MENUS;
 
@@ -208,6 +209,9 @@ export const LOG = {
   podrido: (uno: string) => `Se ha echado a perder ${uno}. Huele a reproche.`,
   dorada: (n: string, uno: string, monedas: number) => `¡Cosecha dorada! ${n} ha recogido ${uno} que brilla como el sol: +${monedas} monedas. Dice que ya lo sabía.`,
   doradaMano: (uno: string, monedas: number) => `¡Cosecha dorada! Has recogido ${uno} que brilla como el sol: +${monedas} monedas. Los gnomos se quitan el gorro.`,
+  maestria: (plural: string, nivel: number, pct: number) => `Los gnomos ya dominan el cultivo de ${plural}: maestría ${nivel}, +${pct} % de valor. Se lo tienen muy creído.`,
+  cromo: (pagina: string) => `Cromo nuevo en el álbum (${pagina.toLowerCase()}). Los gnomos lo pegan torcido.`,
+  paginaAlbum: (pagina: string, semillas: number) => `¡Página «${pagina}» del álbum completa! +${semillas} ${semillas === 1 ? 'semilla dorada' : 'semillas doradas'}.`,
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
   primeraCorona: (n: string, oficio: string) => `${n} es el primer «mejor ${oficio} del mes». Nadie sabe quién decide esto, pero ya lleva corona.`,
   corona: (nuevo: string, viejo: string, oficio: string) => `${nuevo} le quita a ${viejo} la corona de mejor ${oficio}. Dice que no le importa, pero no se la quita ni para dormir.`,
@@ -276,6 +280,33 @@ export const LEGENDARIO = {
   nombre: 'Legendario',
   desc: 'Un gnomo de leyenda: anda y trabaja un 25 % mejor. Nadie sabe de dónde ha salido.',
   titulos: ['el Magnífico', 'el Incansable', 'el de las Mil Cosechas', 'el Grande', 'el Deslumbrante', 'el Sabio del Surco'],
+};
+
+/** Álbum del huerto (G6): seis páginas de cromos. Lo que falta sale en silueta con una pista. */
+export const ALBUM_TEXTOS = {
+  ayuda: (semillas: number) => `Los cromos se quedan para siempre, temporada tras temporada. Cada página completa da ${semillas === 1 ? 'una semilla dorada' : `${semillas} semillas doradas`}.`,
+  completa: '¡Página completa!',
+  premio: (semillas: number) => `Completa la página: +${semillas} ${semillas === 1 ? 'semilla dorada' : 'semillas doradas'}`,
+  falta: '???',
+  paginas: {
+    oficios: { titulo: 'Oficios', pista: 'Contrata a un gnomo de este oficio.' },
+    rasgos: { titulo: 'Caracteres', pista: 'Contrata a un gnomo con este carácter.' },
+    leyendas: { titulo: 'Leyendas', pista: 'Un gnomo legendario con este título. Muy, muy raro.' },
+    sucesos: { titulo: 'Sucesos', pista: 'Algo que pasa en el huerto de vez en cuando. Hay que estar ahí.' },
+    doradas: { titulo: 'Cosechas doradas', pista: 'Recoge una cosecha dorada de este cultivo.' },
+    maestrias: { titulo: 'Maestrías', pista: 'Llega al nivel 3 de maestría con este cultivo en una temporada.' },
+  },
+  sucesos: {
+    cuervo: 'El cuervo', caracol: 'El caracol', topo: 'El topo', ranas: 'Lluvia de ranas', sindicato: 'La huelga', espantapajaros: 'El espantapájaros',
+  },
+  maestria: (plural: string) => `Maestros de ${plural}`,
+};
+
+/** Maestría de cultivo (G5): se ve en los botones de semilla. */
+export const MAESTRIA = {
+  nivel: (n: number) => `Maestría ${n}`,
+  progreso: (n: number, next: number) => `${n} / ${next} cosechas para el siguiente nivel`,
+  maximo: 'maestría completa',
 };
 
 /** Ficha de un gnomo: se abre al pulsarlo en el huerto, en el tablón o en el ranking. */

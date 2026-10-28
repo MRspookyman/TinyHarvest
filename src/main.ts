@@ -14,6 +14,7 @@ import type { GameActions } from './ui/dom';
 import { flyCoins } from './ui/coinFly';
 import { createGnomeCard } from './ui/gnomeCard';
 import { createHud } from './ui/hud';
+import { createAlbumMenu } from './ui/menus/album';
 import { createDiaryMenu } from './ui/menus/diary';
 import { createGroupsMenu } from './ui/menus/groups';
 import { createHireMenu } from './ui/menus/hire';
@@ -156,6 +157,7 @@ async function start() {
     diario: createDiaryMenu(actions),
     ranking: createRankingMenu(actions),
     temporada: seasonMenu,
+    album: createAlbumMenu(),
   });
   const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m), sound);
   const coinStat = document.querySelector<HTMLElement>('[data-coin-stat]')!;
@@ -215,6 +217,8 @@ async function start() {
       if (e.type === 'harvest') sound.play('harvest');
       else if (e.type === 'coins') sound.play('coins', e.amount);
       else if (e.type === 'crown') sound.play('crown');
+      else if (e.type === 'mastery') sound.play('mastery');
+      else if (e.type === 'sticker') sound.play('album');
       else if (e.type === 'golden') {
         sound.play('golden');
         flyCoins(scene.pageOf(e.x, e.y), coinStat, 6);

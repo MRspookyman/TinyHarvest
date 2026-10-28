@@ -178,7 +178,11 @@ export type SimEvent =
   /** empieza una temporada nueva (llega en los eventos del estado que devuelve endSeason) */
   | { type: 'season'; season: number }
   /** se ha recogido una cosecha dorada (G4): destello y monedas de más */
-  | { type: 'golden'; crop: CropId; x: number; y: number; amount: number };
+  | { type: 'golden'; crop: CropId; x: number; y: number; amount: number }
+  /** un cultivo sube de maestría (G5) */
+  | { type: 'mastery'; crop: CropId; level: number }
+  /** cromo nuevo en el álbum (G6); `page` si con él se completa una página */
+  | { type: 'sticker'; id: string; page?: string };
 
 /**
  * Multiplicador de organización (B6): premia una cadena de trabajo que funciona. Se calcula sobre una ventana
@@ -262,6 +266,8 @@ export interface GameState {
   /** segundos hasta el próximo suceso pequeño */
   nextEventIn: number;
   happening: Happening | null;
+  /** cosechas de cada cultivo en esta temporada: dan la maestría (G5) */
+  mastery: Record<CropId, number>;
   /** más reciente primero */
   log: string[];
   /** salida para el render; no se guarda */
@@ -323,4 +329,6 @@ export interface Prestige {
   veterans: Veteran[];
   /** monedas ganadas en todas las temporadas */
   lifetimeEarned: number;
+  /** cromos del álbum (G6) conseguidos en cualquier temporada, y las páginas ya premiadas («pagina:…») */
+  album: string[];
 }

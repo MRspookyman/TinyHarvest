@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS,
-  MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS,
+  MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS, MASTERY, ALBUM,
 } from './config';
 import {
   basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
-  hire, hireCost, houseCapacity, isOpen, moveGnome, nextGoal, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
+  hire, hireCost, houseCapacity, isOpen, masteryLevel, moveGnome, nextGoal, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
   seedsCoinsNeeded, setGroupColor, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, turfBonus, waterTime,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
@@ -531,6 +531,51 @@ describe('enganche', () => {
     Object.assign(q, { stage: RIPE, t: CROPS.zanahoria.keep - 0.01, golden: true });
     tick(s, 0.1, rng);
     expect(q).toMatchObject({ stage: ROTTEN, golden: false });
+  });
+
+  it('la maestría sube con las cosechas de la temporada, encarece ese cultivo y se pierde al acabar la temporada', () => {
+    const rng = seeded(43);
+    const s = createState(rng);
+    const base = cropValue(s, 'zanahoria');
+    for (const p of s.plots) p.stage = -1;
+    const p = s.plots[0];
+    for (let i = 0; i < MASTERY.steps[0]; i++) {
+      Object.assign(p, { stage: RIPE, t: 0 });
+      clickPlot(s, p.id, 'zanahoria');
+    }
+    expect(masteryLevel(s, 'zanahoria')).toBe(1);
+    expect(cropValue(s, 'zanahoria')).toBeCloseTo(base * (1 + MASTERY.bonus));
+    expect(cropValue(s, 'trigo')).toBeCloseTo(CROPS.trigo.value * s.org.mult);
+    expect(s.events.some(e => e.type === 'mastery' && e.crop === 'zanahoria' && e.level === 1)).toBe(true);
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    expect(loaded.mastery.zanahoria).toBe(MASTERY.steps[0]);
+    s.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds);
+    expect(masteryLevel(endSeason(s, rng), 'zanahoria')).toBe(0);
+  });
+
+  it('el álbum pega cada cromo una vez, premia la página completa una sola vez y dura entre temporadas', () => {
+    const rng = seeded(44);
+    const s = createState(rng);
+    s.coins = 1e9;
+    for (const n of NODE_IDS) s.tree[n] = 1;
+    s.house = HOUSE.max;
+    // un gnomo de cada oficio: página de oficios completa
+    for (const j of JOB_IDS) hire(s, j, rng);
+    hire(s, 'recolector', rng);
+    expect(s.prestige.album.filter(id => id.startsWith('oficios:'))).toHaveLength(JOB_IDS.length);
+    expect(s.prestige.album).toContain('pagina:oficios');
+    expect(s.prestige.goldenSeeds).toBe(ALBUM.pageSeeds);
+    expect(s.events.filter(e => e.type === 'sticker' && e.page === 'oficios')).toHaveLength(1);
+    // los sucesos también son cromos
+    expect(startEvent(s, 'caracol', rng)).toBe(true);
+    expect(s.prestige.album).toContain('sucesos:caracol');
+    // al cargar se queda lo válido; en la temporada siguiente sigue ahí
+    const raw = JSON.parse(JSON.stringify(serialize(s)));
+    raw.prestige.album.push('inventado:1', 42);
+    const loaded = deserialize(raw, rng)!;
+    expect(loaded.prestige.album).toEqual(s.prestige.album);
+    s.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds);
+    expect(endSeason(s, rng).prestige.album).toEqual(expect.arrayContaining(s.prestige.album));
   });
 
   it('el próximo objetivo es la mejora más barata que ya se puede comprar; con el árbol completo, la siguiente semilla', () => {

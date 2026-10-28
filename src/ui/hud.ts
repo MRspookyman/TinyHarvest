@@ -1,17 +1,17 @@
 // Lo que está siempre en pantalla: monedas y organización arriba, barra de accesos y semillas abajo, y el último aviso del diario.
 import { CROP_IDS } from '../sim/config';
-import { cropUnlocked, cropValue, nextGoal } from '../sim/sim';
+import { cropUnlocked, cropValue, masteryLevel, masteryNext, nextGoal } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
 import { cropIcons, goldenSeedIcon, menuIcons } from '../render/icons';
 import type { Sound } from '../render/sound';
-import { ARBOL, CULTIVOS, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
+import { ARBOL, CULTIVOS, MAESTRIA, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
   update(s: GameState, selected: CropId, openMenu: MenuId | null): void;
 }
 
-const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'diario', 'temporada'];
+const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'album', 'diario', 'temporada'];
 const ORG_PARTS = Object.keys(ORG.partes) as OrgPart[];
 /** por debajo de esto, una parte da pista; la calidad colorea el multiplicador y las barras */
 const ORG_OK = 0.9;
@@ -65,6 +65,8 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
   const coinStat = topbar.querySelector<HTMLElement>('[data-coin-stat]')!;
   let lastCoins = 0;
   let lastBump = 0;
+  /** cromos que ya ha visto el jugador; -1 hasta la primera actualización (lo de partidas anteriores no avisa) */
+  let seenAlbum = -1;
 
   // el detalle sale al pasar el ratón (CSS) y al pulsar, que es lo que hay en pantallas táctiles
   const org = topbar.querySelector<HTMLElement>('[data-org]')!;
@@ -169,12 +171,20 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         toggleClass(btn, 'active', openMenu === m);
         btn.setAttribute('aria-pressed', String(openMenu === m));
       }
+      // cromo nuevo (G6): el botón del álbum lo avisa hasta que se abre
+      if (seenAlbum < 0 || openMenu === 'album') seenAlbum = s.prestige.album.length;
+      toggleClass(bar.querySelector('[data-menu="album"]'), 'new', s.prestige.album.length > seenAlbum);
       for (const c of CROP_IDS) {
         const btn = bar.querySelector<HTMLButtonElement>(`[data-seed="${c}"]`)!;
         const locked = !cropUnlocked(s, c);
         setDisabled(btn, locked);
         btn.setAttribute('aria-pressed', String(selected === c));
-        const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}`;
+        // maestría (G5): estrellitas en el botón y el progreso en el título
+        const level = masteryLevel(s, c);
+        const next = masteryNext(s, c);
+        if (btn.dataset.level !== String(level)) btn.dataset.level = String(level);
+        const mastery = level || s.mastery[c] ? ` ${MAESTRIA.nivel(level)}: ${next === null ? MAESTRIA.maximo : MAESTRIA.progreso(s.mastery[c], next)}.` : '';
+        const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}.${mastery}`;
         if (btn.title !== title) btn.title = title;
         if (btn.getAttribute('aria-label') !== title) btn.setAttribute('aria-label', title);
       }

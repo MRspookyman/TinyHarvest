@@ -1,5 +1,6 @@
 // Iconos pixel art para la interfaz HTML (barra, ventanas y árbol de mejoras).
 // Se dibujan en canvas y se pasan a la interfaz como data URL.
+import { SUCESOS, type Suceso } from '../sim/album';
 import { CROP_IDS, JOB_IDS } from '../sim/config';
 import type { CropId, JobId, NodeId, TalentId, TraitId } from '../sim/types';
 import { makeCanvas, mapCanvas, type Palette, type PixelMap } from './pixelart';
@@ -84,6 +85,112 @@ const DIARY_ICON: PixelMap = [
   '................',
   '................',
 ];
+/** Álbum abierto con cromos pegados (uno torcido). */
+const ALBUM_ICON: PixelMap = [
+  '................',
+  '................',
+  '.OOOOOOO.OOOOOO.',
+  'OWWWWWWWOWWWWWWO',
+  'OWOOOOWWOWWOOOWO',
+  'OWOBBOWWOWOGGOWO',
+  'OWOBBOWWOWOGGOWO',
+  'OWOOOOWWOWWOOOWO',
+  'OWWWWWWWOWWWWWWO',
+  'OWWOOOOWOWOOOOWO',
+  'OWWOYYOWOWORROWO',
+  'OWWOOOOWOWOOOOWO',
+  'OWWWWWWWOWWWWWWO',
+  'OTTTTTTTOTTTTTTO',
+  '.OOOOOOOOOOOOOO.',
+  '................',
+];
+/** Sucesos del huerto para el álbum: cuervo, caracol, topo, rana, pancarta de huelga y espantapájaros. */
+const EVENT_ICONS: Record<Suceso, PixelMap> = {
+  cuervo: [
+    '............',
+    '.....OOO....',
+    '....OKKKO...',
+    '...OKKWKOYY.',
+    '...OKKKKOO..',
+    '.OOKKKKKO...',
+    'OKKKKKKKO...',
+    '.OKKKKKO....',
+    '..OOKKO.....',
+    '....OYO.....',
+    '....Y.Y.....',
+    '............',
+  ],
+  caracol: [
+    '............',
+    '............',
+    '...OOOO..O.O',
+    '..OCCCCO.O.O',
+    '.OCcccCCOO.O',
+    '.OCcCCcCOYYO',
+    '.OCcccCCOYYO',
+    '..OCCCCOYYYO',
+    'OOOOOOOOYYO.',
+    'OYYYYYYYYYO.',
+    '.OOOOOOOOO..',
+    '............',
+  ],
+  topo: [
+    '............',
+    '...OOOOOO...',
+    '..OKKKKKKO..',
+    '.OKKWKKWKKO.',
+    '.OKKOKKOKKO.',
+    '.OKKKppKKKO.',
+    '..OKKppKKO..',
+    '.OTTOOOOTTO.',
+    'OTTTTTTTTTTO',
+    'OTtTTTTTTtTO',
+    '.OOOOOOOOOO.',
+    '............',
+  ],
+  ranas: [
+    '............',
+    '..OO....OO..',
+    '.OWWO..OWWO.',
+    '.OWOO..OOWO.',
+    '.OGGOOOOGGO.',
+    'OGGGGGGGGGGO',
+    'OGlllllllGGO',
+    'OGGOOOOOOGGO',
+    '.OGGGGGGGGO.',
+    'OGO.OGGO.OGO',
+    'OO..OOOO..OO',
+    '............',
+  ],
+  sindicato: [
+    'OOOOOOOOOOOO',
+    'OWWWWWWWWWWO',
+    'OWRRWRRWRRWO',
+    'OWWWWWWWWWWO',
+    'OWRRRWWRRRWO',
+    'OWWWWWWWWWWO',
+    'OOOOOTTOOOOO',
+    '.....TT.....',
+    '.....TT.....',
+    '.....TT.....',
+    '.....TT.....',
+    '.....TT.....',
+  ],
+  espantapajaros: [
+    '....OOOO....',
+    '...OYYYYO...',
+    '..OOOOOOOO..',
+    '....OCCO....',
+    '....OCCO....',
+    'OOOOOBBOOOOO',
+    'OTTTOBBOTTTO',
+    'OOOOOBBOOOOO',
+    '....OBBO....',
+    '....OTTO....',
+    '....OTTO....',
+    '....OOOO....',
+  ],
+};
 const BOOT: PixelMap = [
   '..OOOO....',
   '..OTTO....',
@@ -370,7 +477,12 @@ export const menuIcons: Record<MenuId, string> = {
   diario: url(mapCanvas(DIARY_ICON, P)),
   ranking: url(mapCanvas(PODIUM_ICON, P)),
   temporada: url(mapCanvas(STATUE_ICON, GOLD)),
+  album: url(mapCanvas(ALBUM_ICON, P)),
 };
+
+export const eventIcons = Object.fromEntries(
+  SUCESOS.map(k => [k, url(mapCanvas(EVENT_ICONS[k], P))]),
+) as Record<Suceso, string>;
 
 export const crownIcon = url(crownCanvas());
 export const houseIcon = url(mapCanvas(HOUSE_ICON, P));

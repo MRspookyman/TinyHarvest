@@ -296,3 +296,7 @@ export const LIFE = {
 export const ZONE_BONUS = 0.4;
 /** Cosecha dorada (G4): al madurar, una planta de cada tantas sale dorada y vale `mult` veces más. */
 export const GOLDEN = { chance: 0.008, mult: 10 } as const;
+/** Maestría de cultivo (G5): cosechas de un cultivo en la temporada para cada nivel; cada nivel, +bonus a lo que vale. */
+export const MASTERY = { steps: [25, 75, 200, 500, 1200], bonus: 0.05 } as const;
+/** Álbum (G6): completar una página da estas semillas doradas; el cromo de maestría sale a partir de este nivel. */
+export const ALBUM = { pageSeeds: 1, masteryLevel: 3 } as const;
