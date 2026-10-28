@@ -190,7 +190,12 @@ export type SimEvent =
   /** el jugador echa una arenga (G7) */
   | { type: 'rally' }
   /** llega un encargo del pueblo o se cumple (G8) */
-  | { type: 'order'; done: boolean };
+  | { type: 'order'; done: boolean }
+  /** línea del diario que también merece el aviso de arriba: importante, o una gracia de vez en cuando */
+  | { type: 'notice'; text: string; kind: NoticeKind };
+
+/** Qué líneas del diario salen también arriba: «diario» solo se queda en el diario. */
+export type NoticeKind = 'importante' | 'humor';
 
 /** Encargo del pueblo (G8): alguien quiere tantos cultivos de un tipo antes de que se le acabe la paciencia. */
 export interface Order {

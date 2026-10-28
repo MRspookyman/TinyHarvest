@@ -104,7 +104,7 @@ export function createSeasonMenu(actions: GameActions): SeasonMenu {
     </div>`);
 
   const head = html(`
-    <span class="gold-balance" title="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold></b></span>`);
+    <span class="gold-balance" data-tip="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold></b></span>`);
 
   const endBtn = el.querySelector<HTMLButtonElement>('[data-end]')!;
   const fame = el.querySelector<HTMLElement>('[data-fame]')!;
@@ -215,7 +215,7 @@ export function createSeasonMenu(actions: GameActions): SeasonMenu {
       <article class="rank-card fame-season">
         <header><h3>${TEMPORADA.temporada(r.season)}</h3><span class="muted">${TEMPORADA.fila(Math.floor(r.earned), r.seconds, r.seeds)}</span></header>
         ${r.crowned.length ? `<ol class="crowns">${r.crowned.map(c => `
-          <li title="${esc(OFICIOS[c.job].nombre)}${c.legendary ? ` · ${LEGENDARIO.nombre}` : ''}">
+          <li data-tip="${esc(OFICIOS[c.job].nombre)}${c.legendary ? ` · ${LEGENDARIO.nombre}` : ''}">
             ${pixelImg(jobIcons[c.job], 'px chip-icon')}
             <span class="fame-name">${esc(c.name)}${star(c.legendary)}</span>
             <span class="rank-value">${TEMPORADA.tareas(c.tasks)}</span>
@@ -225,9 +225,9 @@ export function createSeasonMenu(actions: GameActions): SeasonMenu {
       <article class="rank-card fame-vets">
         <header><h3>${TEMPORADA.veteranos}</h3><span class="muted">${TEMPORADA.veteranosAyuda}</span></header>
         <ol class="crowns">${veterans.map(v => `
-          <li title="${esc(OFICIOS[v.job].nombre)}">
+          <li data-tip="${esc(OFICIOS[v.job].nombre)}">
             ${pixelImg(jobIcons[v.job], 'px chip-icon')}
-            <span class="fame-name">${esc(v.name)}${star(v.legendary)}<img class="px trait-icon" src="${traitIcons[v.trait]}" alt="${RASGOS[v.trait].nombre}" title="${RASGOS[v.trait].nombre}" draggable="false"></span>
+            <span class="fame-name">${esc(v.name)}${star(v.legendary)}<img class="px trait-icon" src="${traitIcons[v.trait]}" alt="${RASGOS[v.trait].nombre}" aria-label="${RASGOS[v.trait].nombre}" data-tip="${RASGOS[v.trait].nombre}" draggable="false"></span>
             <span class="rank-value">${TEMPORADA.temporadas(v.seasons)}</span>
           </li>`).join('')}</ol>
       </article>` : '';

@@ -61,7 +61,7 @@ export function createTutorial(stage: HTMLElement, toolbar: HTMLElement, enabled
 
   const el = html(`
     <aside class="tutorial" role="note" aria-live="polite" hidden>
-      <button type="button" class="tutorial-close" data-skip aria-label="${TUTORIAL.cerrar}" title="${TUTORIAL.cerrar}">×</button>
+      <button type="button" class="tutorial-close" data-skip aria-label="${TUTORIAL.cerrar}" data-tip="${TUTORIAL.cerrar}">×</button>
       <p data-text></p>
       <button type="button" class="link" data-off>${TUTORIAL.noMas}</button>
     </aside>`);

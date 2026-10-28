@@ -16,9 +16,9 @@ export const PX_PER_STEP = 4;
 const metric = (k: Category, g: Gnome) => Math.floor(k === 'walked' ? g.stats.walked / PX_PER_STEP : g.stats[k]);
 
 const row = (s: GameState, g: Gnome, value: number) => `
-  <li title="${esc(g.name)}">
+  <li data-tip="${esc(g.name)}">
     ${pixelImg(jobIcons[g.job], 'px chip-icon')}
-    <button type="button" class="rank-name" data-show="${g.id}" title="${esc(FICHA.verDe(g.name))}">${esc(g.name)}${s.crowns[g.job] === g.id ? pixelImg(crownIcon, 'px crown-icon') : ''}<img class="px trait-icon" src="${traitIcons[g.trait]}" alt="${RASGOS[g.trait].nombre}" title="${RASGOS[g.trait].nombre}" draggable="false"></button>
+    <button type="button" class="rank-name" data-show="${g.id}" data-tip="${esc(FICHA.verDe(g.name))}">${esc(g.name)}${s.crowns[g.job] === g.id ? pixelImg(crownIcon, 'px crown-icon') : ''}<img class="px trait-icon" src="${traitIcons[g.trait]}" alt="${RASGOS[g.trait].nombre}" aria-label="${RASGOS[g.trait].nombre}" data-tip="${RASGOS[g.trait].nombre}" draggable="false"></button>
     <span class="rank-value">${value}</span>
   </li>`;
 

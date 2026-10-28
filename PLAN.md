@@ -1,7 +1,7 @@
 # 🌱 Tiny Harvest — Plan de diseño
 
 > Documento vivo. Lo vamos actualizando en cada iteración.
-> **Estado:** borrador v0.18 · **Última actualización:** 2026-10-28
+> **Estado:** borrador v0.19 · **Última actualización:** 2026-10-28
 > **Roles:** Claude programa · el autor revisa y guía.
 
 ---
@@ -774,6 +774,7 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **v0.19 (2026-10-28):** menos ruido en pantalla. Los bocadillos de rutina (a por qué va cada gnomo) salen en una de cada 6 decisiones y nunca con más de 4 bocadillos a la vez; los de personalidad, siempre. El aviso de arriba ya no repite cada línea del diario: lo importante (mejoras, sucesos, encargos, cosechas doradas, coronas, cromos…) siempre, en cola, y alguna gracia de los gnomos como mucho cada 25 s; «se ha echado a perder» y «cesta llena» como mucho una vez por minuto. Todo sigue en el Diario. Las ayudas al pasar el ratón (o con el teclado) son ahora un bocadillo de papel con el estilo del juego en lugar del cuadro gris del navegador.
 - **v0.18 (2026-10-28):** zum de la cámara. Rueda del ratón (acerca hacia donde apunta), pellizco con dos dedos, teclas + − 0 y tres botones abajo a la izquierda (acercar, alejar y volver a ver todo el huerto). Con zum, el huerto se arrastra para moverse (arrastrar no cuenta como clic) y la cámara nunca enseña más allá del borde del mundo. Siempre de 2 en 2 para que el pixel art siga nítido; hasta 4 pasos más cerca o más lejos que el encuadre normal. Seguir a un gnomo suma un paso más sobre el zum elegido.
 - **v0.17 (2026-10-28):** todo el arte redibujado a doble resolución: gnomos de 32 × 32 con todas sus poses y herramientas, plantas de 32 × 28, terreno, edificios con todas sus mejoras, decorado, bichos, bocadillos, efectos e iconos y marcos de la interfaz. La cámara usa escalas pares para que el pixel art siga nítido. Sin cambios de simulación, equilibrio ni partidas guardadas.
 - **v0.16 (2026-10-28):** iteración 10, «enganche». Ventaja de zona, sonido hecho por código y monedas que vuelan, próximo objetivo en la barra, cosecha dorada, maestría de cultivo, álbum de 35 cromos con páginas premiadas, arenga del capataz, encargos del pueblo con propina, amistades entre gnomos y estaciones. Equilibrado con el bot: árbol completo en 48–52 min.

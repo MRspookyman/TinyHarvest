@@ -88,7 +88,7 @@ export function createTreeMenu(actions: GameActions): Menu {
         btn.setAttribute('aria-pressed', String(selected === id));
         const label = `${ARBOL[id].nombre}. ${status}. ${UI.nivel(s.tree[id], TREE[id].max)}`;
         if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
-        if (btn.title !== label) btn.title = label;
+        if (btn.dataset.tip !== label) btn.dataset.tip = label;
         btn.querySelectorAll('.pips i').forEach((pip, i) => toggleClass(pip, 'on', i < s.tree[id]));
         toggleClass(el.querySelector(`[data-line="${id}"]`), 'lit', reachable);
       }

@@ -13,9 +13,9 @@ export function createZoomControls(stage: HTMLElement, scene: SceneView): ZoomCo
   el.setAttribute('role', 'group');
   el.setAttribute('aria-label', UI.zum);
   el.innerHTML = `
-    <button type="button" data-zoom="in" title="${esc(UI.acercar)}" aria-label="${esc(UI.acercar)}">+</button>
-    <button type="button" data-zoom="out" title="${esc(UI.alejar)}" aria-label="${esc(UI.alejar)}">−</button>
-    <button type="button" data-zoom="reset" title="${esc(UI.encuadre)}" aria-label="${esc(UI.encuadre)}">⤢</button>`;
+    <button type="button" data-zoom="in" data-tip="${esc(UI.acercar)}" aria-label="${esc(UI.acercar)}">+</button>
+    <button type="button" data-zoom="out" data-tip="${esc(UI.alejar)}" aria-label="${esc(UI.alejar)}">−</button>
+    <button type="button" data-zoom="reset" data-tip="${esc(UI.encuadre)}" aria-label="${esc(UI.encuadre)}">⤢</button>`;
   stage.append(el);
   const btn = (k: string) => el.querySelector<HTMLButtonElement>(`[data-zoom="${k}"]`)!;
 

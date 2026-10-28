@@ -93,7 +93,7 @@ export function createGnomeCard(
         <div class="card-title" data-head></div>
         <div class="card-btns">
           <button type="button" class="win-close card-fold" data-fold aria-expanded="true"></button>
-          <button type="button" class="win-close" data-close aria-label="${FICHA.cerrar}" title="${FICHA.cerrar}">×</button>
+          <button type="button" class="win-close" data-close aria-label="${FICHA.cerrar}" data-tip="${FICHA.cerrar}">×</button>
         </div>
       </header>
       <p class="card-now"><span>${FICHA.ahora}</span><b data-now></b></p>
@@ -117,8 +117,8 @@ export function createGnomeCard(
   const setFolded = (folded: boolean) => {
     el.classList.toggle('folded', folded);
     foldBtn.textContent = folded ? '+' : '−';
-    foldBtn.title = folded ? FICHA.desplegar : FICHA.plegar;
-    foldBtn.setAttribute('aria-label', foldBtn.title);
+    foldBtn.dataset.tip = folded ? FICHA.desplegar : FICHA.plegar;
+    foldBtn.setAttribute('aria-label', foldBtn.dataset.tip);
     foldBtn.setAttribute('aria-expanded', String(!folded));
     try {
       localStorage.setItem(FOLD_KEY, folded ? '1' : '0');
@@ -177,7 +177,7 @@ export function createGnomeCard(
       <div>
         <h2 id="gnome-card-name">${esc(g.name)}${crowned ? pixelImg(crownIcon, 'px crown-icon') : ''}</h2>
         <p>${oficio}${crowned ? ` · ${RANKING.corona(oficio.toLowerCase())}` : ''}</p>
-        ${g.legendary ? `<span class="badge legend" title="${esc(LEGENDARIO.desc)}">${pixelImg(legendIcon, 'px legend-icon')}${LEGENDARIO.nombre}</span>` : ''}
+        ${g.legendary ? `<span class="badge legend" data-tip="${esc(LEGENDARIO.desc)}">${pixelImg(legendIcon, 'px legend-icon')}${LEGENDARIO.nombre}</span>` : ''}
       </div>`;
     now.textContent = doing(s, g);
     body.innerHTML = `

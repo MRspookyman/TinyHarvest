@@ -24,6 +24,7 @@ import { createSeasonMenu, createSeasonSummary } from './ui/menus/season';
 import { createTreeMenu } from './ui/menus/tree';
 import { createNotices } from './ui/notices';
 import { createTutorial } from './ui/tutorial';
+import { installTooltips } from './ui/tooltip';
 import { createZoomControls } from './ui/zoom';
 import { createWindows } from './ui/windows';
 import { AVISOS } from './textos';
@@ -185,6 +186,7 @@ async function start() {
   const toolbar = stageEl.querySelector<HTMLElement>('.toolbar')!;
   const tutorial = createTutorial(stageEl, toolbar, !devParams || new URLSearchParams(location.search).get('tutorial') === '1');
   const zoom = createZoomControls(stageEl, scene);
+  installTooltips();
 
   let sinceSave = 0;
   app.ticker.add(ticker => {
@@ -229,6 +231,7 @@ async function start() {
       else if (e.type === 'sticker') sound.play('album');
       else if (e.type === 'order') sound.play(e.done ? 'orderDone' : 'order');
       else if (e.type === 'moment' && e.kind === 'amistad') sound.play('orderDone');
+      else if (e.type === 'notice') hud.notice(e.kind, e.text);
       else if (e.type === 'golden') {
         sound.play('golden');
         flyCoins(scene.pageOf(e.x, e.y), coinStat, 6);

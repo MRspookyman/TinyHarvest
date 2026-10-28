@@ -514,3 +514,35 @@ img.fame-star { display: inline-block; width: 18px; height: 18px; flex: none; }
   .win-head { padding-bottom: 6px; margin-bottom: 8px; }
   .tree-detail p.detail-help { display: none; }
 }
+
+/* ---------- tooltips ---------- */
+.pixel-tooltip {
+  position: fixed; z-index: 10; pointer-events: none;
+  width: max-content; max-width: min(280px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px); box-sizing: border-box;
+  padding: 6px 10px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 0 0 var(--px) var(--outline), 3px 6px 0 rgba(26, 28, 44, 0.35);
+  font-family: var(--font-body); font-size: 0.85rem; line-height: 1.35;
+  overflow-wrap: anywhere; white-space: normal;
+  opacity: 0; visibility: hidden; transition: opacity 90ms ease, visibility 90ms;
+}
+.pixel-tooltip.show { opacity: 1; visibility: visible; }
+.pixel-tooltip::before, .pixel-tooltip::after {
+  content: ''; position: absolute; left: var(--tip-arrow, 50%);
+  width: 0; height: 0; border-style: solid; border-color: transparent;
+}
+.pixel-tooltip::before {
+  top: 100%; margin-left: -8px; border-width: 8px 8px 0; border-top-color: var(--outline);
+}
+.pixel-tooltip::after {
+  top: 100%; margin-left: -5px; border-width: 5px 5px 0; border-top-color: var(--paper);
+}
+.pixel-tooltip.below::before {
+  top: auto; bottom: 100%; border-width: 0 8px 8px; border-top-color: transparent; border-bottom-color: var(--outline);
+}
+.pixel-tooltip.below::after {
+  top: auto; bottom: 100%; border-width: 0 5px 5px; border-top-color: transparent; border-bottom-color: var(--paper);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pixel-tooltip { transition: none; }
+}

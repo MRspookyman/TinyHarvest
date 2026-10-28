@@ -5,14 +5,14 @@ import {
   HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
   MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
   TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS, MASTERY, ALBUM,
-  RALLY, ORDERS, FRIENDS, SEASON_IDS, SEASONS, type SeasonId,
+  RALLY, ORDERS, FRIENDS, SEASON_IDS, SEASONS, BUBBLES, type SeasonId,
 } from './config';
 import { ALBUM_PAGES, pageRewardId, stickerId, type AlbumPage } from './album';
 import { createState, makeGnome, randomTrait } from './state';
 import { ALBUM_TEXTOS, APELLIDOS, ARBOL, CULTIVOS, ENCARGOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
 import type {
-  BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, Plot, Pose,
-  Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, Zone,
+  BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, NoticeKind, Plot,
+  Pose, Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, Zone,
 } from './types';
 
 // ---------- Árbol de mejoras y sus efectos ----------
@@ -55,17 +55,17 @@ export function buyNode(s: GameState, id: NodeId): boolean {
   s.tree[id]++;
   if (id === 'bancal') {
     const f = fieldSize(s);
-    log(s, LOG.bancal(f.cols, f.rows));
+    log(s, LOG.bancal(f.cols, f.rows), 'importante');
   } else if ((CROP_IDS as string[]).includes(id)) {
-    log(s, LOG.desbloqueo(CULTIVOS[id as CropId].plural));
+    log(s, LOG.desbloqueo(CULTIVOS[id as CropId].plural), 'importante');
   } else if (id === 'porteadores') {
-    log(s, LOG.porteadores);
+    log(s, LOG.porteadores, 'importante');
   } else if (id === 'regadores') {
-    log(s, LOG.regadores);
+    log(s, LOG.regadores, 'importante');
   } else if (id === 'guardianes') {
-    log(s, LOG.guardianes);
+    log(s, LOG.guardianes, 'importante');
   } else {
-    log(s, LOG.mejora(ARBOL[id].nombre));
+    log(s, LOG.mejora(ARBOL[id].nombre), 'importante');
   }
   return true;
 }
@@ -107,7 +107,7 @@ export function rally(s: GameState, rng: Rng): boolean {
   s.rally = { t: RALLY.duration, cd: RALLY.cooldown };
   for (const g of s.gnomes) say(g, 'cheer', 1.5);
   s.events.push({ type: 'rally' });
-  log(s, pick(rng, LOG.arenga));
+  log(s, pick(rng, LOG.arenga), 'importante');
   return true;
 }
 export const capacity = (s: GameState) => 1 + s.tree.saco;
@@ -150,14 +150,14 @@ function countHarvest(s: GameState, crop: CropId) {
     s.totalEarned += o.reward;
     s.order = null;
     s.events.push({ type: 'order', done: true });
-    log(s, LOG.encargoCumplido(ENCARGOS.clientes[o.who], o.reward));
+    log(s, LOG.encargoCumplido(ENCARGOS.clientes[o.who], o.reward), 'importante');
   }
   const before = masteryLevel(s, crop);
   s.mastery[crop]++;
   const level = masteryLevel(s, crop);
   if (level === before) return;
   s.events.push({ type: 'mastery', crop, level });
-  log(s, LOG.maestria(CULTIVOS[crop].plural, level, Math.round(MASTERY.bonus * level * 100)));
+  log(s, LOG.maestria(CULTIVOS[crop].plural, level, Math.round(MASTERY.bonus * level * 100)), 'importante');
   if (level >= ALBUM.masteryLevel) collect(s, 'maestrias', crop);
 }
 
@@ -171,7 +171,7 @@ function updateOrders(s: GameState, dt: number, rng: Rng) {
     o.t -= dt;
     if (o.t <= 0) {
       s.order = null;
-      log(s, LOG.encargoPerdido(ENCARGOS.clientes[o.who]));
+      log(s, LOG.encargoPerdido(ENCARGOS.clientes[o.who]), 'importante');
     }
     return;
   }
@@ -196,7 +196,7 @@ function updateOrders(s: GameState, dt: number, rng: Rng) {
   const who = Math.floor(rng() * ENCARGOS.clientes.length);
   s.order = { who, crop, need, have: 0, t: ORDERS.time, reward: Math.round(need * cropValue(s, crop) * ORDERS.reward) };
   s.events.push({ type: 'order', done: false });
-  log(s, LOG.encargo(ENCARGOS.clientes[who], need, CULTIVOS[crop].plural));
+  log(s, LOG.encargo(ENCARGOS.clientes[who], need, CULTIVOS[crop].plural), 'importante');
 }
 
 /** El jugador dice que no al encargo: se va sin más y el siguiente tarda lo de siempre. */
@@ -218,10 +218,10 @@ export function collect(s: GameState, page: AlbumPage, key: string) {
     album.push(reward);
     s.prestige.goldenSeeds += ALBUM.pageSeeds;
     s.events.push({ type: 'sticker', id, page });
-    log(s, LOG.paginaAlbum(ALBUM_TEXTOS.paginas[page].titulo, ALBUM.pageSeeds));
+    log(s, LOG.paginaAlbum(ALBUM_TEXTOS.paginas[page].titulo, ALBUM.pageSeeds), 'importante');
   } else {
     s.events.push({ type: 'sticker', id });
-    log(s, LOG.cromo(ALBUM_TEXTOS.paginas[page].titulo));
+    log(s, LOG.cromo(ALBUM_TEXTOS.paginas[page].titulo), 'importante');
   }
 }
 /** segundos que aguanta madura, con las conservas */
@@ -241,7 +241,7 @@ export function buyHouse(s: GameState): boolean {
   if (houseMaxed(s) || s.coins < cost) return false;
   s.coins -= cost;
   s.house++;
-  log(s, LOG.casa(houseCapacity(s)));
+  log(s, LOG.casa(houseCapacity(s)), 'importante');
   return true;
 }
 
@@ -286,9 +286,27 @@ export function plotAt(s: GameState, x: number, y: number): number | null {
 
 // ---------- Contratar ----------
 
-function log(s: GameState, text: string) {
+/**
+ * Apunta una línea en el diario. Las «importantes» y las de «humor» salen además en el aviso de arriba
+ * (la interfaz enseña siempre lo importante y, de vez en cuando, una gracia); el resto solo queda en el diario.
+ */
+function log(s: GameState, text: string, kind?: NoticeKind) {
   s.log.unshift(text);
   if (s.log.length > LOG_MAX) s.log.length = LOG_MAX;
+  if (kind) s.events.push({ type: 'notice', text, kind });
+}
+
+/** cuándo salió arriba por última vez cada aviso que se repite (segundos de temporada); interno, no se guarda */
+const lastNotice = new WeakMap<GameState, Partial<Record<string, number>>>();
+
+/** Como log, pero el aviso de arriba sale como mucho una vez cada `every` segundos; las demás, solo en el diario. */
+function logEvery(s: GameState, key: string, every: number, text: string, kind: NoticeKind) {
+  let seen = lastNotice.get(s);
+  if (!seen) lastNotice.set(s, (seen = {}));
+  const last = seen[key];
+  const due = last === undefined || s.seasonTime - last >= every;
+  if (due) seen[key] = s.seasonTime;
+  log(s, text, due ? kind : undefined);
 }
 
 const pick = <T>(rng: Rng, a: readonly T[]): T => a[Math.floor(rng() * a.length)];
@@ -316,8 +334,8 @@ export function hire(s: GameState, job: JobId, rng: Rng): boolean {
   s.coins -= cost;
   s.hired[job]++;
   const g = addGnome(s, job, rng);
-  log(s, LOG.contratado(g.name, OFICIOS[job].nombre));
-  if (g.legendary) log(s, LOG.legendario(g.name));
+  log(s, LOG.contratado(g.name, OFICIOS[job].nombre), 'humor');
+  if (g.legendary) log(s, LOG.legendario(g.name), 'importante');
   return true;
 }
 
@@ -458,11 +476,11 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
     if (golden) {
       p.golden = false;
       s.events.push({ type: 'golden', crop: p.crop, x: o.x + 9, y: o.y + 6, amount: Math.round(v) });
-      log(s, LOG.doradaMano(CULTIVOS[p.crop].uno, Math.round(v)));
+      log(s, LOG.doradaMano(CULTIVOS[p.crop].uno, Math.round(v)), 'importante');
       collect(s, 'doradas', p.crop);
     } else {
       s.events.push({ type: 'coins', x: o.x + 9, y: o.y + 2, amount: Math.round(v) });
-      if (manual) log(s, LOG.manual(CULTIVOS[p.crop].uno));
+      if (manual) log(s, LOG.manual(CULTIVOS[p.crop].uno), 'humor');
     }
     p.stage = -1;
     p.t = 0;
@@ -546,7 +564,7 @@ function rot(s: GameState, p: Plot, rng: Rng) {
   p.t = 0;
   s.rotted++;
   orgOf(s).lost++;
-  if (rng() < 0.25) log(s, LOG.podrido(CULTIVOS[p.crop].uno));
+  if (rng() < 0.25) logEvery(s, 'podrido', 60, LOG.podrido(CULTIVOS[p.crop].uno), 'importante');
 }
 
 // ---------- Multiplicador de organización ----------
@@ -621,9 +639,14 @@ function say(g: Gnome, kind: BubbleKind, t = BUBBLE_TIME, crop?: CropId) {
   g.bubble = crop ? { kind, crop, t } : { kind, t };
 }
 
-/** bocadillo de intención: no tapa uno que ya esté diciendo algo (un enfado, un saludo) */
-function intent(g: Gnome, kind: BubbleKind, crop?: CropId) {
-  if (!g.bubble) say(g, kind, BUBBLE_TIME, crop);
+/**
+ * Bocadillo de intención (a por qué va): es rutina, así que sale solo de vez en cuando (BUBBLES.routine) y nunca con
+ * más de BUBBLES.max bocadillos ya en pantalla. No tapa uno que ya esté diciendo algo (un enfado, un saludo).
+ */
+function intent(s: GameState, g: Gnome, rng: Rng, kind: BubbleKind, crop?: CropId) {
+  if (g.bubble || rng() >= BUBBLES.routine) return;
+  if (s.gnomes.filter(o => o.bubble).length >= BUBBLES.max) return;
+  say(g, kind, BUBBLE_TIME, crop);
 }
 
 /** tareas que no se interrumpen para celebrar una corona */
@@ -642,7 +665,7 @@ function updateCrowns(s: GameState, rng: Rng) {
     const holder = s.gnomes.find(g => g.id === s.crowns[job]);
     if (holder && leader.stats.tasks < holder.stats.tasks + CROWN_MARGIN) continue;
     const oficio = OFICIOS[job].nombre.toLowerCase();
-    log(s, holder ? LOG.corona(leader.name, holder.name, oficio) : LOG.primeraCorona(leader.name, oficio));
+    log(s, holder ? LOG.corona(leader.name, holder.name, oficio) : LOG.primeraCorona(leader.name, oficio), 'importante');
     s.crowns[job] = leader.id;
     s.events.push({ type: 'crown', job, gnome: leader.id });
     moment(s, 'corona', leader.x, leader.y);
@@ -773,9 +796,9 @@ const needsWater = (s: GameState, p: Plot) =>
 /** riegos que le quedan en la regadera a cada regador. Interno: al cargar la partida llegan con la regadera llena. */
 const canLeft = new WeakMap<Gnome, number>();
 
-function goRefill(g: Gnome) {
+function goRefill(s: GameState, g: Gnome, rng: Rng) {
   goTo(g, WELL.x + WELL.w / 2, WELL.y + WELL.h + 2, { kind: 'refill' });
-  intent(g, 'well');
+  intent(s, g, rng, 'well');
 }
 
 /** el guardián da una vuelta: a un punto al azar por fuera del bancal abierto, o a vigilar al pie de su torre */
@@ -802,7 +825,7 @@ export const moleOn = (s: GameState, plot: number) =>
 function goDeliver(s: GameState, g: Gnome, rng: Rng) {
   if (g.job === 'recolector' && hasPorters(s)) goTo(g, BASKET.x + rng() * 6 - 3, BASKET.y, { kind: 'drop' });
   else goTo(g, DOOR.x + rng() * 8 - 4, DOOR.y, { kind: 'deliver' });
-  intent(g, 'sack');
+  intent(s, g, rng, 'sack');
 }
 
 function decide(s: GameState, g: Gnome, rng: Rng) {
@@ -811,7 +834,7 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
     work(g, 1.5 + rng(), 'idle', { kind: 'think' });
     say(g, 'think', Infinity);
     moment(s, 'pensar', g.x, g.y);
-    if (rng() < 0.15) log(s, LOG.pensar(g.name));
+    if (rng() < 0.15) log(s, LOG.pensar(g.name), 'humor');
     return;
   }
   if (g.job === 'recolector') {
@@ -821,7 +844,7 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
         p.res = g.id;
         const st = plotStand(p);
         goTo(g, st.x, st.y, { kind: 'harvest', plot: p.id });
-        intent(g, 'crop', p.crop);
+        intent(s, g, rng, 'crop', p.crop);
         return;
       }
     }
@@ -832,22 +855,22 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
       p.res = g.id;
       const st = plotStand(p);
       goTo(g, st.x, st.y, { kind: 'plant', plot: p.id });
-      intent(g, 'crop', seedFor(s, g, p));
+      intent(s, g, rng, 'crop', seedFor(s, g, p));
       return;
     }
   } else if (g.job === 'regador') {
     const left = canLeft.get(g) ?? WATER.can;
-    if (left <= 0) return goRefill(g);
+    if (left <= 0) return goRefill(s, g, rng);
     const p = pickPlot(s, g, p => needsWater(s, p));
     if (p) {
       p.wres = g.id;
       const st = plotStand(p);
       goTo(g, st.x, st.y, { kind: 'water', plot: p.id });
-      intent(g, 'water');
+      intent(s, g, rng, 'water');
       return;
     }
     // sin nada que regar, aprovecha para llenar la regadera
-    if (left < WATER.can) return goRefill(g);
+    if (left < WATER.can) return goRefill(s, g, rng);
   } else if (g.job === 'guardian') {
     return patrol(s, g, rng);
   } else {
@@ -856,7 +879,7 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
     const claimed = s.gnomes.filter(o => o !== g && o.job === 'porteador' && o.task?.kind === 'pickup').length * porterCapacity(s);
     if (s.basket.length > claimed) {
       goTo(g, BASKET.x + rng() * 6 - 3, BASKET.y + 2, { kind: 'pickup' });
-      intent(g, 'basket');
+      intent(s, g, rng, 'basket');
       return;
     }
   }
@@ -890,7 +913,7 @@ function idlePartner(s: GameState, g: Gnome): Gnome | null {
 function idle(s: GameState, g: Gnome, rng: Rng) {
   const napChance = g.trait === 'dormilon' ? LIFE.napDormilon : g.trait === 'currante' ? LIFE.napCurrante : LIFE.nap;
   if (rng() < napChance) {
-    if (rng() < 0.5) log(s, `${g.name} ${pick(rng, LOG.siesta)}`);
+    if (rng() < 0.5) log(s, `${g.name} ${pick(rng, LOG.siesta)}`, 'humor');
     say(g, 'zz', Infinity);
     g.stats.naps++;
     const long = g.trait === 'dormilon';
@@ -938,7 +961,7 @@ function startTogether(s: GameState, a: Gnome, b: Gnome, kind: 'cards' | 'chat',
   say(a, kind, Infinity);
   say(b, kind, Infinity);
   moment(s, kind === 'cards' ? 'cartas' : 'charla', (a.x + b.x) / 2, (a.y + b.y) / 2);
-  if (rng() < 0.25) log(s, (kind === 'cards' ? LOG.cartas : LOG.charla)(a.name, b.name));
+  if (rng() < 0.25) log(s, (kind === 'cards' ? LOG.cartas : LOG.charla)(a.name, b.name), 'humor');
   befriend(s, a, b, kind === 'cards' ? FRIENDS.cards : FRIENDS.chat);
 }
 
@@ -951,7 +974,7 @@ function chaseButterfly(s: GameState, g: Gnome, rng: Rng) {
   g.timer = 3 + rng() * 2;
   goTo(g, c.x, c.y + 10, { kind: 'chase', critter: c.id });
   moment(s, 'mariposa', g.x, g.y);
-  if (rng() < 0.2) log(s, LOG.mariposa(g.name));
+  if (rng() < 0.2) log(s, LOG.mariposa(g.name), 'humor');
 }
 
 /** persigue la mariposa mientras le dure el capricho (g.timer); false si lo deja */
@@ -972,7 +995,7 @@ function stumble(s: GameState, g: Gnome, rng: Rng) {
   releaseTask(s, g);
   work(g, 1, 'fall', { kind: 'fall' });
   moment(s, 'tropiezo', g.x, g.y);
-  if (rng() < 0.25) log(s, LOG.tropiezo(g.name));
+  if (rng() < 0.25) log(s, LOG.tropiezo(g.name), 'humor');
 }
 
 // ---------- Encuentros ----------
@@ -1046,7 +1069,7 @@ function befriend(s: GameState, a: Gnome, b: Gnome, points: number) {
   b.friend = a.id;
   map.delete(key);
   moment(s, 'amistad', (a.x + b.x) / 2, (a.y + b.y) / 2);
-  log(s, LOG.amistad(a.name, b.name));
+  log(s, LOG.amistad(a.name, b.name), 'importante');
 }
 
 /** dos amigos del mismo grupo trabajan algo más rápido (G9) */
@@ -1064,7 +1087,7 @@ function dispute(s: GameState, g: Gnome, rng: Rng) {
   work(g, 1, 'idle', { kind: 'rest' });
   say(g, 'angry', 1.5);
   moment(s, 'disputa', g.x, g.y);
-  if (rng() < 0.2) log(s, LOG.disputa(g.name));
+  if (rng() < 0.2) log(s, LOG.disputa(g.name), 'humor');
 }
 
 function arrive(s: GameState, g: Gnome, rng: Rng) {
@@ -1103,7 +1126,7 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
     s.basket.push(...g.carry.splice(0, Math.max(0, room)));
     if (g.carry.length) {
       // cesta llena: el cuello de botella se ve con el gnomo esperando con el saco
-      if (rng() < 0.15) log(s, LOG.cestaLlena(g.name));
+      if (rng() < 0.15) logEvery(s, 'cesta', 60, LOG.cestaLlena(g.name), 'importante');
       say(g, 'alert', Infinity);
       g.stats.complaints++;
       work(g, 1.2, 'complain', { kind: 'wait' });
@@ -1130,7 +1153,7 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
   } else if (task.kind === 'sit') {
     work(g, 4 + rng() * 3, 'sit', task);
     moment(s, 'sentarse', g.x, g.y);
-    if (rng() < 0.15) log(s, LOG.sentarse(g.name));
+    if (rng() < 0.15) log(s, LOG.sentarse(g.name), 'humor');
   } else if (task.kind === 'cards' || task.kind === 'chat') {
     const o = s.gnomes.find(o => o.id === task.other);
     if (!o || o.task?.kind !== task.kind || o.task.other !== g.id) return think(g);
@@ -1143,10 +1166,10 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
       // el topo se mete en su agujero antes de tiempo
       c.state = 'out';
       c.t = 0;
-      if (rng() < 0.6) log(s, LOG.topoGuardian(g.name));
+      if (rng() < 0.6) log(s, LOG.topoGuardian(g.name), 'humor');
     } else {
       flyAway(c);
-      if (rng() < 0.6) log(s, g.job === 'guardian' ? LOG.cuervoGuardian(g.name) : LOG.cuervoFuera(g.name));
+      if (rng() < 0.6) log(s, g.job === 'guardian' ? LOG.cuervoGuardian(g.name) : LOG.cuervoFuera(g.name), 'humor');
     }
   } else if (task.kind === 'scarecrow') {
     work(g, HAPPENING_TIME.espantapajaros, 'scare', task);
@@ -1182,20 +1205,20 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
       g.stats.value += extra;
       s.events.push({ type: 'golden', crop, x: o.x + 9, y: o.y + 6, amount: Math.round(extra) });
       say(g, 'heart', 1.5);
-      log(s, LOG.dorada(g.name, CULTIVOS[crop].uno, Math.round(extra)));
+      log(s, LOG.dorada(g.name, CULTIVOS[crop].uno, Math.round(extra)), 'importante');
       collect(s, 'doradas', crop);
     } else if (g.trait === 'gloton' && crop === 'zanahoria' && rng() < LIFE.glutton) {
       // el glotón se come alguna zanahoria recién recogida (las doradas, no: se las queda mirando)
       say(g, 'yum', Infinity);
       moment(s, 'comer', g.x, g.y);
-      if (rng() < 0.4) log(s, LOG.comer(g.name));
+      if (rng() < 0.4) log(s, LOG.comer(g.name), 'humor');
       work(g, 1.2, 'idle', { kind: 'rest' });
       return;
     }
     g.carry.push(crop);
     g.stats.value += cropValue(s, crop);
     if (CROPS[crop].value >= 12 && rng() < 0.15) {
-      log(s, LOG.protesta(g.name));
+      log(s, LOG.protesta(g.name), 'humor');
       say(g, 'alert', Infinity);
       g.stats.complaints++;
       work(g, 1.2, 'complain', { kind: 'complain' });
@@ -1205,8 +1228,8 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
   } else if (task?.kind === 'plant' && p) {
     p.res = null;
     if (p.stage === -1 || p.stage === ROTTEN) {
-      if (p.stage === ROTTEN && rng() < 0.2) log(s, LOG.arrancar(g.name));
-      else if (rng() < 0.08) log(s, `${g.name} ${pick(rng, LOG.plantar)}`);
+      if (p.stage === ROTTEN && rng() < 0.2) log(s, LOG.arrancar(g.name), 'humor');
+      else if (rng() < 0.08) log(s, `${g.name} ${pick(rng, LOG.plantar)}`, 'humor');
       p.crop = seedFor(s, g, p);
       p.stage = 0;
       p.t = 0;
@@ -1221,7 +1244,7 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
       canLeft.set(g, (canLeft.get(g) ?? WATER.can) - 1);
       g.stats.tasks++;
       s.events.push({ type: 'water', plot: p.id });
-      if (rng() < 0.04) log(s, `${g.name} ${pick(rng, LOG.regar)}`);
+      if (rng() < 0.04) log(s, `${g.name} ${pick(rng, LOG.regar)}`, 'humor');
     }
   } else if (task?.kind === 'refill') {
     canLeft.set(g, WATER.can);
@@ -1363,14 +1386,14 @@ function updateCrow(s: GameState, c: Critter, arrived: boolean) {
     c.state = 'stay';
     c.t = 0;
     moment(s, 'cuervo', c.x, c.y);
-    log(s, LOG.cuervo);
+    log(s, LOG.cuervo, 'importante');
     return;
   }
   if (c.state !== 'stay') return;
   // alguien la ha recogido antes: aquí ya no hay nada que picar
   if (!p || p.stage !== RIPE) return flyAway(c);
   if (c.t >= CROW_EAT) {
-    log(s, LOG.cuervoCome(CULTIVOS[p.crop].uno));
+    log(s, LOG.cuervoCome(CULTIVOS[p.crop].uno), 'importante');
     p.stage = -1;
     p.t = 0;
     const org = orgOf(s);
@@ -1446,7 +1469,7 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
     const at = plotCentre(p);
     spawn(s, 'topo', at.x, at.y, at.x, at.y, 'in', p.id);
     moment(s, 'topo', at.x, at.y);
-    log(s, LOG.topo);
+    log(s, LOG.topo, 'importante');
     return true;
   }
   if (kind === 'caracol') {
@@ -1457,7 +1480,7 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
     const ltr = rng() < 0.5;
     spawn(s, 'caracol', ltr ? left : right, y, ltr ? right : left, y, 'in');
     moment(s, 'caracol', ltr ? left : right, y);
-    if (rng() < 0.5) log(s, LOG.caracol);
+    if (rng() < 0.5) log(s, LOG.caracol, 'humor');
     return true;
   }
   if (s.happening || !s.gnomes.length) return false;
@@ -1469,7 +1492,7 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
     }
     s.happening = { kind, t: HAPPENING_TIME.ranas };
     moment(s, 'ranas', WORLD.w / 2, WORLD.h / 2);
-    log(s, LOG.ranas);
+    log(s, LOG.ranas, 'importante');
     return true;
   }
   if (kind === 'sindicato') {
@@ -1481,7 +1504,7 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
     }
     s.happening = { kind, t: dur };
     moment(s, 'sindicato', DOOR.x, DOOR.y);
-    log(s, LOG.sindicato);
+    log(s, LOG.sindicato, 'importante');
     return true;
   }
   // espantapájaros: uno se planta en el bancal y los cuervos que hubiera se van
@@ -1493,7 +1516,7 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
   // margen para llegar andando; si llega antes, lo da por acabado él al terminar su turno (finish)
   s.happening = { kind, t: HAPPENING_TIME.espantapajaros + 20, gnome: g.id };
   moment(s, 'espantapajaros', g.x, g.y);
-  log(s, LOG.espantapajaros(g.name));
+  log(s, LOG.espantapajaros(g.name), 'importante');
   return true;
 }
 
@@ -1524,7 +1547,7 @@ export function buyTalent(s: GameState, id: TalentId): boolean {
   if (s.prestige.goldenSeeds < cost) return false;
   s.prestige.goldenSeeds -= cost;
   s.prestige.talents[id]++;
-  log(s, LOG.talento(TALENTOS[id].nombre));
+  log(s, LOG.talento(TALENTOS[id].nombre), 'importante');
   return true;
 }
 
@@ -1565,7 +1588,7 @@ export function endSeason(s: GameState, rng: Rng): GameState {
   };
   const t = n.prestige.talents;
   n.log = [];
-  log(n, LOG.temporada(n.prestige.season, seeds));
+  log(n, LOG.temporada(n.prestige.season, seeds), 'importante');
   n.coins = TALENT_EFFECT.herencia * t.herencia;
   n.tree.bancal = Math.min(TREE.bancal.max, TALENT_EFFECT.bancalHeredado * t.bancalHeredado);
   n.house = Math.min(HOUSE.max, TALENT_EFFECT.casaHeredada * t.casaHeredada);
@@ -1575,7 +1598,7 @@ export function endSeason(s: GameState, rng: Rng): GameState {
     if (n.gnomes.length >= houseCapacity(n)) break;
     // si su gremio aún no ha abierto (el árbol empieza de cero), echa una mano recogiendo hasta que abra
     const g = addGnome(n, jobUnlocked(n, v.job) ? v.job : 'recolector', rng, v);
-    log(n, LOG.veterano(g.name, v.seasons));
+    log(n, LOG.veterano(g.name, v.seasons), 'importante');
   }
   const free = TALENT_EFFECT.experiencia * t.experiencia;
   let arrived = 0;
@@ -1583,11 +1606,11 @@ export function endSeason(s: GameState, rng: Rng): GameState {
     for (const job of ['recolector', 'sembrador'] as const) {
       if (n.gnomes.length >= houseCapacity(n)) break;
       const g = addGnome(n, job, rng);
-      if (g.legendary) log(n, LOG.legendario(g.name));
+      if (g.legendary) log(n, LOG.legendario(g.name), 'importante');
       arrived++;
     }
   }
-  if (arrived) log(n, LOG.experiencia(arrived));
+  if (arrived) log(n, LOG.experiencia(arrived), 'importante');
   n.events.push({ type: 'season', season: n.prestige.season });
   return n;
 }

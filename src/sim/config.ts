@@ -244,6 +244,11 @@ export const TRAIT_WORK: Partial<Record<TraitId, number>> = { currante: 0.85 };
 export const LEGENDARY = { chance: 0.03, mult: 1.25 } as const;
 /** lo que dura un bocadillo de intención o de reacción; corto para que con muchos gnomos no se llene el bancal */
 export const BUBBLE_TIME = 0.9;
+/**
+ * Bocadillos de rutina (a por qué va cada gnomo): solo salen en una de cada tantas decisiones, y nunca si ya hay `max`
+ * bocadillos en pantalla. Los de personalidad (saludos, enfados, siestas, charlas…) salen siempre.
+ */
+export const BUBBLES = { routine: 1 / 6, max: 4 } as const;
 /** dos gnomos andando a menos de esto se ven; luego cada uno tarda MEET_COOLDOWN en volver a reaccionar */
 export const MEET_DIST = 6;
 export const MEET_COOLDOWN = 20;

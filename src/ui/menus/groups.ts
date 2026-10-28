@@ -82,7 +82,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
           <div class="chips" data-drop="${g.id}">
             ${members.length
               ? members.map(gn => `
-                <button type="button" class="chip ${selectedGnome === gn.id ? 'selected' : ''}" data-gnome="${gn.id}" draggable="true" title="${esc(`${OFICIOS[gn.job].nombre} · ${RASGOS[gn.trait].nombre}`)}">
+                <button type="button" class="chip ${selectedGnome === gn.id ? 'selected' : ''}" data-gnome="${gn.id}" draggable="true" data-tip="${esc(`${OFICIOS[gn.job].nombre} · ${RASGOS[gn.trait].nombre}`)}">
                   ${pixelImg(jobIcons[gn.job], 'px chip-icon')}${esc(gn.name)}${pixelImg(traitIcons[gn.trait], 'px trait-icon')}
                 </button>`).join('')
               : `<span class="muted empty">${GRUPOS.vacio}</span>`}

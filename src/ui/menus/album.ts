@@ -48,8 +48,8 @@ export function createAlbumMenu(): Menu {
                 const got = album.includes(stickerId(page, k));
                 const { icon, name } = sticker(page, k);
                 return got
-                  ? `<li class="sticker" title="${esc(name)}">${pixelImg(icon, `px ${page === 'doradas' ? 'gilded' : ''}`)}<span>${esc(name)}</span></li>`
-                  : `<li class="sticker missing" title="${esc(t.pista)}">${pixelImg(icon, 'px silhouette')}<span>${ALBUM_TEXTOS.falta}</span></li>`;
+                  ? `<li class="sticker" data-tip="${esc(name)}">${pixelImg(icon, `px ${page === 'doradas' ? 'gilded' : ''}`)}<span>${esc(name)}</span></li>`
+                  : `<li class="sticker missing" data-tip="${esc(t.pista)}">${pixelImg(icon, 'px silhouette')}<span>${ALBUM_TEXTOS.falta}</span></li>`;
               }).join('')}
             </ul>
             <footer>${done ? ALBUM_TEXTOS.completa : ALBUM_TEXTOS.premio(ALBUM.pageSeeds)} · <span class="muted">${t.pista}</span></footer>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN,
   MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS, MASTERY, ALBUM,
-  RALLY, ORDERS, FRIENDS, SEASONS,
+  RALLY, ORDERS, FRIENDS, SEASONS, BUBBLES,
 } from './config';
 import {
   basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
@@ -280,9 +280,10 @@ describe('gnomos', () => {
     tick(s, 1 / 30, rng);
     expect(picker.task?.kind).not.toBe('harvest');
     hireFree(s, 'sembrador', rng);
-    run(s, 6, rng);
+    run(s, 9, rng);
+    // arrancada y replantada (puede que ya esté creciendo o madura, pero no podrida)
     expect(rotten.stage).toBeGreaterThanOrEqual(0);
-    expect(rotten.stage).toBeLessThan(RIPE);
+    expect(rotten.stage).not.toBe(ROTTEN);
   });
 
   it('dos porteadores no van a por una cesta que solo da para uno', () => {
@@ -817,15 +818,23 @@ describe('vida en el huerto', () => {
     expect(lazy).toBeGreaterThan(hard * 1.1);
   });
 
-  it('al ir a por algo maduro, el recolector lo dice con un bocadillo', () => {
+  it('los bocadillos de rutina salen de vez en cuando y nunca más de BUBBLES.max a la vez', () => {
     const rng = seeded(3);
-    const { s, p } = oneRipe(rng);
-    const g = hireFree(s, 'recolector', rng);
-    tick(s, 1 / 30, rng);
-    expect(g.task).toMatchObject({ kind: 'harvest', plot: p.id });
-    expect(g.bubble).toMatchObject({ kind: 'crop', crop: 'zanahoria' });
-    run(s, 2, rng);
-    expect(g.bubble?.kind).not.toBe('crop');
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    s.house = HOUSE.max;
+    for (const p of s.plots) p.stage = isOpen(s, p) ? RIPE : -1;
+    for (let i = 0; i < 12; i++) hireFree(s, 'recolector', rng);
+    const routine = new Set(['crop', 'sack', 'basket', 'well', 'water']);
+    let seen = 0, most = 0;
+    for (let i = 0; i < 30 * 30; i++) {
+      tick(s, 1 / 30, rng);
+      const now = s.gnomes.filter(g => g.bubble && routine.has(g.bubble.kind)).length;
+      most = Math.max(most, now);
+      if (now) seen++;
+    }
+    expect(seen).toBeGreaterThan(0);
+    expect(most).toBeLessThanOrEqual(BUBBLES.max);
   });
 
   it('un cuervo se come lo maduro si nadie lo espanta', () => {

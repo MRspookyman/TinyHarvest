@@ -1,4 +1,4 @@
-// Lo que está siempre en pantalla: monedas y organización arriba, barra de accesos y semillas abajo, y el último aviso del diario.
+// Monedas y organización arriba, accesos y semillas abajo, y avisos seleccionados sobre el huerto.
 import { CROP_IDS, RALLY, SEASONS } from '../sim/config';
 import { cropUnlocked, cropValue, favoriteCrop, masteryLevel, masteryNext, nextGoal, seasonOf } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
@@ -9,6 +9,7 @@ import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } fr
 
 export interface Hud {
   update(s: GameState, selected: CropId, openMenu: MenuId | null): void;
+  notice(kind: 'importante' | 'humor', text: string): void;
 }
 
 const MENU_ORDER: MenuId[] = ['contratar', 'grupos', 'arbol', 'ranking', 'album', 'diario', 'temporada'];
@@ -30,7 +31,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       </button>
       <span class="stat" data-coin-stat><i class="coin" aria-hidden="true"></i><b data-coins>0</b> ${UI.monedas}</span>
       <div class="org" data-org>
-        <button type="button" class="stat org-btn" aria-expanded="false" aria-controls="org-pop" title="${esc(ORG.boton)}">
+        <button type="button" class="stat org-btn" aria-expanded="false" aria-controls="org-pop" data-tip="${esc(ORG.boton)}" aria-label="${esc(ORG.boton)}">
           <i class="org-icon" aria-hidden="true"></i><b data-org-mult></b>
         </button>
         <div class="org-pop" id="org-pop" role="tooltip">
@@ -44,7 +45,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       </div>
       <span class="stat"><b data-gnomes>0</b> ${UI.gnomos}</span>
       <span class="stat estacion" data-estacion><span data-estacion-name></span> · <img class="px" alt="" data-estacion-icon><span data-estacion-fav></span></span>
-      <span class="stat" data-prestige hidden title="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold>0</b> · <span data-season></span></span>
+      <span class="stat" data-prestige hidden data-tip="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold>0</b> · <span data-season></span></span>
       <button type="button" class="sound-btn" data-sound aria-pressed="false"><i aria-hidden="true"></i></button>
     </div>`;
 
@@ -56,7 +57,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
     soundBtn.setAttribute('aria-pressed', String(!sound.muted));
     soundBtn.classList.toggle('off', sound.muted);
     const label = sound.muted ? UI.sonidoOff : UI.sonidoOn;
-    soundBtn.title = label;
+    soundBtn.dataset.tip = label;
     soundBtn.setAttribute('aria-label', label);
   };
   soundBtn.addEventListener('click', () => {
@@ -94,7 +95,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
   bar.innerHTML = `
     <div class="tool-group">
       ${MENU_ORDER.map(m => `
-        <button type="button" class="tool" data-menu="${m}" aria-label="${esc(MENUS[m].boton)}" aria-pressed="false" title="${esc(MENUS[m].sub)}">
+        <button type="button" class="tool" data-menu="${m}" aria-label="${esc(MENUS[m].boton)}" aria-pressed="false" data-tip="${esc(MENUS[m].sub)}">
           ${pixelImg(menuIcons[m])}<span>${MENUS[m].boton}</span>
         </button>`).join('')}
     </div>
@@ -123,7 +124,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
     <header><b>${ENCARGOS.titulo}</b><span data-order-time></span></header>
     <div class="order-body">${'<img class="px" alt="" data-order-icon>'}<p data-order-text></p></div>
     <i class="goal-bar" aria-hidden="true"><i data-order-fill></i></i>
-    <footer><span data-order-reward></span><button type="button" class="link" data-order-no title="${esc(ENCARGOS.noAyuda)}">${ENCARGOS.no}</button></footer>`;
+    <footer><span data-order-reward></span><button type="button" class="link" data-order-no data-tip="${esc(ENCARGOS.noAyuda)}">${ENCARGOS.no}</button></footer>`;
   stage.append(order);
   order.querySelector('[data-order-no]')!.addEventListener('click', () => actions.dismissOrder());
 
@@ -135,8 +136,19 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
     else if (btn.dataset.rally !== undefined) actions.rally();
   });
 
-  let lastLog = '';
+  const waiting: string[] = [];
+  let humor: string | null = null;
+  let shownAt = -Infinity;
   return {
+    notice(kind, text) {
+      if (kind === 'importante') {
+        humor = null;
+        waiting.push(text);
+        if (waiting.length > 3) waiting.shift();
+      } else if (!waiting.length && performance.now() - shownAt > 25_000) {
+        humor = text;
+      }
+    },
     update(s, selected, openMenu) {
       setText(topbar.querySelector('[data-coins]'), String(Math.floor(s.coins)));
       const now = performance.now();
@@ -160,7 +172,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       if (goalFill.style.width !== width) goalFill.style.width = width;
       toggleClass(goalBtn, 'ready', fill >= 1 && goal.kind === 'node');
       const help = goal.kind === 'node' ? UI.proximoAyuda : UI.proximoSemillaAyuda;
-      if (goalBtn.title !== help) goalBtn.title = help;
+      if (goalBtn.dataset.tip !== help) goalBtn.dataset.tip = help;
       setText(topbar.querySelector('[data-gnomes]'), String(s.gnomes.length));
       // semillas doradas y temporada: solo cuando ya significan algo
       const { goldenSeeds, season } = s.prestige;
@@ -178,7 +190,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       const favIcon = seasonEl.querySelector<HTMLImageElement>('[data-estacion-icon]')!;
       if (favIcon.getAttribute('src') !== cropIcons[fav]) favIcon.src = cropIcons[fav];
       const seasonHelp = ESTACIONES.ayuda(estacion, CULTIVOS[fav].nombre, pct);
-      if (seasonEl.title !== seasonHelp) seasonEl.title = seasonHelp;
+      if (seasonEl.dataset.tip !== seasonHelp) seasonEl.dataset.tip = seasonHelp;
 
       // organización: el multiplicador coloreado por la media de las partes, y pista para la peor
       const parts = s.org.parts;
@@ -208,13 +220,13 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         const locked = !cropUnlocked(s, c);
         setDisabled(btn, locked);
         btn.setAttribute('aria-pressed', String(selected === c));
-        // maestría (G5): estrellitas en el botón y el progreso en el título
+        // maestría (G5): estrellitas en el botón y el progreso en la ayuda
         const level = masteryLevel(s, c);
         const next = masteryNext(s, c);
         if (btn.dataset.level !== String(level)) btn.dataset.level = String(level);
         const mastery = level || s.mastery[c] ? ` ${MAESTRIA.nivel(level)}: ${next === null ? MAESTRIA.maximo : MAESTRIA.progreso(s.mastery[c], next)}.` : '';
         const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}.${mastery}`;
-        if (btn.title !== title) btn.title = title;
+        if (btn.dataset.tip !== title) btn.dataset.tip = title;
         if (btn.getAttribute('aria-label') !== title) btn.setAttribute('aria-label', title);
       }
 
@@ -230,7 +242,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       setText(rallyBtn.querySelector('[data-rally-label]'), rallyT > 0 ? UI.arengaActiva(Math.ceil(rallyT)) : cd > 0 ? clock(cd) : UI.arenga);
       const rallyTitle = !s.gnomes.length ? UI.sinGnomos
         : cd > 0 && rallyT <= 0 ? UI.arengaRecarga(clock(cd)) : UI.arengaAyuda(Math.round(RALLY.mult * 100), RALLY.duration);
-      if (rallyBtn.title !== rallyTitle) rallyBtn.title = rallyTitle;
+      if (rallyBtn.dataset.tip !== rallyTitle) rallyBtn.dataset.tip = rallyTitle;
 
       // encargo (G8)
       const o = s.order;
@@ -247,10 +259,11 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         toggleClass(order, 'hurry', o.t < 30);
       }
 
-      // el aviso más reciente del diario aparece un momento sobre el huerto
-      if (s.log[0] !== lastLog) {
-        lastLog = s.log[0] ?? '';
-        ticker.textContent = lastLog;
+      // Cada aviso tiene al menos tres segundos; sin cola, la animación dura cinco.
+      if (now - shownAt >= 3000 && (waiting.length || humor !== null)) {
+        ticker.textContent = waiting.shift() ?? humor;
+        humor = null;
+        shownAt = now;
         ticker.classList.remove('show');
         void ticker.offsetWidth;
         ticker.classList.add('show');
