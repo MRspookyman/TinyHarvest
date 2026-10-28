@@ -636,6 +636,22 @@ Las partidas anteriores siguen valiendo: los grupos sin zona trabajan en todo el
 | F6 | **Táctil y móvil** | M | Bajo por ahora | — | Más adelante |
 | F7 | **Robustez:** copia de partidas ilegibles, aviso de «sin guardar», parada segura ante errores | S | Alto (seguridad) | — | ✅ It9 |
 
+**G. Enganche** (estudio del 2026-10-28; fuentes en la sección 10)
+
+| # | Tarea | Tamaño | Impacto | Depende de | Estado |
+|---|---|---|---|---|---|
+| G1 | **Ventaja de las zonas** («se conocen el terreno»): que organizar por zonas también compense en monedas | S | Alto | A5 | Siguiente |
+| G2 | **Sonido y más «jugo»** (F4): sonidos suaves al recoger, cobrar y contratar; monedas que vuelan al contador; botón de silencio | M | Alto | — | Siguiente |
+| G3 | **Próximo objetivo siempre a la vista**, con barra de progreso en la barra de arriba («Trigo: 42 / 60») | S | Alto | — | Propuesta |
+| G4 | **Cosecha dorada**: muy de vez en cuando una planta sale dorada, brilla y vale ×10 | S | Medio | — | Propuesta |
+| G5 | **Maestría de cultivo**: cada N cosechas de un cultivo, +5 % a ese cultivo, con medalla en el cartel | M | Alto | — | Propuesta |
+| G6 | **Álbum del huerto**: rasgos, legendarios, sucesos y cosechas doradas vistos; lo que falta sale como silueta «???» | M | Alto | — | Propuesta |
+| G7 | **Arenga del capataz**: botón con recarga (p. ej. +50 % de ritmo durante 30 s, cada 5 min) | S–M | Medio | — | Propuesta |
+| G8 | **Encargos del pueblo**: pedidos voluntarios y cortos («20 fresas en 3 min»), sin castigo si no se cumplen | M | Medio | — | Propuesta |
+| G9 | **Amistades entre gnomos**: los que trabajan juntos se hacen amigos, se ayudan y se echan de menos; se ve en la ficha | M | Medio | D7 | Propuesta |
+| G10 | **Estaciones**: cada temporada del prestigio es una estación con su paleta, su clima y su cultivo favorito | M | Medio | E1 | Propuesta |
+| G11 | **Bienvenida al volver**: resumen de la última sesión y, si se decide, un pequeño regalo por volver (revisar la decisión 7) | S | Medio | — | Por decidir |
+
 ### 9.2 Hoja de ruta (opción A: mecánica antes que números)
 
 ```mermaid
@@ -662,6 +678,24 @@ flowchart LR
 - **El bot va en la iteración 4** para que cada cambio de equilibrio se mida, no se adivine.
 - **La personalidad apenas toca la economía**, así que se puede adelantar si apetece algo más vistoso.
 - **El prestigio va al final** porque multiplica una economía que antes tiene que estar equilibrada.
+
+---
+
+## 10. 🧠 Estudio: qué engancha en este tipo de juegos (2026-10-28)
+
+| Principio | Qué dice la fuente | Qué tenemos | Qué falta (backlog G) |
+|---|---|---|---|
+| **Ni solo esperar ni solo clicar** | Un buen *idle* da motivos para dejarlo solo y también para volver a jugar activamente ([Alharthi et al., CHI 2018](https://dl.acm.org/doi/10.1145/3173574.3174195)). | Gnomos automáticos, clic a mano, grupos. | Una acción activa con recarga (G7) y encargos (G8). |
+| **Lo que mueve a sus jugadores: completar y crecer** | En las encuestas de Quantic Foundry, las motivaciones principales de los jugadores de *idle* son **completar** y **poder**. Los multiplicadores por hitos dan «pequeñas victorias» y mantienen útil lo barato ([Pecorella, GDC 2016](https://media.gdcvault.com/gdceurope2016/presentations/Pecorella_Anthony_Quest%20for%20Progress.pdf)). | Árbol, prestigio, ranking. | Maestría de cultivo (G5) y álbum (G6). |
+| **Cada vuelta, algo más lejos** | Conviene reiniciar al ganar entre un 50 % y un 200 % más de moneda de prestigio. El principio de la siguiente vuelta tiene que ir rápido. Limitar lo ganado fuera del juego le hizo abandonar Egg Inc. (Pecorella). | Temporadas de 64 → 48 → 39 min. | Revisar si damos algo al volver (G11). |
+| **Autonomía, competencia y relación** | Las tres necesidades de la teoría de la autodeterminación predicen por separado cuánto se disfruta un juego y cuánto se vuelve a él ([Ryan, Rigby y Przybylski, 2006](https://selfdeterminationtheory.org/SDT/documents/2006_RyanRigbyPrzybylski_MandE.pdf)). | Autonomía: grupos y zonas. Competencia: bot, multiplicador. | Que organizar compense (G1); vínculo con los gnomos (G9). |
+| **Cuanto más cerca de la meta, más se acelera** | Con una tarjeta de sellos, la gente vuelve más rápido cuanto más cerca está del premio. Regalar los dos primeros sellos sube la tasa de completar del 19 % al 34 % ([Kivetz et al., 2006](https://www.researchgate.net/publication/239776073_The_Goal-Gradient_Hypothesis_Resurrected_Purchase_Acceleration_Illusionary_Goal_Progress_and_Customer_Retention); [Nunes y Drèze, 2006](https://www.researchgate.net/publication/23547282_The_Endowed_Progress_Effect_How_Artificial_Advancement_Increases_Effort)). | Los costes se ven en los menús. | Próximo objetivo con barra siempre a la vista (G3). |
+| **La curiosidad nace de un hueco pequeño** | Engancha saber *casi* algo: el hueco tiene que verse y parecer alcanzable ([Loewenstein, 1994](https://psychologyfanatic.com/information-gap-theory/)). | Legendarios y sucesos raros, pero no se ve cuántos faltan. | Siluetas «???» en el álbum (G6) y la cosecha dorada (G4). |
+| **El «jugo»** | Partículas, rebote y sonido convierten cada acción en algo satisfactorio. Pero es como la sal: si tapa lo que pasa, sobra ([Jonasson y Purho, 2012](https://roblog.co.uk/2024/03/juicy-games/)). | Números flotantes, arco de la cosecha, confeti. | Sonido y monedas que vuelan (G2). |
+| **Lo acogedor retiene** | Seguridad, abundancia y suavidad. Lo que rompe la sensación: amenazas, obligaciones, avisos intrusivos y recompensas que empujan. Lo acogedor reduce los motivos de abandono ([Project Horseshoe, 2017](https://www.projecthorseshoe.com/reports/featured/ph17r3.htm)). | Tono amable, gnomos con humor, huerto pequeño. | Estaciones y rituales (G10). Vigilar que la podredumbre no agobie. |
+| **Límites éticos** | Evitar patrones oscuros: tareas repetitivas que roban tiempo, castigos por no entrar, pagar por saltar y presión social ([Zagal, Björk y Lewis, 2013](https://dblp.org/rec/conf/fdg/ZagalB013.html)). | Sin pagos, sin castigos por ausencia. | Los encargos (G8) y la bienvenida (G11), siempre voluntarios y sin pérdidas. |
+
+**Orden propuesto:** G1 y G2 (pedidos por el autor) → G3 y G4 (poco trabajo y efecto inmediato) → G5 y G6 (completar) → G7 y G8 (motivos para volver a jugar activamente) → G9, G10 y G11.
 
 ---
 
