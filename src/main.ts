@@ -18,8 +18,10 @@ import { createHireMenu } from './ui/menus/hire';
 import { createRankingMenu } from './ui/menus/ranking';
 import { createSeasonMenu, createSeasonSummary } from './ui/menus/season';
 import { createTreeMenu } from './ui/menus/tree';
+import { createNotices } from './ui/notices';
 import { createTutorial } from './ui/tutorial';
 import { createWindows } from './ui/windows';
+import { AVISOS } from './textos';
 
 const rng = Math.random;
 // Con el juego cerrado o la pestaña oculta no se avanza: el paso máximo por fotograma es corto
@@ -29,15 +31,56 @@ const SAVE_EVERY = 10;
 
 async function start() {
   TextureSource.defaultOptions.scaleMode = 'nearest';
+  const stageEl = document.getElementById('stage')!;
+  const notices = createNotices(stageEl);
 
   const devParams = import.meta.env.DEV && location.search.length > 1;
-  let state = (devParams ? null : loadGame(rng)) ?? createState(rng);
+  const loaded = devParams ? { state: null } : loadGame(rng);
+  let state = loaded.state ?? createState(rng);
   if (devParams) applyDevParams(state);
+  // una partida ilegible sin copia apartada no se pisa hasta que el jugador lo decida
+  let canSave = !loaded.unreadable || loaded.unreadable.backedUp;
+  // tras un error en el bucle no se guarda: el estado puede estar a medias y la última copia buena es la del autoguardado
+  let broken = false;
+  let saveOk = true;
+  const persist = () => {
+    if (broken || !canSave) return;
+    const ok = saveGame(state);
+    if (ok === saveOk) return;
+    saveOk = ok;
+    if (ok) notices.hide('guardar');
+    else notices.show('guardar', AVISOS.sinGuardar);
+  };
+  const allowSave = () => {
+    canSave = true;
+    notices.hide('ilegible');
+    persist();
+  };
+  if (loaded.unreadable) {
+    const { raw, backedUp } = loaded.unreadable;
+    const download = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
+      a.download = 'tiny-harvest-partida-danada.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    if (backedUp) {
+      notices.show('ilegible', AVISOS.ilegible, [
+        { label: AVISOS.descargar, onClick: download },
+        { label: AVISOS.entendido, onClick: () => notices.hide('ilegible') },
+      ]);
+    } else {
+      notices.show('ilegible', AVISOS.ilegibleSinCopia, [
+        { label: AVISOS.descargar, onClick: () => { download(); allowSave(); } },
+        { label: AVISOS.sustituir, onClick: allowSave },
+      ]);
+    }
+  }
   let seed: CropId = 'zanahoria';
   // solo en desarrollo: acceso al estado desde la consola para revisar (window.__th.state)
   if (import.meta.env.DEV) Object.assign(window, { __th: { get state() { return state; } } });
 
-  const stageEl = document.getElementById('stage')!;
   const app = new Application();
   await app.init({ resizeTo: stageEl, background: '#38b764', antialias: false, roundPixels: true });
   stageEl.prepend(app.canvas);
@@ -68,6 +111,8 @@ async function start() {
     },
     reset: () => {
       clearGame();
+      canSave = true;
+      notices.hide('ilegible');
       state = createState(rng);
       seed = 'zanahoria';
       scene.reset();
@@ -82,7 +127,7 @@ async function start() {
       scene.reset();
       windows.close();
       card.close();
-      saveGame(state);
+      persist();
       summary.show(state);
     },
     showHallOfFame: () => {
@@ -113,30 +158,38 @@ async function start() {
 
   let sinceSave = 0;
   app.ticker.add(ticker => {
-    const dt = Math.min(ticker.deltaMS / 1000, MAX_DT);
-    tick(state, dt, rng);
-    if (!cropUnlocked(state, seed)) seed = 'zanahoria';
-    scene.sync(state, dt);
-    hud.update(state, seed, windows.current);
-    windows.update(state);
-    card.update(state);
-    tutorial.update(state, { menu: windows.current, card: card.current });
-    // la cámara encuadra el huerto en lo que no tapan la barra de abajo ni la ficha (D13); se aplica al siguiente fotograma
-    scene.setInsets({
-      right: card.el.hidden ? 0 : stageEl.clientWidth - card.el.offsetLeft,
-      bottom: stageEl.clientHeight - toolbar.offsetTop,
-    });
-    sinceSave += dt;
-    if (sinceSave >= SAVE_EVERY) {
-      sinceSave = 0;
-      saveGame(state);
+    try {
+      const dt = Math.min(ticker.deltaMS / 1000, MAX_DT);
+      tick(state, dt, rng);
+      if (!cropUnlocked(state, seed)) seed = 'zanahoria';
+      scene.sync(state, dt);
+      hud.update(state, seed, windows.current);
+      windows.update(state);
+      card.update(state);
+      tutorial.update(state, { menu: windows.current, card: card.current });
+      // la cámara encuadra el huerto en lo que no tapan la barra de abajo ni la ficha (D13); se aplica al siguiente fotograma
+      scene.setInsets({
+        right: card.el.hidden ? 0 : stageEl.clientWidth - card.el.offsetLeft,
+        bottom: stageEl.clientHeight - toolbar.offsetTop,
+      });
+      sinceSave += dt;
+      if (sinceSave >= SAVE_EVERY) {
+        sinceSave = 0;
+        persist();
+      }
+    } catch (e) {
+      // un fallo a mitad de fotograma deja el estado a medias: se para todo y no se guarda encima de la última copia buena
+      broken = true;
+      app.ticker.stop();
+      console.error(e);
+      notices.show('error', AVISOS.roto, [{ label: AVISOS.recargar, onClick: () => location.reload() }]);
     }
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveGame(state);
+    if (document.visibilityState === 'hidden') persist();
   });
-  window.addEventListener('pagehide', () => saveGame(state));
+  window.addEventListener('pagehide', persist);
 }
 
 /**
@@ -186,4 +239,9 @@ function applyDevParams(state: GameState) {
   if (n('temporada')) state.prestige.season = n('temporada');
 }
 
-start();
+start().catch(e => {
+  console.error(e);
+  createNotices(document.getElementById('stage') ?? document.body).show('error', AVISOS.noArranca, [
+    { label: AVISOS.recargar, onClick: () => location.reload() },
+  ]);
+});

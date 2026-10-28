@@ -35,6 +35,19 @@ export const UI = {
   borrarSeguro: '¿Seguro? Pulsa otra vez',
 };
 
+/** Avisos de guardado y de errores: se quedan hasta que se resuelven. */
+export const AVISOS = {
+  ilegible: 'La partida guardada no se ha podido leer (está dañada o es de otra versión del juego). Se ha apartado una copia en este navegador y empiezas un huerto nuevo.',
+  ilegibleSinCopia: 'La partida guardada no se ha podido leer y no queda sitio para apartar una copia. No se guardará nada encima hasta que la descargues o decidas sustituirla.',
+  descargar: 'Descargar la partida dañada',
+  sustituir: 'Empezar de nuevo y guardar encima',
+  entendido: 'Entendido',
+  sinGuardar: 'No se puede guardar la partida: el navegador no lo permite o no le queda sitio. Puedes seguir jugando, pero lo que hagas se perderá al cerrar. Se reintenta solo.',
+  roto: 'Algo se ha roto y el huerto se ha detenido. La partida se guardó por última vez hace unos segundos; al recargar sigues desde ahí.',
+  noArranca: 'El juego no ha podido arrancar. Prueba a recargar la página; si sigue sin funcionar, puede que tu navegador no sea compatible.',
+  recargar: 'Recargar',
+};
+
 /** Menús y los elementos del huerto que los abren. */
 export const MENUS = {
   contratar: { titulo: 'Granero', sub: 'Contratar gnomos', lugar: 'Granero', boton: 'Granero' },
