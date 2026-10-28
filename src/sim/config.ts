@@ -300,3 +300,11 @@ export const GOLDEN = { chance: 0.008, mult: 10 } as const;
 export const MASTERY = { steps: [25, 75, 200, 500, 1200], bonus: 0.05 } as const;
 /** Álbum (G6): completar una página da estas semillas doradas; el cromo de maestría sale a partir de este nivel. */
 export const ALBUM = { pageSeeds: 1, masteryLevel: 3 } as const;
+/** Arenga del capataz (G7): durante `duration` s todos andan y trabajan un `mult` más rápido; se recarga en `cooldown` s. */
+export const RALLY = { mult: 0.5, duration: 30, cooldown: 300 } as const;
+/**
+ * Encargos del pueblo (G8): llegan cada `gap` s (el primero a los `first`), duran `time` s y piden lo que el bancal
+ * y los recolectores pueden dar en ese tiempo con algo de esfuerzo (`effort`). Para calcularlo, un viaje de recolector
+ * dura unos `trip` s y a mano se recogen unos `byHand` más. Pagan `reward` veces lo que valen.
+ */
+export const ORDERS = { first: 90, gap: { min: 150, max: 300 }, time: 180, effort: 0.6, trip: 8, byHand: 15, min: 5, max: 80, reward: 2 } as const;

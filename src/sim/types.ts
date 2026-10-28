@@ -182,7 +182,24 @@ export type SimEvent =
   /** un cultivo sube de maestría (G5) */
   | { type: 'mastery'; crop: CropId; level: number }
   /** cromo nuevo en el álbum (G6); `page` si con él se completa una página */
-  | { type: 'sticker'; id: string; page?: string };
+  | { type: 'sticker'; id: string; page?: string }
+  /** el jugador echa una arenga (G7) */
+  | { type: 'rally' }
+  /** llega un encargo del pueblo o se cumple (G8) */
+  | { type: 'order'; done: boolean };
+
+/** Encargo del pueblo (G8): alguien quiere tantos cultivos de un tipo antes de que se le acabe la paciencia. */
+export interface Order {
+  /** quién lo pide (índice en ENCARGOS.clientes) */
+  who: number;
+  crop: CropId;
+  need: number;
+  have: number;
+  /** segundos que le quedan */
+  t: number;
+  /** monedas al cumplirlo */
+  reward: number;
+}
 
 /**
  * Multiplicador de organización (B6): premia una cadena de trabajo que funciona. Se calcula sobre una ventana
@@ -268,6 +285,12 @@ export interface GameState {
   happening: Happening | null;
   /** cosechas de cada cultivo en esta temporada: dan la maestría (G5) */
   mastery: Record<CropId, number>;
+  /** arenga del capataz (G7): segundos que le quedan al efecto y a la recarga */
+  rally: { t: number; cd: number };
+  /** encargo del pueblo en curso (G8), o null; no se guarda: al cargar llega otro */
+  order: Order | null;
+  /** segundos hasta el próximo encargo */
+  nextOrderIn: number;
   /** más reciente primero */
   log: string[];
   /** salida para el render; no se guarda */

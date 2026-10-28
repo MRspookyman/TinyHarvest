@@ -5,8 +5,9 @@ import { createSound } from './render/sound';
 import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
-  buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, endSeason, hire, hireCost,
-  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, plotOrigin, renameGroup, setGroupColor, setGroupSeed, setGroupZone, setPriority, tick,
+  buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, dismissOrder, endSeason, hire, hireCost,
+  houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, plotOrigin, rally, renameGroup, setGroupColor, setGroupSeed, setGroupZone,
+  setPriority, tick,
 } from './sim/sim';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
@@ -147,6 +148,10 @@ async function start() {
       seasonMenu.tab('fama');
       windows.open('temporada');
     },
+    rally: () => {
+      if (rally(state, rng)) sound.play('rally');
+    },
+    dismissOrder: () => dismissOrder(state),
   };
 
   const seasonMenu = createSeasonMenu(actions);
@@ -219,6 +224,7 @@ async function start() {
       else if (e.type === 'crown') sound.play('crown');
       else if (e.type === 'mastery') sound.play('mastery');
       else if (e.type === 'sticker') sound.play('album');
+      else if (e.type === 'order') sound.play(e.done ? 'orderDone' : 'order');
       else if (e.type === 'golden') {
         sound.play('golden');
         flyCoins(scene.pageOf(e.x, e.y), coinStat, 6);

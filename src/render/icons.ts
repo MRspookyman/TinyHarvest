@@ -487,6 +487,26 @@ export const eventIcons = Object.fromEntries(
 export const crownIcon = url(crownCanvas());
 export const houseIcon = url(mapCanvas(HOUSE_ICON, P));
 
+/** Megáfono del capataz para la arenga (G7). */
+export const rallyIcon = url(mapCanvas([
+  '................',
+  '................',
+  '..........OO....',
+  '.........OYO....',
+  '........OYYO..O.',
+  '...OOOOOYYYO.O..',
+  '..OYYYYYYYYO....',
+  '.OYYWYYYYYYO.OOO',
+  '.OYYYYYYYYYO....',
+  '..OOOOOdYYYO.O..',
+  '....OTTOdYYO..O.',
+  '....OTTO.OdO....',
+  '....OTTO..OO....',
+  '....OOOO........',
+  '................',
+  '................',
+], GOLD));
+
 export const cropIcons = Object.fromEntries(
   CROP_IDS.map(c => [c, url(mapCanvas(PLANT_MAPS[c][4], PLANT_PAL))]),
 ) as Record<CropId, string>;

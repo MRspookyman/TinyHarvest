@@ -24,6 +24,10 @@ export interface GameActions {
   endSeason(): void;
   /** abre la estatua en el salón de la fama (desde el ranking y el resumen) */
   showHallOfFame(): void;
+  /** arenga del capataz (G7) */
+  rally(): void;
+  /** decir que no al encargo del pueblo (G8) */
+  dismissOrder(): void;
 }
 
 export const esc = (t: string) =>

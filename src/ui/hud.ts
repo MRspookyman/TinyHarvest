@@ -1,10 +1,10 @@
 // Lo que está siempre en pantalla: monedas y organización arriba, barra de accesos y semillas abajo, y el último aviso del diario.
-import { CROP_IDS } from '../sim/config';
+import { CROP_IDS, RALLY } from '../sim/config';
 import { cropUnlocked, cropValue, masteryLevel, masteryNext, nextGoal } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
-import { cropIcons, goldenSeedIcon, menuIcons } from '../render/icons';
+import { cropIcons, goldenSeedIcon, menuIcons, rallyIcon } from '../render/icons';
 import type { Sound } from '../render/sound';
-import { ARBOL, CULTIVOS, MAESTRIA, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
+import { ARBOL, CULTIVOS, ENCARGOS, MAESTRIA, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
@@ -16,6 +16,8 @@ const ORG_PARTS = Object.keys(ORG.partes) as OrgPart[];
 /** por debajo de esto, una parte da pista; la calidad colorea el multiplicador y las barras */
 const ORG_OK = 0.9;
 const quality = (f: number) => (f < 0.5 ? 'bad' : f < 0.8 ? 'mid' : 'good');
+/** segundos como m:ss */
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
 export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: GameActions, open: (m: MenuId) => void, sound: Sound): Hud {
   topbar.innerHTML = `
@@ -96,6 +98,8 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         </button>`).join('')}
     </div>
     <div class="tool-sep" aria-hidden="true"></div>
+    <button type="button" class="tool rally" data-rally>${pixelImg(rallyIcon)}<span data-rally-label>${UI.arenga}</span></button>
+    <div class="tool-sep" aria-hidden="true"></div>
     <div class="tool-group seeds" role="group" aria-label="${UI.semilla}">
       <span class="tool-label">${UI.semilla}</span>
       ${CROP_IDS.map(c => `
@@ -110,11 +114,24 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
   ticker.setAttribute('aria-live', 'polite');
   stage.append(ticker);
 
+  // encargo del pueblo (G8): tarjeta arriba a la izquierda del huerto mientras dura
+  const order = document.createElement('aside');
+  order.className = 'order-card';
+  order.hidden = true;
+  order.innerHTML = `
+    <header><b>${ENCARGOS.titulo}</b><span data-order-time></span></header>
+    <div class="order-body">${'<img class="px" alt="" data-order-icon>'}<p data-order-text></p></div>
+    <i class="goal-bar" aria-hidden="true"><i data-order-fill></i></i>
+    <footer><span data-order-reward></span><button type="button" class="link" data-order-no title="${esc(ENCARGOS.noAyuda)}">${ENCARGOS.no}</button></footer>`;
+  stage.append(order);
+  order.querySelector('[data-order-no]')!.addEventListener('click', () => actions.dismissOrder());
+
   bar.addEventListener('click', e => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
     if (!btn) return;
     if (btn.dataset.menu) open(btn.dataset.menu as MenuId);
     else if (btn.dataset.seed) actions.selectSeed(btn.dataset.seed as CropId);
+    else if (btn.dataset.rally !== undefined) actions.rally();
   });
 
   let lastLog = '';
@@ -187,6 +204,35 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}.${mastery}`;
         if (btn.title !== title) btn.title = title;
         if (btn.getAttribute('aria-label') !== title) btn.setAttribute('aria-label', title);
+      }
+
+      // arenga (G7): activa, recargando (barra que se llena) o lista
+      const rallyBtn = bar.querySelector<HTMLButtonElement>('[data-rally]')!;
+      const { t: rallyT, cd } = s.rally;
+      const ready = cd <= 0 && s.gnomes.length > 0;
+      setDisabled(rallyBtn, !ready);
+      toggleClass(rallyBtn, 'active', rallyT > 0);
+      toggleClass(rallyBtn, 'ready', ready);
+      const charge = `${Math.round((1 - cd / RALLY.cooldown) * 100)}%`;
+      if (rallyBtn.style.getPropertyValue('--charge') !== charge) rallyBtn.style.setProperty('--charge', charge);
+      setText(rallyBtn.querySelector('[data-rally-label]'), rallyT > 0 ? UI.arengaActiva(Math.ceil(rallyT)) : cd > 0 ? clock(cd) : UI.arenga);
+      const rallyTitle = !s.gnomes.length ? UI.sinGnomos
+        : cd > 0 && rallyT <= 0 ? UI.arengaRecarga(clock(cd)) : UI.arengaAyuda(Math.round(RALLY.mult * 100), RALLY.duration);
+      if (rallyBtn.title !== rallyTitle) rallyBtn.title = rallyTitle;
+
+      // encargo (G8)
+      const o = s.order;
+      order.hidden = !o;
+      if (o) {
+        const icon = order.querySelector<HTMLImageElement>('[data-order-icon]')!;
+        if (icon.getAttribute('src') !== cropIcons[o.crop]) icon.src = cropIcons[o.crop];
+        setText(order.querySelector('[data-order-text]'), `${ENCARGOS.pide(ENCARGOS.clientes[o.who], o.need, CULTIVOS[o.crop].plural)} · ${o.have} / ${o.need}`);
+        setText(order.querySelector('[data-order-time]'), clock(o.t));
+        setText(order.querySelector('[data-order-reward]'), ENCARGOS.paga(o.reward));
+        const width = `${Math.round((o.have / o.need) * 100)}%`;
+        const fill = order.querySelector<HTMLElement>('[data-order-fill]')!;
+        if (fill.style.width !== width) fill.style.width = width;
+        toggleClass(order, 'hurry', o.t < 30);
       }
 
       // el aviso más reciente del diario aparece un momento sobre el huerto

@@ -5,10 +5,11 @@ import {
   HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
   MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
   TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS, MASTERY, ALBUM,
+  RALLY, ORDERS,
 } from './config';
 import { ALBUM_PAGES, pageRewardId, stickerId, type AlbumPage } from './album';
 import { createState, makeGnome, randomTrait } from './state';
-import { ALBUM_TEXTOS, APELLIDOS, ARBOL, CULTIVOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
+import { ALBUM_TEXTOS, APELLIDOS, ARBOL, CULTIVOS, ENCARGOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
 import type {
   BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, Plot, Pose,
   Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, Zone,
@@ -93,10 +94,22 @@ export function turfBonus(s: GameState, g: Gnome): number {
 /** velocidad de un gnomo concreto: la del huerto con su rasgo, si es legendario, en su zona y (el guardián) con silbato */
 export const gnomeWalkSpeed = (s: GameState, g: Gnome) =>
   walkSpeed(s) * (TRAIT_WALK[g.trait] ?? 1) * (g.legendary ? LEGENDARY.mult : 1)
-  * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1) * (1 + turfBonus(s, g));
+  * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1) * (1 + turfBonus(s, g)) * rallyBoost(s);
 /** multiplicador del tiempo de trabajo de un gnomo concreto (menos = más rápido) */
 export const gnomeWorkMult = (s: GameState, g: Gnome) =>
-  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g));
+  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g)) / rallyBoost(s);
+/** la arenga del capataz (G7) acelera a todos mientras dura */
+export const rallyBoost = (s: GameState) => (s.rally.t > 0 ? 1 + RALLY.mult : 1);
+
+/** Arenga del capataz (G7): todos más rápido un rato. Hace falta algún gnomo y que se haya recargado. */
+export function rally(s: GameState, rng: Rng): boolean {
+  if (s.rally.cd > 0 || !s.gnomes.length) return false;
+  s.rally = { t: RALLY.duration, cd: RALLY.cooldown };
+  for (const g of s.gnomes) say(g, 'cheer', 1.5);
+  s.events.push({ type: 'rally' });
+  log(s, pick(rng, LOG.arenga));
+  return true;
+}
 export const capacity = (s: GameState) => 1 + s.tree.saco;
 export const basketMax = (s: GameState) => BASKET.base + BASKET.perLevel * s.tree.cesta;
 /** segundos por fase con el abono (y el abono dorado), a velocidad normal (ver growRate) */
@@ -124,8 +137,16 @@ export const masteryLevel = (s: GameState, crop: CropId) => MASTERY.steps.filter
 /** cosechas que faltan para el siguiente nivel, o null en el máximo */
 export const masteryNext = (s: GameState, crop: CropId): number | null => MASTERY.steps[masteryLevel(s, crop)] ?? null;
 
-/** Cuenta una cosecha para la maestría; al subir de nivel lo celebra y, desde ALBUM.masteryLevel, da su cromo. */
+/** Cuenta una cosecha para la maestría y el encargo; al subir de nivel lo celebra y, desde ALBUM.masteryLevel, da su cromo. */
 function countHarvest(s: GameState, crop: CropId) {
+  const o = s.order;
+  if (o && o.crop === crop && ++o.have >= o.need) {
+    s.coins += o.reward;
+    s.totalEarned += o.reward;
+    s.order = null;
+    s.events.push({ type: 'order', done: true });
+    log(s, LOG.encargoCumplido(ENCARGOS.clientes[o.who], o.reward));
+  }
   const before = masteryLevel(s, crop);
   s.mastery[crop]++;
   const level = masteryLevel(s, crop);
@@ -133,6 +154,51 @@ function countHarvest(s: GameState, crop: CropId) {
   s.events.push({ type: 'mastery', crop, level });
   log(s, LOG.maestria(CULTIVOS[crop].plural, level, Math.round(MASTERY.bonus * level * 100)));
   if (level >= ALBUM.masteryLevel) collect(s, 'maestrias', crop);
+}
+
+/**
+ * Encargos del pueblo (G8): de vez en cuando alguien pide un cultivo de los que hay sembrados, tantos como el bancal
+ * puede dar en el plazo con algo de esfuerzo. Si no se cumple, se va sin más: no se pierde nada.
+ */
+function updateOrders(s: GameState, dt: number, rng: Rng) {
+  const o = s.order;
+  if (o) {
+    o.t -= dt;
+    if (o.t <= 0) {
+      s.order = null;
+      log(s, LOG.encargoPerdido(ENCARGOS.clientes[o.who]));
+    }
+    return;
+  }
+  s.nextOrderIn -= dt;
+  if (s.nextOrderIn > 0) return;
+  s.nextOrderIn = ORDERS.gap.min + rng() * (ORDERS.gap.max - ORDERS.gap.min);
+  // lo que está creciendo o maduro en el bancal abierto
+  const growing = CROP_IDS.map(crop => ({
+    crop, plots: s.plots.filter(p => isOpen(s, p) && p.crop === crop && p.stage >= 0 && p.stage !== ROTTEN).length,
+  })).filter(c => c.plots > 0);
+  if (!growing.length) return;
+  const { crop, plots } = pick(rng, growing);
+  // lo que el bancal da en el plazo (con sed y sin regadores crece muy despacio)… y lo que los recolectores pueden
+  // llevarse (más algo a mano)
+  const dry = CROPS[crop].thirsty && !s.gnomes.some(g => g.job === 'regador');
+  const cycle = (stageTime(s, crop) * RIPE) / (dry ? WATER.dry : 1) + PLANT_TIME + HARVEST_TIME + 5;
+  const fromPlots = (plots * ORDERS.time) / cycle;
+  const pickers = s.gnomes.filter(g => g.job === 'recolector').length;
+  const share = plots / growing.reduce((a, c) => a + c.plots, 0);
+  const fromPickers = (pickers * capacity(s) * ORDERS.time * share) / ORDERS.trip + ORDERS.byHand;
+  const need = Math.round(Math.min(ORDERS.max, Math.max(ORDERS.min, Math.min(fromPlots, fromPickers) * ORDERS.effort)));
+  const who = Math.floor(rng() * ENCARGOS.clientes.length);
+  s.order = { who, crop, need, have: 0, t: ORDERS.time, reward: Math.round(need * cropValue(s, crop) * ORDERS.reward) };
+  s.events.push({ type: 'order', done: false });
+  log(s, LOG.encargo(ENCARGOS.clientes[who], need, CULTIVOS[crop].plural));
+}
+
+/** El jugador dice que no al encargo: se va sin más y el siguiente tarda lo de siempre. */
+export function dismissOrder(s: GameState) {
+  if (!s.order) return;
+  log(s, LOG.encargoRechazado(ENCARGOS.clientes[s.order.who]));
+  s.order = null;
 }
 
 /** Pega un cromo en el álbum si es nuevo; si completa la página, da sus semillas doradas (una sola vez). */
@@ -463,6 +529,9 @@ export function tick(s: GameState, dt: number, rng: Rng) {
   updateCritters(s, dt);
   updateEvents(s, dt, rng);
   updateCrowns(s, rng);
+  updateOrders(s, dt, rng);
+  s.rally.t = Math.max(0, s.rally.t - dt);
+  s.rally.cd = Math.max(0, s.rally.cd - dt);
   updateOrg(s, org);
 }
 

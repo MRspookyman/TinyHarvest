@@ -1,6 +1,6 @@
 import {
-  CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, ORG, PRESTIGE, PRIORITIES, RIPE,
-  ROTTEN, TALENT_IDS, TALENTS, TRAIT_IDS, TREE,
+  CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, ORDERS, ORG, PRESTIGE, PRIORITIES,
+  RALLY, RIPE, ROTTEN, TALENT_IDS, TALENTS, TRAIT_IDS, TREE,
 } from './config';
 import { GRUPOS, LOG } from '../textos';
 import type {
@@ -72,6 +72,9 @@ export function createState(rng: Rng): GameState {
     nextEventIn: EVENT_GAP.first,
     happening: null,
     mastery: Object.fromEntries(CROP_IDS.map(c => [c, 0])) as Record<CropId, number>,
+    rally: { t: 0, cd: 0 },
+    order: null,
+    nextOrderIn: ORDERS.first,
     log: [LOG.inicio],
     events: [],
   };
@@ -103,6 +106,7 @@ export interface SaveData {
   house: number;
   seasonTime: number;
   mastery?: Record<CropId, number>;
+  rally?: { t: number; cd: number };
   prestige: Prestige;
   crowns: Record<JobId, number | null>;
   plots: { crop: CropId; stage: number; t: number; wet: number; golden?: boolean }[];
@@ -129,6 +133,7 @@ export function serialize(s: GameState): SaveData {
     house: s.house,
     seasonTime: s.seasonTime,
     mastery: { ...s.mastery },
+    rally: { ...s.rally },
     prestige: structuredClone(s.prestige),
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet, golden: p.golden })),
     crowns: { ...s.crowns },
@@ -200,6 +205,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   for (const j of JOB_IDS) s.hired[j] = int(d.hired?.[j], 0, 0, 999);
   s.seasonTime = Math.max(0, num(d.seasonTime, 0));
   for (const c of CROP_IDS) s.mastery[c] = int(d.mastery?.[c], 0, 0, 1e9);
+  s.rally = { t: Math.min(RALLY.duration, Math.max(0, num(d.rally?.t, 0))), cd: Math.min(RALLY.cooldown, Math.max(0, num(d.rally?.cd, 0))) };
   s.prestige = loadPrestige(d.prestige);
 
   if (Array.isArray(d.groups)) {

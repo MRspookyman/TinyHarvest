@@ -42,6 +42,12 @@ export const UI = {
   sonido: 'Sonido',
   sonidoOn: 'Quitar el sonido',
   sonidoOff: 'Poner el sonido',
+  // arenga del capataz (G7)
+  arenga: 'Arenga',
+  arengaAyuda: (pct: number, s: number) => `El capataz anima a todos: un ${pct} % más rápido durante ${s} s.`,
+  arengaActiva: (s: number) => `¡A tope! ${s} s`,
+  arengaRecarga: (s: string) => `Se recarga en ${s}`,
+  sinGnomos: 'Hace falta algún gnomo al que animar.',
 };
 
 /** Avisos de guardado y de errores: se quedan hasta que se resuelven. */
@@ -212,6 +218,15 @@ export const LOG = {
   maestria: (plural: string, nivel: number, pct: number) => `Los gnomos ya dominan el cultivo de ${plural}: maestría ${nivel}, +${pct} % de valor. Se lo tienen muy creído.`,
   cromo: (pagina: string) => `Cromo nuevo en el álbum (${pagina.toLowerCase()}). Los gnomos lo pegan torcido.`,
   paginaAlbum: (pagina: string, semillas: number) => `¡Página «${pagina}» del álbum completa! +${semillas} ${semillas === 1 ? 'semilla dorada' : 'semillas doradas'}.`,
+  arenga: [
+    'El capataz se sube a una calabaza: «¡Por el huerto y por la merienda!». Los gnomos corren como si hubiera tarta.',
+    'Arenga del capataz: «¡Quien acabe antes elige la siesta!». Hay estampida.',
+    'El capataz toca el silbato tres veces. Nadie sabe qué significa, pero todos corren.',
+  ],
+  encargo: (quien: string, n: number, plural: string) => `Encargo: ${quien} quiere ${n} de ${plural}. Si llegan a tiempo, paga el doble.`,
+  encargoCumplido: (quien: string, monedas: number) => `¡Encargo cumplido! ${quien} paga ${monedas} monedas y se va silbando.`,
+  encargoPerdido: (quien: string) => `${quien} se cansa de esperar y se va. Volverá otro día, no pasa nada.`,
+  encargoRechazado: (quien: string) => `Le decís a ${quien} que hoy no puede ser. Lo entiende perfectamente.`,
   arrancar: (n: string) => `${n} arranca una planta pocha y le da el pésame.`,
   primeraCorona: (n: string, oficio: string) => `${n} es el primer «mejor ${oficio} del mes». Nadie sabe quién decide esto, pero ya lleva corona.`,
   corona: (nuevo: string, viejo: string, oficio: string) => `${nuevo} le quita a ${viejo} la corona de mejor ${oficio}. Dice que no le importa, pero no se la quita ni para dormir.`,
@@ -300,6 +315,16 @@ export const ALBUM_TEXTOS = {
     cuervo: 'El cuervo', caracol: 'El caracol', topo: 'El topo', ranas: 'Lluvia de ranas', sindicato: 'La huelga', espantapajaros: 'El espantapájaros',
   },
   maestria: (plural: string) => `Maestros de ${plural}`,
+};
+
+/** Encargos del pueblo (G8): quien los pide y la tarjeta que se ve sobre el huerto. */
+export const ENCARGOS = {
+  clientes: ['La abuela Remedios', 'El cartero Anselmo', 'La panadera Pura', 'El alcalde Ceferino', 'La maestra Rosario', 'El herrero Bonifacio'],
+  titulo: 'Encargo',
+  pide: (quien: string, n: number, plural: string) => `${quien} quiere ${n} de ${plural}`,
+  paga: (monedas: number) => `Paga ${monedas} monedas`,
+  no: 'Hoy no',
+  noAyuda: 'Decir que no: se va sin más, no pasa nada.',
 };
 
 /** Maestría de cultivo (G5): se ve en los botones de semilla. */
