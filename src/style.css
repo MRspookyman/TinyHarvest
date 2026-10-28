@@ -279,24 +279,26 @@ img.crown-icon { display: inline-block; width: 14px; height: 10px; margin: 0 2px
 
 /* ---------- ficha del gnomo ---------- */
 .gnome-card {
-  position: absolute; top: 12px; right: 12px; width: min(264px, calc(100% - 24px)); max-height: calc(100% - 120px);
+  position: absolute; top: 12px; right: 12px; width: min(340px, calc(100% - 24px)); max-height: calc(100% - 120px);
   display: flex; flex-direction: column; gap: 8px;
   border: 24px solid transparent; border-image: var(--frame-img) 8 fill / 24px; image-rendering: pixelated;
   color: var(--ink); filter: drop-shadow(0 6px 0 rgba(26, 28, 44, 0.35));
 }
-.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -6px -4px 0; padding-bottom: 8px; border-bottom: var(--px) solid var(--paper-dark); }
+/* los botones flotan arriba a la derecha: solo el nombre les deja sitio y el oficio usa todo el ancho */
+.card-head { position: relative; margin: -6px -4px 0; padding-bottom: 8px; border-bottom: var(--px) solid var(--paper-dark); }
 .card-title { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.card-title > div { flex: 1; min-width: 0; }
+.card-title h2 { font-size: 1.1rem; overflow-wrap: break-word; padding-right: 72px; min-height: 30px; }
 .card-job { width: 32px; height: 34px; flex: none; }
-.card-title h2 { font-size: 1.1rem; overflow-wrap: break-word; }
 .card-title p { font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-soft); }
 .badge.legend { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; background: var(--gold); color: var(--ink); }
 img.legend-icon { width: 18px; height: 18px; }
 .gnome-card .win-close { width: 30px; height: 30px; }
-.card-btns { display: flex; gap: 4px; flex: none; }
+.card-btns { position: absolute; top: 0; right: 0; display: flex; gap: 4px; }
 /* plegada: nombre y «Ahora», nada más */
 .gnome-card.folded .card-body, .gnome-card.folded .card-move, .gnome-card.folded .card-title p, .gnome-card.folded .badge.legend { display: none; }
 .gnome-card.folded .card-head { padding-bottom: 4px; }
-.card-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; font-size: 0.88rem; }
+.card-body { display: flex; flex-direction: column; gap: 10px; overflow-x: hidden; overflow-y: auto; min-height: 0; font-size: 0.88rem; }
 .card-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; }
 .card-facts dt { padding-top: 2px; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
 .card-facts dd { margin: 0; }
@@ -306,7 +308,7 @@ img.legend-icon { width: 18px; height: 18px; }
 .card-now { display: flex; flex-direction: column; font-size: 0.88rem; }
 .card-now span { font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
 .card-now b { font-family: var(--font-display); font-weight: 400; }
-.card-stats { list-style: none; margin: 0; padding: 6px 8px; display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; gap: 2px 8px; background: var(--paper-dark); font-size: 0.8rem; white-space: nowrap; }
+.card-stats { list-style: none; margin: 0; padding: 8px 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; background: var(--paper-dark); font-size: 0.85rem; }
 .card-stats b { font-variant-numeric: tabular-nums; }
 .card-quote { margin: 0; padding: 6px 10px; background: #fff8e6; box-shadow: inset var(--px) 0 0 var(--gold-dark); font-style: italic; }
 .card-quote span { display: block; font-style: normal; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
