@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BASKET, COST_GROWTH, CROPS, CROW_EAT, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN,
-  MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS, MASTERY, ALBUM,
-  RALLY, ORDERS, FRIENDS, SEASONS, BUBBLES,
+  APHID, AWAY, BASKET, COST_GROWTH, CROPS, CROW_EAT, CROW_REACH, CROWN_MARGIN, FIELD, HOUSE, JOB_IDS, JOB_NODE, JOBS, MAX_GNOMES, MAX_GROUPS,
+  MARKET, MEET_COOLDOWN, MERCADO_PER_LEVEL, MOLE_TIME, NODE_IDS, ORG, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT, TALENTS, TREE, WATER, GOLDEN, ZONE_BONUS,
+  MASTERY, ALBUM, RALLY, ORDERS, FRIENDS, SEASONS, SKILL, BUBBLES, WORK_EFFECT, WORK_IDS, WORK_MAX, WORKS,
 } from './config';
 import {
-  basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
+  aphidOn, applyAway, basketMax, buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropValue, deleteGroup, endSeason, fieldSize,
   hire, hireCost, houseCapacity, isOpen, masteryLevel, moveGnome, nextGoal, nodeCost, nodeReachable, plotAt, plotStand, renameGroup, seasonSeeds,
   seedsCoinsNeeded, setGroupColor, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentReachable, tick, turfBonus, waterTime,
-  rally, gnomeWalkSpeed, gnomeWorkMult, seasonOf, favoriteCrop,
+  rally, gnomeWalkSpeed, gnomeWorkMult, seasonOf, favoriteCrop, marketMult, marketWindow, noteSale, skillBonus,
+  buyWork, treeComplete, workCost, workSeeds,
 } from './sim';
 import { createState, deserialize, SAVE_VERSION, serialize } from './state';
-import type { GameState, JobId, Rng, TraitId } from './types';
+import { LOG } from '../textos';
+import type { CropId, GameState, JobId, Rng, TraitId } from './types';
 
 function seeded(seed: number): Rng {
   return () => {
@@ -52,6 +54,45 @@ function park(g: { state: string; timer: number; task: unknown }) {
 }
 
 const plotId = (col: number, row: number) => row * FIELD.maxCols + col;
+/** momento de guardado fijo para los tests */
+const SAVED_AT = 1_700_000_000_000;
+
+describe('destreza', () => {
+  it('con zona y semilla llega al tope; repetir valores no reinicia y cambiarlos sí', () => {
+    const rng = seeded(65), s = createState(rng);
+    const g = hireFree(s, 'recolector', rng);
+    park(g);
+    const group = s.groups[0], zone = { c0: 0, c1: 1, r0: 0, r1: 2 };
+    setGroupZone(s, group.id, zone);
+    setGroupSeed(s, group.id, 'zanahoria');
+    const speed = gnomeWalkSpeed(s, g), work = gnomeWorkMult(s, g);
+    run(s, SKILL.max / SKILL.perMin * 60 + 1, rng);
+    expect(skillBonus(s, g)).toBeCloseTo(SKILL.max);
+    expect(gnomeWorkMult(s, g)).toBeLessThan(work);
+    expect(gnomeWalkSpeed(s, g)).toBe(speed);
+    const skill = group.skill;
+    setGroupZone(s, group.id, { ...zone });
+    setGroupSeed(s, group.id, 'zanahoria');
+    expect(group.skill).toBe(skill);
+    expect(deserialize(serialize(s, SAVED_AT), rng)!.groups[0].skill).toBe(skill);
+    s.tree.trigo = 1;
+    setGroupSeed(s, group.id, 'trigo');
+    expect(group.skill).toBe(0);
+    run(s, 1, rng);
+    setGroupZone(s, group.id, null);
+    expect(group.skill).toBe(0);
+  });
+
+  it('sin zona no acumula destreza y las partidas antiguas empiezan a cero', () => {
+    const rng = seeded(66), s = createState(rng);
+    setGroupSeed(s, s.groups[0].id, 'zanahoria');
+    run(s, 10, rng);
+    expect(s.groups[0].skill).toBe(0);
+    const raw = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
+    delete raw.groups[0].skill;
+    expect(deserialize(raw, rng)!.groups[0].skill).toBe(0);
+  });
+});
 
 describe('contratar', () => {
   it('el coste sube un COST_GROWTH por gnomo del mismo oficio', () => {
@@ -103,7 +144,7 @@ describe('casa de gnomos', () => {
     s.coins = 1e9;
     s.house = HOUSE.max;
     for (let i = 0; i < HOUSE.base + 5; i++) hire(s, 'recolector', rng);
-    const old = JSON.parse(JSON.stringify(serialize(s)));
+    const old = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
     delete old.house;
     const loaded = deserialize(old, rng)!;
     expect(houseCapacity(loaded)).toBeGreaterThanOrEqual(loaded.gnomes.length);
@@ -550,7 +591,7 @@ describe('enganche', () => {
     expect(cropValue(s, 'zanahoria')).toBeCloseTo(base * (1 + MASTERY.bonus));
     expect(cropValue(s, 'trigo')).toBeCloseTo(CROPS.trigo.value * s.org.mult);
     expect(s.events.some(e => e.type === 'mastery' && e.crop === 'zanahoria' && e.level === 1)).toBe(true);
-    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s, SAVED_AT))), rng)!;
     expect(loaded.mastery.zanahoria).toBe(MASTERY.steps[0]);
     s.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds);
     expect(masteryLevel(endSeason(s, rng), 'zanahoria')).toBe(0);
@@ -573,7 +614,7 @@ describe('enganche', () => {
     expect(startEvent(s, 'caracol', rng)).toBe(true);
     expect(s.prestige.album).toContain('sucesos:caracol');
     // al cargar se queda lo válido; en la temporada siguiente sigue ahí
-    const raw = JSON.parse(JSON.stringify(serialize(s)));
+    const raw = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
     raw.prestige.album.push('inventado:1', 42);
     const loaded = deserialize(raw, rng)!;
     expect(loaded.prestige.album).toEqual(s.prestige.album);
@@ -647,7 +688,7 @@ describe('enganche', () => {
     const c = createGroup(s)!;
     moveGnome(s, b.id, c.id);
     expect(gnomeWorkMult(s, a)).toBeCloseTo(work);
-    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s, SAVED_AT))), rng)!;
     expect(loaded.gnomes.find(g => g.id === a.id)!.friend).toBe(b.id);
   });
 
@@ -663,14 +704,167 @@ describe('enganche', () => {
     expect(seasonOf(s)).toBe('primavera');
   });
 
-  it('el próximo objetivo es la mejora más barata que ya se puede comprar; con el árbol completo, la siguiente semilla', () => {
+  it('el próximo objetivo es la mejora más barata; con el árbol completo, la obra más barata; con todo, la siguiente semilla', () => {
     const s = createState(seeded(42));
     const reachable = NODE_IDS.filter(id => nodeReachable(s, id));
     const cheapest = reachable.reduce((a, b) => (nodeCost(s, b) < nodeCost(s, a) ? b : a));
     expect(nextGoal(s)).toMatchObject({ kind: 'node', id: cheapest, need: nodeCost(s, cheapest) });
     for (const id of NODE_IDS) s.tree[id] = TREE[id].max;
+    expect(nextGoal(s)).toMatchObject({ kind: 'work', id: 'molino', need: WORKS.molino.costs[0] });
+    s.works.molino = 1;
+    expect(nextGoal(s)).toMatchObject({ kind: 'work', id: 'invernadero', need: WORKS.invernadero.costs[0] });
+    for (const id of WORK_IDS) s.works[id] = WORK_MAX;
     s.totalEarned = seedsCoinsNeeded(3);
     expect(nextGoal(s)).toMatchObject({ kind: 'seed', seeds: 4, need: seedsCoinsNeeded(4) });
+  });
+});
+
+describe('obras', () => {
+  const completeTree = (s: GameState) => {
+    for (const id of NODE_IDS) s.tree[id] = TREE[id].max;
+  };
+
+  it('sin el árbol completo no se construye; al completarlo se avisa', () => {
+    const s = createState(seeded(90));
+    s.coins = 1e9;
+    expect(treeComplete(s)).toBe(false);
+    expect(buyWork(s, 'molino')).toBe(false);
+    expect(s.works.molino).toBe(0);
+    completeTree(s);
+    s.tree.botas--;
+    expect(buyNode(s, 'botas')).toBe(true);
+    expect(treeComplete(s)).toBe(true);
+    expect(s.log[0]).toBe(LOG.obrasAbiertas);
+  });
+
+  it('cada nivel cuesta lo suyo, hasta el tercero, y da una semilla más al acabar; la temporada nueva empieza sin obras', () => {
+    const rng = seeded(91), s = createState(rng);
+    completeTree(s);
+    s.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds);
+    const base = seasonSeeds(s);
+    s.coins = WORKS.molino.costs.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < WORK_MAX; i++) {
+      const cost = workCost(s, 'molino'), before = s.coins;
+      expect(cost).toBe(WORKS.molino.costs[i]);
+      expect(buyWork(s, 'molino')).toBe(true);
+      expect(s.coins).toBe(before - cost);
+    }
+    expect(s.coins).toBe(0);
+    s.coins = 1e9;
+    expect(buyWork(s, 'molino')).toBe(false);
+    expect(s.works.molino).toBe(WORK_MAX);
+    expect(workSeeds(s)).toBe(3);
+    expect(seasonSeeds(s)).toBe(base);
+    const n = endSeason(s, rng);
+    expect(n.prestige.goldenSeeds).toBe(base + 3);
+    expect(n.prestige.history[0].seeds).toBe(base + 3);
+    for (const id of WORK_IDS) expect(n.works[id]).toBe(0);
+  });
+
+  it('no se compra sin monedas suficientes', () => {
+    const s = createState(seeded(92));
+    completeTree(s);
+    s.coins = WORKS.fuente.costs[0] - 1;
+    expect(buyWork(s, 'fuente')).toBe(false);
+    expect(s.coins).toBe(WORKS.fuente.costs[0] - 1);
+  });
+
+  it('las semillas de las obras cuentan para poder acabar la temporada', () => {
+    const s = createState(seeded(93));
+    s.totalEarned = seedsCoinsNeeded(PRESTIGE.minSeeds - 1);
+    expect(canEndSeason(s)).toBe(false);
+    s.works.fuente = 1;
+    expect(canEndSeason(s)).toBe(true);
+  });
+
+  it('molino, invernadero y fuente cambian mercado, crecimiento y riego', () => {
+    const s = createState(seeded(94));
+    const window = marketWindow(s), stage = stageTime(s, 'zanahoria'), water = waterTime(s);
+    s.works = { molino: 2, invernadero: 3, fuente: 1 };
+    expect(marketWindow(s)).toBeCloseTo(window / (1 + 2 * WORK_EFFECT.molino));
+    expect(stageTime(s, 'zanahoria')).toBeCloseTo(stage / (1 + 3 * WORK_EFFECT.invernadero));
+    expect(waterTime(s)).toBeCloseTo(water * (1 + WORK_EFFECT.fuente));
+  });
+
+  it('con la fuente a nivel 3 el regador no vuelve al pozo; con menos, sí', () => {
+    for (const fuente of [WORK_MAX - 1, WORK_MAX]) {
+      const rng = seeded(95), s = createState(rng);
+      s.tree.tomate = 1;
+      s.works.fuente = fuente;
+      for (const p of s.plots) if (isOpen(s, p)) Object.assign(p, { crop: 'tomate', stage: 0, t: 0 });
+      else p.stage = -1;
+      const g = hireFree(s, 'regador', rng);
+      let waterings = 0, refills = 0;
+      for (let i = 0; i < 90 * 30; i++) {
+        const was = g.task?.kind;
+        tick(s, 1 / 30, rng);
+        waterings += s.events.filter(e => e.type === 'water').length;
+        s.events.length = 0;
+        if (g.task?.kind === 'refill' && was !== 'refill') refills++;
+      }
+      expect(waterings).toBeGreaterThan(WATER.can);
+      if (fuente >= WORK_MAX) expect(refills).toBe(0);
+      else expect(refills).toBeGreaterThan(0);
+    }
+  });
+
+  it('se guardan y las partidas sin obras cargan a cero', () => {
+    const rng = seeded(96), s = createState(rng);
+    s.works = { molino: 3, invernadero: 1, fuente: 2 };
+    expect(deserialize(serialize(s, SAVED_AT), rng)!.works).toEqual({ molino: 3, invernadero: 1, fuente: 2 });
+    const raw = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
+    raw.works = { molino: 9, invernadero: -2, fuente: 'x' };
+    expect(deserialize(raw, rng)!.works).toEqual({ molino: WORK_MAX, invernadero: 0, fuente: 0 });
+    delete raw.works;
+    expect(raw.v).toBe(SAVE_VERSION);
+    expect(deserialize(raw, rng)!.works).toEqual({ molino: 0, invernadero: 0, fuente: 0 });
+  });
+});
+
+describe('vuelta', () => {
+  it('el ritmo sigue a lo ganado y un tick sin tiempo no lo estropea', () => {
+    const rng = seeded(97), s = createState(rng);
+    for (const p of s.plots) p.stage = isOpen(s, p) ? RIPE : -1;
+    run(s, 1, rng);
+    expect(s.rate).toBe(0);
+    hireFree(s, 'recolector', rng);
+    run(s, 60, rng);
+    expect(s.totalEarned).toBeGreaterThan(0);
+    // la media empieza en 0 y se acerca a lo ganado por segundo sin pasarse
+    expect(s.rate).toBeGreaterThan(0);
+    expect(s.rate).toBeLessThanOrEqual(s.totalEarned / 60);
+    const rate = s.rate;
+    tick(s, 0, rng);
+    expect(s.rate).toBe(rate);
+    // sin ganar nada, el ritmo se va olvidando
+    s.gnomes.length = 0;
+    run(s, AWAY.window / 10, rng);
+    expect(s.rate).toBeLessThan(rate);
+    expect(s.rate).toBeGreaterThan(0);
+  });
+
+  it('da una parte del ritmo con tope de tiempo, sin sumar a lo ganado ni a las semillas', () => {
+    const rng = seeded(98), s = createState(rng);
+    s.rate = 10;
+    s.coins = 5;
+    s.totalEarned = 77;
+    const log = s.log.length;
+    expect(applyAway(s, 10_000)).toBe(36_000);
+    expect(s.coins).toBe(36_005);
+    expect(s.totalEarned).toBe(77);
+    expect(s.log.length).toBe(log + 1);
+    expect(s.log[0]).toBe(LOG.vuelta(36_000));
+    expect(applyAway(s, 1000)).toBe(Math.floor(10 * AWAY.share * 1000));
+  });
+
+  it('poco rato fuera o sin ritmo no da nada', () => {
+    const rng = seeded(99), s = createState(rng);
+    s.rate = 10;
+    expect(applyAway(s, 30)).toBe(0);
+    expect(applyAway(s, Number.NaN)).toBe(0);
+    s.rate = 0;
+    expect(applyAway(s, 3600)).toBe(0);
+    expect(s.coins).toBe(0);
   });
 });
 
@@ -734,14 +928,15 @@ describe('guardado', () => {
     g.stats.tasks = 9;
     g.stats.walked = 120;
     s.crowns.porteador = g.id;
-    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    s.rate = 3.25;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s, SAVED_AT))), rng)!;
     expect(loaded.coins).toBe(s.coins);
     expect(loaded.tree).toEqual(s.tree);
     expect(fieldSize(loaded)).toEqual(fieldSize(s));
     expect(loaded.basket).toEqual(['trigo', 'zanahoria']);
     expect(loaded.plots[3]).toMatchObject({ crop: 'tomate', stage: 2 });
     expect(loaded.plots[4].stage).toBe(ROTTEN);
-    expect(loaded.groups[1]).toEqual({
+    expect(loaded.groups[1]).toMatchObject({
       id: b.id, name: 'Los Valientes', color: 7, priority: 'solo_tomate', seed: 'tomate', zone: { c0: 0, c1: 2, r0: 0, r1: 1 },
     });
     expect(loaded.gnomes[0]).toMatchObject({ name: g.name, job: 'porteador', group: b.id, state: 'think' });
@@ -749,13 +944,33 @@ describe('guardado', () => {
     expect(loaded).toMatchObject({ rotted: 3, crowns: { porteador: g.id, recolector: null } });
     expect(loaded.nextId).toBe(s.nextId);
     expect(loaded.nextGroupId).toBe(s.nextGroupId);
+    expect(loaded.rate).toBe(3.25);
+    expect(loaded.savedAt).toBe(SAVED_AT);
+  });
+
+  it('una partida v6 sin destreza, obras, ritmo ni momento de guardado carga con ceros', () => {
+    const rng = seeded(8);
+    const s = createState(rng);
+    s.groups[0].skill = 100;
+    s.works.molino = 2;
+    s.rate = 4;
+    const raw = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
+    for (const g of raw.groups) delete g.skill;
+    delete raw.works;
+    delete raw.rate;
+    delete raw.savedAt;
+    expect(raw.v).toBe(SAVE_VERSION);
+    const loaded = deserialize(raw, rng)!;
+    expect(loaded.groups[0].skill).toBe(0);
+    expect(loaded.works).toEqual({ molino: 0, invernadero: 0, fuente: 0 });
+    expect(loaded).toMatchObject({ rate: 0, savedAt: 0 });
   });
 
   it('carga las partidas v3 (sin semilla, estadísticas, podredumbre ni rasgos) y les reparte rasgos', () => {
     const rng = seeded(7);
     const s = createState(rng);
     const g = hireFree(s, 'recolector', rng);
-    const old = JSON.parse(JSON.stringify(serialize(s)));
+    const old = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
     old.v = 3;
     delete old.rotted;
     delete old.crowns;
@@ -773,7 +988,7 @@ describe('guardado', () => {
     expect(['perezoso', 'nervioso', 'gloton', 'cotilla', 'dormilon', 'currante']).toContain(loaded.gnomes[0].trait);
     expect(loaded.gnomes[0].stats.tasks).toBe(0);
     expect(loaded).toMatchObject({ rotted: 0, crowns: { recolector: null, sembrador: null, porteador: null }, critters: [], happening: null });
-    expect(serialize(loaded).v).toBe(SAVE_VERSION);
+    expect(serialize(loaded, SAVED_AT).v).toBe(SAVE_VERSION);
   });
 
   it('guarda el rasgo y si es legendario', () => {
@@ -781,7 +996,7 @@ describe('guardado', () => {
     const s = createState(rng);
     const g = hireFree(s, 'sembrador', rng, 'dormilon');
     g.legendary = true;
-    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s))), rng)!;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(s, SAVED_AT))), rng)!;
     expect(loaded.gnomes[0]).toMatchObject({ trait: 'dormilon', legendary: true });
   });
 
@@ -862,6 +1077,43 @@ describe('vida en el huerto', () => {
     expect(s.critters.filter(c => c.kind === 'cuervo')).toHaveLength(0);
   });
 
+  /** quieto descansando a dist px del sitio desde el que se espanta al cuervo: libre para espantarlo */
+  function restingAt(s: GameState, rng: Rng, p: GameState['plots'][number], dist: number) {
+    const g = hireFree(s, 'sembrador', rng);
+    const st = plotStand(p);
+    Object.assign(g, { x: st.x - dist, y: st.y, state: 'work', timer: 9999, task: { kind: 'rest' } });
+    return g;
+  }
+
+  it(`un gnomo libre a más de CROW_REACH px no se entera: el cuervo come a los CROW_EAT s`, () => {
+    const rng = seeded(12);
+    const { s, p } = oneRipe(rng);
+    const g = restingAt(s, rng, p, CROW_REACH + 20);
+    expect(startEvent(s, 'cuervo', rng)).toBe(true);
+    const crow = s.critters.find(c => c.kind === 'cuervo')!;
+    for (let i = 0; i < 30 * 30 && crow.state !== 'stay'; i++) tick(s, 1 / 30, rng);
+    expect(crow.state).toBe('stay');
+    run(s, CROW_EAT - 0.5, rng);
+    expect(p.stage).toBe(RIPE);
+    run(s, 1, rng);
+    expect(p.stage).toBe(-1);
+    expect(g.task?.kind).toBe('rest');
+  });
+
+  it('un gnomo libre a 30 px sí va a espantar al cuervo', () => {
+    const rng = seeded(12);
+    const { s, p } = oneRipe(rng);
+    const g = restingAt(s, rng, p, 30);
+    expect(startEvent(s, 'cuervo', rng)).toBe(true);
+    let shooed = false;
+    for (let i = 0; i < (CROW_EAT + 8) * 30; i++) {
+      tick(s, 1 / 30, rng);
+      if (g.task?.kind === 'shoo') shooed = true;
+    }
+    expect(shooed).toBe(true);
+    expect(p.stage).toBe(RIPE);
+  });
+
   it('donde asoma un topo no se siembra hasta que se va', () => {
     const rng = seeded(13);
     const s = createState(rng);
@@ -890,6 +1142,153 @@ describe('vida en el huerto', () => {
     }
     expect(s.events.some(e => e.type === 'moment' && e.kind === 'comer')).toBe(true);
     expect(g.stats.harvests).toBeGreaterThan(g.stats.delivered + g.carry.length);
+  });
+});
+
+describe('pulgón', () => {
+  /** lo que lleva crecido una parcela, en fases */
+  const growth = (s: GameState, p: GameState['plots'][number]) => p.stage + p.t / stageTime(s, p.crop);
+  const liveAphids = (s: GameState) => s.critters.filter(c => c.kind === 'pulgon' && c.state !== 'out').length;
+
+  /** bancal vacío salvo calabazas recién plantadas en las parcelas dadas (sin gnomos: no hay más sucesos) */
+  function pumpkins(rng: Rng, plots: [number, number][]) {
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = -1;
+    const ps = plots.map(([col, row]) => Object.assign(s.plots[plotId(col, row)], { crop: 'calabaza', stage: 0, t: 0 }));
+    return { s, ps };
+  }
+
+  it('la planta con pulgones crece a medias', () => {
+    const rng = seeded(31);
+    const { s, ps } = pumpkins(rng, [[0, 0], [2, 2]]);
+    expect(startEvent(s, 'pulgon', rng)).toBe(true);
+    const plot = s.critters[0].plot;
+    const sick = ps.find(p => p.id === plot)!;
+    const fine = ps.find(p => p.id !== plot)!;
+    // menos que APHID.spread: aún no ha saltado (y no hay vecinas creciendo)
+    run(s, APHID.spread - 5, rng);
+    expect(aphidOn(s, sick.id)).toBe(true);
+    expect(aphidOn(s, fine.id)).toBe(false);
+    expect(growth(s, sick) / growth(s, fine)).toBeCloseTo(APHID.slow, 2);
+  });
+
+  it('un clic espanta los pulgones y no cosecha', () => {
+    const rng = seeded(32);
+    const { s, ps: [p] } = pumpkins(rng, [[1, 1]]);
+    expect(startEvent(s, 'pulgon', rng)).toBe(true);
+    run(s, 1, rng);
+    // aunque estuviera madura, el clic solo espanta
+    p.stage = RIPE;
+    p.t = 0;
+    expect(clickPlot(s, p.id, 'zanahoria')).toBe('shoo');
+    expect(aphidOn(s, p.id)).toBe(false);
+    expect(p.stage).toBe(RIPE);
+    expect(s.coins).toBe(0);
+    run(s, 1, rng);
+    expect(s.critters).toHaveLength(0);
+    expect(clickPlot(s, p.id, 'zanahoria')).toBe('harvest');
+  });
+
+  it('cada APHID.spread s saltan a una vecina que esté creciendo', () => {
+    const rng = seeded(34);
+    const { s } = pumpkins(rng, [[1, 1], [0, 1], [2, 1], [1, 0], [1, 2]]);
+    expect(startEvent(s, 'pulgon', rng)).toBe(true);
+    const first = s.plots[s.critters[0].plot!];
+    run(s, APHID.spread - 1, rng);
+    expect(liveAphids(s)).toBe(1);
+    run(s, 2, rng);
+    expect(liveAphids(s)).toBe(2);
+    const next = s.plots[s.critters[1].plot!];
+    expect(Math.abs(next.col - first.col) + Math.abs(next.row - first.row)).toBe(1);
+  });
+
+  it('nunca hay más de APHID.max pulgones a la vez', () => {
+    const rng = seeded(33);
+    const s = createState(rng);
+    s.tree.bancal = TREE.bancal.max;
+    for (const p of s.plots) Object.assign(p, { crop: 'calabaza', stage: isOpen(s, p) ? 0 : -1, t: 0 });
+    let started = 0, most = 0;
+    for (let i = 0; i < 90 * 30; i++) {
+      if (i % (5 * 30) === 0 && startEvent(s, 'pulgon', rng)) started++;
+      tick(s, 1 / 30, rng);
+      most = Math.max(most, liveAphids(s));
+    }
+    expect(started).toBeGreaterThanOrEqual(APHID.max);
+    expect(most).toBe(APHID.max);
+  });
+});
+
+describe('mercado', () => {
+  /** desbloquea los cultivos dados (además de la zanahoria) */
+  function unlocked(rng: Rng, crops: CropId[]) {
+    const s = createState(rng);
+    for (const c of crops) if (c !== 'zanahoria') s.tree[c] = 1;
+    return s;
+  }
+
+  it('con un solo cultivo desbloqueado no hay castigo, ni tras 100 cosechas', () => {
+    const rng = seeded(60);
+    const s = createState(rng);
+    for (const p of s.plots) p.stage = -1;
+    const p = s.plots[0];
+    for (let i = 0; i < 100; i++) {
+      Object.assign(p, { stage: RIPE, t: 0 });
+      expect(clickPlot(s, p.id, 'zanahoria')).toBe('harvest');
+    }
+    expect(s.market.zanahoria).toBe(100 * CROPS.zanahoria.value);
+    expect(marketMult(s, 'zanahoria')).toBe(1);
+    // no se guarda: al cargar, el mercado empieza de cero
+    expect(deserialize(JSON.parse(JSON.stringify(serialize(s, SAVED_AT))), rng)!.market.zanahoria).toBe(0);
+  });
+
+  it('con tres cultivos y solo ventas de melón, el melón baja a MARKET.floor y lo demás no', () => {
+    const rng = seeded(61);
+    const s = unlocked(rng, ['trigo', 'melon']);
+    const base = cropValue(s, 'melon');
+    noteSale(s, 'melon', 100);
+    expect(marketMult(s, 'melon')).toBeCloseTo(MARKET.floor);
+    expect(marketMult(s, 'melon')).toBeCloseTo(0.6);
+    expect(cropValue(s, 'melon')).toBeCloseTo(base * MARKET.floor);
+    expect(marketMult(s, 'trigo')).toBe(1);
+    expect(marketMult(s, 'zanahoria')).toBe(1);
+  });
+
+  it('repartido a partes iguales entre tres cultivos, no hay castigo', () => {
+    const rng = seeded(62);
+    const s = unlocked(rng, ['trigo', 'melon']);
+    for (const c of ['zanahoria', 'trigo', 'melon'] as const) noteSale(s, c, 600 / CROPS[c].value);
+    for (const c of ['zanahoria', 'trigo', 'melon'] as const) expect(marketMult(s, c)).toBeCloseTo(1);
+  });
+
+  it('por debajo de MARKET.minSample no castiga, y lo vendido se olvida con el tiempo', () => {
+    const rng = seeded(63);
+    const s = unlocked(rng, ['trigo', 'melon']);
+    for (const p of s.plots) p.stage = -1;
+    s.nextEventIn = 1e9;
+    s.nextOrderIn = 1e9;
+    noteSale(s, 'zanahoria', (MARKET.minSample - 1) / CROPS.zanahoria.value);
+    expect(marketMult(s, 'zanahoria')).toBe(1);
+    s.market.zanahoria = 1000;
+    run(s, marketWindow(s), rng);
+    expect(s.market.zanahoria).toBeCloseTo(1000 * Math.exp(-1), 0);
+  });
+
+  it('la entrega se cobra al precio de antes de apuntarla en el mercado', () => {
+    const rng = seeded(64);
+    const s = unlocked(rng, ['trigo', 'melon']);
+    s.nextEventIn = 1e9;
+    s.nextOrderIn = 1e9;
+    for (const p of s.plots) p.stage = -1;
+    Object.assign(s.plots[plotId(1, 1)], { crop: 'melon', stage: RIPE, t: 0 });
+    const g = hireFree(s, 'recolector', rng);
+    const before = s.coins;
+    for (let i = 0; i < 60 * 30 && g.stats.delivered === 0; i++) tick(s, 1 / 30, rng);
+    expect(g.stats.delivered).toBe(1);
+    // un melón (60) ya supera MARKET.minSample: la siguiente venta saldría castigada, esta no
+    const fav = favoriteCrop(s) === 'melon' ? 1 + SEASONS.bonus : 1;
+    expectSold(s.coins - before, CROPS.melon.value * fav);
+    expect(s.market.melon).toBeCloseTo(CROPS.melon.value);
+    expect(marketMult(s, 'melon')).toBeCloseTo(MARKET.floor);
   });
 });
 
@@ -982,7 +1381,7 @@ describe('guardado v5', () => {
     const s = createState(rng);
     const g = hireFree(s, 'recolector', rng);
     s.plots[0].stage = 1;
-    const old = JSON.parse(JSON.stringify(serialize(s)));
+    const old = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
     old.v = 4;
     for (const p of old.plots) delete p.wet;
     for (const k of ['regador', 'guardian']) {
@@ -995,7 +1394,7 @@ describe('guardado v5', () => {
     expect(loaded.hired).toMatchObject({ recolector: 1, regador: 0, guardian: 0 });
     expect(loaded.crowns).toMatchObject({ regador: null, guardian: null });
     expect(loaded.gnomes[0].name).toBe(g.name);
-    expect(serialize(loaded).v).toBe(SAVE_VERSION);
+    expect(serialize(loaded, SAVED_AT).v).toBe(SAVE_VERSION);
   });
 });
 
@@ -1111,7 +1510,7 @@ describe('guardado v6', () => {
     const s = createState(rng);
     hireFree(s, 'recolector', rng);
     s.coins = 321;
-    const old = JSON.parse(JSON.stringify(serialize(s)));
+    const old = JSON.parse(JSON.stringify(serialize(s, SAVED_AT)));
     old.v = 5;
     delete old.seasonTime;
     delete old.prestige;
@@ -1128,11 +1527,11 @@ describe('guardado v6', () => {
     s.prestige.talents.veterano = 1;
     const n = endSeason(s, rng);
     n.seasonTime = 42;
-    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(n))), rng)!;
+    const loaded = deserialize(JSON.parse(JSON.stringify(serialize(n, SAVED_AT))), rng)!;
     expect(loaded.prestige).toEqual(n.prestige);
     expect(loaded.seasonTime).toBe(42);
 
-    const bad = JSON.parse(JSON.stringify(serialize(n)));
+    const bad = JSON.parse(JSON.stringify(serialize(n, SAVED_AT)));
     bad.prestige.talents.veterano = 99;
     bad.prestige.goldenSeeds = 'muchas';
     bad.prestige.history = Array.from({ length: 30 }, () => n.prestige.history[0]);

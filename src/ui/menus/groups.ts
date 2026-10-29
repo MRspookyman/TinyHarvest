@@ -1,5 +1,5 @@
 // Tablón de anuncios: crear, renombrar, colorear y borrar grupos, elegir su prioridad, lo que siembran y su zona, y repartir gnomos.
-import { CROP_IDS, GROUP_NAME_MAX, GROUP_PALETTE, MAX_GROUPS, PRIORITIES } from '../../sim/config';
+import { CROP_IDS, GROUP_NAME_MAX, GROUP_PALETTE, MAX_GROUPS, PRIORITIES, SKILL } from '../../sim/config';
 import { cropUnlocked, fieldSize, inZone } from '../../sim/sim';
 import type { CropId, GameState, GnomeGroup, Priority } from '../../sim/types';
 import { jobIcons, traitIcons } from '../../render/icons';
@@ -79,6 +79,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
             </select>
           </label>
           ${zonePicker(s, g)}
+          <p class="muted">${g.zone && g.seed ? GRUPOS.destreza(Math.round(Math.min(SKILL.max, SKILL.perMin * g.skill / 60) * 100)) : GRUPOS.destrezaAyuda}</p>
           <div class="chips" data-drop="${g.id}">
             ${members.length
               ? members.map(gn => `
@@ -212,7 +213,7 @@ export function createGroupsMenu(actions: GameActions): Menu {
       // no se redibuja mientras se escribe un nombre, para no perder el foco
       if (el.contains(document.activeElement) && document.activeElement instanceof HTMLInputElement) return;
       const next = JSON.stringify([
-        s.groups,
+        s.groups.map(g => ({ ...g, skill: Math.round(Math.min(SKILL.max, SKILL.perMin * g.skill / 60) * 100) })),
         s.gnomes.map(g => [g.id, g.group, g.job, g.name]),
         Object.values(s.tree),
         selectedGnome, paletteFor, armedDelete, corner,

@@ -1,4 +1,6 @@
 // Una sola ayuda para todos los data-tip, incluidos los controles que se crean al abrir menús.
+import { ACCESSIBILITY } from '../sim/config';
+
 export function installTooltips(): void {
   const tip = document.createElement('div');
   tip.id = 'harvest-tooltip';
@@ -93,6 +95,50 @@ export function installTooltips(): void {
   });
   document.addEventListener('focusout', hide);
   document.addEventListener('pointerdown', hide, true);
+  // con el dedo no hay «pasar por encima»: una pulsación larga enseña la ayuda y se come el clic que viene detrás
+  let press = 0;
+  let pressId = -1;
+  let pressX = 0;
+  let pressY = 0;
+  let suppressClick = false;
+  const cancelPress = () => {
+    window.clearTimeout(press);
+    pressId = -1;
+  };
+  document.addEventListener('pointerdown', e => {
+    cancelPress();
+    suppressClick = false;
+    if (e.pointerType === 'mouse' || !e.isPrimary) return;
+    const el = owner(e.target);
+    if (!el?.dataset.tip) return;
+    pressId = e.pointerId;
+    pressX = e.clientX;
+    pressY = e.clientY;
+    press = window.setTimeout(() => {
+      pressId = -1;
+      if (!el.isConnected) return;
+      activate(el, true);
+      suppressClick = true;
+    }, ACCESSIBILITY.longPressMs);
+  }, true);
+  document.addEventListener('pointermove', e => {
+    if (e.pointerId === pressId && Math.hypot(e.clientX - pressX, e.clientY - pressY) > ACCESSIBILITY.movePx) cancelPress();
+  }, true);
+  const endPress = (e: PointerEvent) => {
+    if (e.pointerId === pressId) cancelPress();
+  };
+  document.addEventListener('pointerup', endPress, true);
+  document.addEventListener('pointercancel', endPress, true);
+  window.addEventListener('click', e => {
+    if (!suppressClick) return;
+    suppressClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+  // el menú contextual de la pulsación larga taparía la ayuda
+  window.addEventListener('contextmenu', e => {
+    if (suppressClick) e.preventDefault();
+  }, true);
   document.addEventListener('scroll', hide, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
   window.addEventListener('blur', hide);

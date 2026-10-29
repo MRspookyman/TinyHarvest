@@ -116,7 +116,7 @@ img.px { image-rendering: pixelated; display: block; }
 #stage { position: relative; min-height: 0; overflow: hidden; }
 #stage canvas { display: block; image-rendering: pixelated; touch-action: none; }
 /* zum: tres botones de madera en la esquina de abajo a la izquierda (a la derecha va la ficha del gnomo) */
-.zoom-ctl { position: absolute; left: 14px; bottom: 104px; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
+.zoom-ctl { position: absolute; left: 14px; bottom: calc(var(--toolbar-h, 92px) + 12px); z-index: 1; display: flex; flex-direction: column; gap: 4px; }
 .zoom-ctl button {
   width: 34px; height: 34px; padding: 0; border: 0; background: var(--wood); color: var(--paper);
   font-family: var(--font-display); font-size: 1.3rem; line-height: 1; cursor: pointer; text-shadow: 1px 1px 0 var(--outline);
@@ -161,6 +161,7 @@ img.px { image-rendering: pixelated; display: block; }
 .tool.active { background: var(--wood-dark); box-shadow: inset 0 0 0 2px var(--outline), inset 0 -4px 0 var(--gold); }
 .tool.seed { min-width: 0; padding: 4px; }
 .tool.seed img { width: 32px; height: 28px; }
+.tool.seed.saturated img { filter: saturate(0.4); }
 .tool.seed[aria-pressed='true'] { background: var(--paper); box-shadow: inset 0 0 0 2px var(--outline), inset 0 -4px 0 var(--wood-dark), 0 0 0 2px var(--gold); }
 .tool.seed:disabled { cursor: not-allowed; background: rgba(26, 28, 44, 0.18); }
 .tool.seed:disabled img { filter: grayscale(0.8); opacity: 0.65; }
@@ -485,14 +486,17 @@ img.fame-star { display: inline-block; width: 18px; height: 18px; flex: none; }
   .stats { max-width: 100%; gap: 6px 12px; font-size: 0.95rem; }
   .org { position: static; }
   .org-pop { left: 10px; right: auto; top: calc(100% + 6px); width: calc(100% - 20px); }
-  .toolbar { width: max-content; max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; gap: 6px; bottom: 8px; }
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: calc(100% - 16px); max-width: calc(100% - 16px); row-gap: 6px; bottom: 8px; }
   .toolbar .tool-sep { display: none; }
-  .toolbar .tool-group { justify-content: center; }
+  .toolbar > .tool-group:first-child { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; scrollbar-width: none; }
+  .toolbar > .tool-group:first-child .tool { flex-shrink: 0; }
+  .tool.rally { grid-column: 2; }
+  .tool-group.seeds { grid-column: 1 / -1; justify-content: center; }
   .tool img { width: 32px; height: 32px; }
   .tool.seed img { width: 32px; height: 28px; }
   .tool-label { font-size: 0.75rem; }
-  .win-layer { padding: 10px 8px 120px; }
-  .win { border-width: 18px; border-image-width: 18px; }
+  .win-layer { padding: 0 0 var(--toolbar-h, 96px); }
+  .win { width: 100%; height: 100%; border-width: 18px; border-image-width: 18px; }
   .win-head h2 { font-size: 1.35rem; }
   .tree-canvas { overflow-x: auto; min-height: 400px; aspect-ratio: auto; }
   .tree-inner { min-width: 520px; right: auto; width: calc(100% - 80px); }

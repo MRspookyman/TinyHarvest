@@ -1,7 +1,7 @@
 // Edificios y monumentos del huerto: dibujo artesanal a doble resolución.
 // Las medidas de configuración siguen en unidades del mundo; las coordenadas de dibujo son píxeles de arte.
-import { BOARD, HOUSE, NODE_IDS, OLD_TREE, TREE } from '../sim/config';
-import type { GameState } from '../sim/types';
+import { BOARD, HOUSE, NODE_IDS, OLD_TREE, TREE, WORKS } from '../sim/config';
+import type { GameState, WorkId } from '../sim/types';
 import { makeCanvas } from './pixelart';
 import { statueGnomeCanvas } from './gnome';
 
@@ -427,6 +427,213 @@ export function drawStatue(tier: number): HTMLCanvasElement {
     rect(ctx, x, y, rw, rh, '#ffcd75');
   }
   return c;
+}
+
+/** Obras del pueblo, del tamaño de su caja: solar con cerca y cartel a nivel 0; cada nivel añade parte del edificio. */
+export function drawWork(id: WorkId, level: number): HTMLCanvasElement {
+  const w = WORKS[id].w * 2, h = WORKS[id].h * 2;
+  const c = makeCanvas(w, h), ctx = c.getContext('2d')!;
+  if (level <= 0) drawLot(ctx, id, w, h);
+  else if (id === 'molino') drawMill(ctx, level, w, h);
+  else if (id === 'invernadero') drawGreenhouse(ctx, level, w, h);
+  else drawFountain(ctx, level, w, h);
+  return c;
+}
+
+/** Solar de tierra removida, cartel con el dibujo de la obra y cerca delante. */
+function drawLot(ctx: Ctx, id: WorkId, w: number, h: number) {
+  rect(ctx, 2, h - 12, w - 4, 10, INK);
+  rect(ctx, 3, h - 11, w - 6, 8, '#8b5a3c');
+  rect(ctx, 3, h - 11, w - 6, 1, '#a8723f');
+  for (let x = 6; x < w - 6; x += 7) {
+    rect(ctx, x, h - 8 + x % 3, 3, 1, '#5a3a2a');
+    rect(ctx, x + 1, h - 9 + x % 3, 1, 1, '#c8925f');
+  }
+  // Cartel: dos renglones de letra y el dibujo de lo que se va a construir.
+  const sx = Math.floor(w / 2) - 11, sy = h - 34, ix = sx + 15, iy = sy + 3;
+  panel(ctx, sx + 10, sy + 10, 3, 18, '#8b5a3c', '#c8925f', '#5a3a2a');
+  panel(ctx, sx, sy, 22, 12, '#e4b27a', '#fee3a0', '#a8723f');
+  rect(ctx, sx + 3, sy + 4, 10, 1, '#8b5a3c');
+  rect(ctx, sx + 3, sy + 7, 7, 1, '#8b5a3c');
+  if (id === 'molino') {
+    for (let i = 0; i < 5; i++) {
+      rect(ctx, ix + i, iy + i, 1, 1, '#566c86');
+      rect(ctx, ix + 4 - i, iy + i, 1, 1, '#566c86');
+    }
+    rect(ctx, ix + 2, iy + 2, 1, 1, '#5a3a2a');
+  } else if (id === 'invernadero') {
+    rect(ctx, ix + 2, iy, 1, 1, '#f4f4f4');
+    rect(ctx, ix + 1, iy + 1, 3, 1, '#f4f4f4');
+    rect(ctx, ix, iy + 2, 5, 4, '#41a6f6');
+    rect(ctx, ix + 2, iy + 2, 1, 4, '#f4f4f4');
+  } else {
+    rect(ctx, ix + 2, iy, 1, 1, '#41a6f6');
+    rect(ctx, ix + 1, iy + 1, 3, 2, '#41a6f6');
+    rect(ctx, ix, iy + 3, 5, 2, '#41a6f6');
+    rect(ctx, ix + 1, iy + 5, 3, 1, '#3b5dc9');
+    rect(ctx, ix + 1, iy + 3, 1, 1, '#73eff7');
+  }
+  // Cerca: dos travesaños y postes repartidos de punta a punta.
+  for (const y of [h - 13, h - 8]) {
+    rect(ctx, 2, y, w - 4, 2, '#5a3a2a');
+    rect(ctx, 3, y, w - 6, 1, '#c8925f');
+  }
+  const posts = Math.round((w - 7) / 8);
+  for (let i = 0; i <= posts; i++) {
+    const x = 2 + Math.round(i * (w - 7) / posts);
+    panel(ctx, x, h - 16, 3, 13, '#a8723f', '#e4b27a', '#5a3a2a');
+  }
+}
+
+/** Molino: torre de piedra (1), aspas de tela (2) y tejado rojo con veleta (3). */
+function drawMill(ctx: Ctx, level: number, w: number, h: number) {
+  const cx = w / 2, top = 34, bottom = h - 5;
+  // Torre un poco más ancha abajo, con hiladas de piedra alternas.
+  rect(ctx, cx - 12, top - 1, 24, 1, INK);
+  for (let y = top; y < bottom; y++) {
+    const half = 11 + Math.floor((y - top) * 5 / (bottom - top)), row = y - top;
+    rect(ctx, cx - half - 1, y, half * 2 + 2, 1, INK);
+    rect(ctx, cx - half, y, half * 2, 1, '#94b0c2');
+    if (row % 6 === 5) rect(ctx, cx - half, y, half * 2, 1, '#566c86');
+    else for (let x = cx - half + 4 + (Math.floor(row / 6) % 2 ? 3 : 0); x < cx + half - 1; x += 7) rect(ctx, x, y, 1, 1, '#566c86');
+    rect(ctx, cx - half, y, 2, 1, '#c7cfcc');
+    rect(ctx, cx + half - 3, y, 3, 1, '#566c86');
+  }
+  panel(ctx, 6, h - 6, w - 12, 4, '#566c86', '#94b0c2', '#333c57');
+  // Puerta de tablas y ventanuco con luz.
+  panel(ctx, cx - 5, bottom - 14, 10, 14, '#8b5a3c', '#c8925f', '#5a3a2a');
+  rect(ctx, cx, bottom - 13, 1, 12, '#5a3a2a');
+  rect(ctx, cx + 2, bottom - 7, 1, 1, '#ffcd75');
+  panel(ctx, cx - 3, top + 10, 6, 7, '#333c57', '#566c86', INK);
+  rect(ctx, cx - 2, top + 11, 4, 5, '#ffcd75');
+  rect(ctx, cx, top + 11, 1, 5, '#8b5a3c');
+  if (level >= 3) {
+    roof(ctx, cx, top - 20, 15, 21, true);
+    rect(ctx, cx - 1, top - 25, 2, 5, INK);
+    rect(ctx, cx + 1, top - 25, 5, 3, INK);
+    rect(ctx, cx + 1, top - 24, 4, 1, '#ffcd75');
+  } else {
+    for (const x of [cx - 12, cx - 5, cx + 2, cx + 8]) panel(ctx, x, top - 4, 4, 4, '#94b0c2', '#c7cfcc', '#566c86');
+  }
+  if (level < 2) return;
+  // Aspas en aspa: primero el contorno de las telas, luego las telas y encima los largueros.
+  const hx = cx, hy = top + 2, ARM = 22, CLOTH = 4;
+  const arms = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+  for (const pass of [0, 1]) for (const [dx, dy] of arms) for (let i = 8; i <= ARM; i++) for (let k = 1; k <= CLOTH; k++) {
+    const px = hx + dx * i - dy * k, py = hy + dy * i + dx * k;
+    if (pass === 0) rect(ctx, px - 2, py - 2, 4, 4, INK);
+    else rect(ctx, px - 1, py - 1, 2, 2, i % 4 === 0 || k === CLOTH ? '#c7cfcc' : '#f4f4f4');
+  }
+  for (const [dx, dy] of arms) for (let i = 3; i <= ARM; i++) rect(ctx, hx + dx * i - 1, hy + dy * i - 1, 2, 2, '#5a3a2a');
+  panel(ctx, hx - 3, hy - 3, 6, 6, '#8b5a3c', '#c8925f', '#5a3a2a');
+  rect(ctx, hx - 1, hy - 1, 2, 2, '#ffcd75');
+}
+
+const GREENHOUSE_FLOWERS = ['#ef7d57', '#ffcd75', '#e8687d', '#f4f4f4'] as const;
+/** Invernadero: armazón blanco con cristales por poner (1), cristales (2) y flores dentro (3). */
+function drawGreenhouse(ctx: Ctx, level: number, w: number, h: number) {
+  const x0 = 4, x1 = w - 4, cx = w / 2, apex = 10, wallTop = 30, floor = h - 8;
+  const half = (x1 - x0) / 2, H = wallTop - apex;
+  const spread = (row: number) => Math.floor((row + 1) * half / H);
+  panel(ctx, x0 - 1, floor, x1 - x0 + 2, 6, '#94b0c2', '#c7cfcc', '#566c86');
+  for (let x = x0 + 5; x < x1; x += 8) rect(ctx, x, floor + 2, 1, 3, '#566c86');
+  rect(ctx, x0 + 2, floor - 4, x1 - x0 - 4, 4, '#8b5a3c');
+  rect(ctx, x0 + 2, floor - 4, x1 - x0 - 4, 1, '#a8723f');
+  const glass = (x: number, y: number) => rect(ctx, x, y, 1, 1, (x + y) % 11 < 2 ? '#f4f4f4' : y > floor - 10 ? '#41a6f6' : '#73eff7');
+  if (level >= 2) {
+    for (let y = wallTop; y < floor - 4; y++) for (let x = x0; x < x1; x++) glass(x, y);
+    for (let row = 0; row < H; row++) for (let x = cx - spread(row); x < cx + spread(row); x++) glass(x, apex + row);
+  }
+  if (level >= 3) {
+    for (let i = 0, x = x0 + 5; x < x1 - 4; i++, x += 7) {
+      const top = floor - 13 + (i % 2) * 3;
+      rect(ctx, x, top, 1, floor - 4 - top, '#257179');
+      rect(ctx, x - 2, floor - 8, 2, 1, '#38b764');
+      rect(ctx, x + 1, floor - 10 + (i % 2), 2, 1, '#38b764');
+      rect(ctx, x - 1, top - 1, 3, 3, GREENHOUSE_FLOWERS[i % GREENHOUSE_FLOWERS.length]);
+      rect(ctx, x, top, 1, 1, '#fee3a0');
+    }
+  }
+  // Armazón: vigas del tejado, alero, postes y montantes hasta la cumbrera.
+  for (let row = 0; row < H; row++) {
+    const y = apex + row, sp = spread(row);
+    rect(ctx, cx - sp, y, 3, 1, INK);
+    rect(ctx, cx - sp + 1, y, 1, 1, '#f4f4f4');
+    rect(ctx, cx + sp - 3, y, 3, 1, INK);
+    rect(ctx, cx + sp - 2, y, 1, 1, '#f4f4f4');
+  }
+  for (const x of [x0 + 19, cx - 1, x1 - 22]) {
+    const y = apex + Math.max(0, Math.ceil(Math.abs(x - cx) * H / half) - 1);
+    rect(ctx, x, y, 1, wallTop - y, '#f4f4f4');
+    rect(ctx, x + 1, y, 1, wallTop - y, '#94b0c2');
+  }
+  panel(ctx, x0 - 1, wallTop - 1, x1 - x0 + 2, 3, '#f4f4f4', '#f4f4f4', '#94b0c2');
+  for (let x = x0; x <= x1 - 3; x += 19) panel(ctx, x, wallTop + 1, 3, floor - wallTop - 1, '#f4f4f4', '#f4f4f4', '#94b0c2');
+  if (level >= 2) rect(ctx, x0, wallTop + 12, x1 - x0, 1, '#f4f4f4');
+  // Puerta en el centro y, mientras faltan cristales, un montón de ellos esperando.
+  panel(ctx, cx - 6, floor - 16, 2, 16, '#f4f4f4', '#f4f4f4', '#94b0c2');
+  panel(ctx, cx + 4, floor - 16, 2, 16, '#f4f4f4', '#f4f4f4', '#94b0c2');
+  panel(ctx, cx - 6, floor - 17, 12, 2, '#f4f4f4', '#f4f4f4', '#94b0c2');
+  rect(ctx, cx + 2, floor - 8, 1, 2, '#ffcd75');
+  if (level === 1) {
+    panel(ctx, x0 + 6, floor - 8, 8, 8, '#73eff7', '#f4f4f4', '#41a6f6');
+    panel(ctx, x0 + 8, floor - 10, 8, 10, '#73eff7', '#f4f4f4', '#41a6f6');
+  }
+  rect(ctx, cx - 1, apex - 2, 2, 2, INK);
+}
+
+/** Fuente: pila de piedra con agua (1), columna con chorro (2) y estatuilla de gnomo encima (3). */
+function drawFountain(ctx: Ctx, level: number, w: number, h: number) {
+  const cx = w / 2, by = h - 16, colTop = level >= 3 ? 22 : 20;
+  panel(ctx, 0, h - 4, w, 4, '#566c86', '#94b0c2', '#333c57');
+  if (level >= 2) {
+    panel(ctx, cx - 4, colTop, 8, by + 2 - colTop, '#94b0c2', '#c7cfcc', '#566c86');
+    rect(ctx, cx + 1, colTop + 3, 1, by - colTop - 3, '#566c86');
+  }
+  // Pila: pared delantera con juntas, borde claro y el agua dentro.
+  panel(ctx, 3, by + 4, w - 6, 10, '#94b0c2', '#c7cfcc', '#566c86');
+  for (let x = 8; x < w - 6; x += 8) rect(ctx, x, by + 6, 1, 6, '#566c86');
+  panel(ctx, 1, by, w - 2, 5, '#c7cfcc', '#f4f4f4', '#94b0c2');
+  rect(ctx, 4, by + 1, w - 8, 2, '#41a6f6');
+  rect(ctx, 6, by + 1, 8, 1, '#73eff7');
+  rect(ctx, w - 14, by + 2, 5, 1, '#73eff7');
+  if (level >= 2) {
+    panel(ctx, cx - 4, by - 1, 8, 3, '#94b0c2', '#c7cfcc', '#566c86');
+    panel(ctx, cx - 6, colTop - 2, 12, 3, '#c7cfcc', '#f4f4f4', '#94b0c2');
+    // Dos chorros en arco que caen a la pila.
+    const k = (by - colTop + 4) / 81;
+    for (const side of [-1, 1]) {
+      for (let t = 0; t <= 12; t++) {
+        const x = cx + side * (5 + t) - (side < 0 ? 1 : 0), y = colTop - 4 + Math.round((t - 3) ** 2 * k);
+        rect(ctx, x, y, 1, 2, '#73eff7');
+        rect(ctx, x, y + 2, 1, 1, '#41a6f6');
+      }
+      rect(ctx, cx + side * 19 - (side < 0 ? 1 : 0), by - 1, 1, 1, '#f4f4f4');
+      rect(ctx, cx + side * 15 - (side < 0 ? 1 : 0), by - 2, 1, 1, '#f4f4f4');
+    }
+  }
+  if (level === 2) {
+    rect(ctx, cx - 1, colTop - 16, 2, 14, '#73eff7');
+    rect(ctx, cx - 1, colTop - 16, 1, 14, '#f4f4f4');
+    rect(ctx, cx - 3, colTop - 17, 6, 2, '#73eff7');
+    for (const [dx, dy] of [[-5, -15], [4, -16], [-3, -19], [2, -20]]) rect(ctx, cx + dx, colTop + dy, 1, 1, '#f4f4f4');
+  }
+  if (level >= 3) {
+    // Estatuilla: gorro rojo, cara, barba blanca y chaqueta azul, sentada en la taza.
+    const gy = colTop - 18;
+    for (let r = 0; r < 8; r++) {
+      const hw = 1 + Math.floor(r / 2);
+      rect(ctx, cx - hw - 1, gy + r, hw * 2 + 2, 1, INK);
+      rect(ctx, cx - hw, gy + r, hw * 2, 1, '#b13e53');
+      rect(ctx, cx - hw, gy + r, 1, 1, '#e8687d');
+    }
+    panel(ctx, cx - 4, gy + 7, 8, 4, '#e4b27a', '#fee3a0', '#c8925f');
+    rect(ctx, cx - 2, gy + 8, 1, 1, INK);
+    rect(ctx, cx + 1, gy + 8, 1, 1, INK);
+    panel(ctx, cx - 5, gy + 13, 10, 5, '#3b5dc9', '#41a6f6', '#29366f');
+    panel(ctx, cx - 4, gy + 10, 8, 5, '#f4f4f4', '#f4f4f4', '#c7cfcc');
+    for (const side of [-1, 1]) rect(ctx, cx + side * 6 - (side < 0 ? 1 : 0), gy + 13, 1, 3, '#e4b27a');
+  }
 }
 
 /** Silueta de un color; conserva exactamente el tamaño del lienzo de arte recibido. */

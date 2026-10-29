@@ -92,9 +92,9 @@
 
 **Ciclo largo (temporadas), el prestigio ✅ (iteración 8):**
 > «Fin de temporada» en la Estatua del Gnomo Dorado: reinicias el huerto y ganas **semillas doradas** según lo ganado (cada vez cuesta más sacar una). Se gastan en el **árbol dorado** de talentos permanentes.
-> La primera temporada dura **~1 h**; las siguientes, menos (48 y 39 min según el bot), así que en 1–2 h de juego se nota el ciclo.
+> El árbol viejo se completa hacia los **56 min** en la primera temporada. Se puede terminar desde los 30 min o seguir con las obras opcionales: completar todo lleva 193,3 → 112,6 → 88,5 min según el bot, con 41 semillas por temporada completa.
 
-**Sin progreso offline ✅:** con el juego cerrado no se avanza nada. Al volver, la partida continúa justo donde quedó. Si la pestaña pasa a segundo plano, la simulación se pausa (sin recuperar el tiempo perdido) y se reanuda al volver.
+**Ganancias parciales al volver:** la simulación de cultivos y tareas se pausa con el juego cerrado o en segundo plano. Al volver tras al menos un minuto, se cobra el 50 % del ritmo reciente de monedas, hasta dos horas. No cuenta como ganado de temporada ni da semillas. Desde cinco minutos fuera se muestra una bienvenida. Sustituye por decisión del autor la antigua regla «sin progreso offline».
 
 ---
 
@@ -175,7 +175,7 @@ Zanahoria → Trigo → Tomate → Calabaza → Fresa → Melón → exóticos (
 - **Mejoras:** 3–4 sencillas (velocidad al andar, capacidad del saco, crecimiento más rápido).
 - **Personalidad mínima:** nombre aleatorio gracioso y un bocadillo de vez en cuando.
 - **Visual:** sprites por código, números flotantes y animación simple de andar.
-- **Guardado:** `localStorage` al cerrar y cada X segundos, sin progreso offline.
+- **Guardado:** `localStorage` al cerrar y cada 10 segundos; ganancias parciales al volver, sin simular cultivos ni tareas fuera.
 
 ### No incluye (todavía)
 
@@ -683,7 +683,7 @@ Las partidas anteriores siguen valiendo: los campos nuevos tienen valores por de
 | G8 | **Encargos del pueblo**: pedidos voluntarios y cortos, con propina, sin castigo si no se cumplen | M | Medio | — | ✅ It10 |
 | G9 | **Amistades entre gnomos**: se hacen amigos tratándose y trabajan mejor juntos; se ve en la ficha | M | Medio | D7 | ✅ It10 |
 | G10 | **Estaciones**: cada temporada del prestigio es una estación con su tono, lo que cae del cielo y su cultivo favorito | M | Medio | E1 | ✅ It10 |
-| G11 | **Bienvenida al volver**: resumen de la última sesión y, si se decide, un pequeño regalo por volver (revisar la decisión 7) | S | Medio | — | Por decidir |
+| G11 | **Bienvenida al volver**: tiempo fuera, monedas al 50 % del ritmo reciente (máximo dos horas), sin semillas por lo ganado fuera | S | Medio | — | Hecho |
 
 ### 9.2 Hoja de ruta (opción A: mecánica antes que números)
 
@@ -737,7 +737,7 @@ flowchart LR
 ## ❓ Preguntas abiertas
 
 - [ ] Cuando el autor pueda jugar: ¿es entretenido dejarlo un minuto y solo mirar? (último criterio de la demo)
-- [ ] ¿Damos algo al volver (G11)? Ahora, con el juego cerrado no pasa nada (decisión 7). Opciones: solo un resumen de la última sesión, o además un pequeño regalo por volver.
+- [x] Vuelta (G11): aprobado e implementado el 50 % del ritmo reciente hasta dos horas y una bienvenida; sustituye la decisión anterior sin progreso offline.
 - [ ] ¿Qué viene después de la iteración 10? Orden propuesto: publicar la demo en itch.io y que alguien la juegue; después día y noche (D11), molino y mercado (C5), biomas (E2), calabaza 2×2 (C4) y táctil y móvil (F6).
 
 ---
@@ -752,9 +752,9 @@ flowchart LR
 | 4 | Ritmo | Incremental activo: mejoras, contratación y organización de los gnomos |
 | 5 | Desarrollo | Claude implementa; el autor revisa y guía |
 | 6 | Personajes | Gnomos clásicos con toque humorístico |
-| 7 | Offline | Sin progreso con el juego cerrado; pausa en segundo plano |
+| 7 | Offline | Cultivos y tareas en pausa; monedas al 50 % del ritmo reciente, máximo dos horas, sin semillas |
 | 8 | Gestión | Básica: grupos con prioridades, sin microgestión individual |
-| 9 | Temporada | La primera dura 1–2 h |
+| 9 | Temporada | Fin disponible desde ~30 min; árbol viejo ~1 h; completar también las obras es opcional y alarga la temporada |
 | 10 | Arte | Sprites por código o pack gratuito, de momento |
 | 11 | Primer hito | Demo muy básica (sección 8) para validar la idea |
 | 12 | Resolución | Arte a doble resolución: gnomos de 32 × 32 con contorno oscuro y todo lo demás al mismo nivel de detalle (v0.17) |
@@ -774,6 +774,14 @@ flowchart LR
 
 ## 📝 Historial de cambios
 
+- **Balance completo tras decisión del autor:** se conserva la economía aprobada y se amplía de 90 a 240 min el límite de medición del bot. Árbol viejo de temporadas 1–3: 56,4 / 34,2 / 25,2 min; todas las obras completas: 193,3 / 112,6 / 88,5 min, sin alcanzar el nuevo límite. Cada una da 41 semillas. Se cumplen el acortamiento de temporadas completas y el mínimo de 15 semillas. `npm run balance`, compilación y 96 tests correctos; informe final en `%TEMP%/th-balance-nuevo.txt`.
+- **Comprobación integral de mejoras jugables:** `npm run balance` guardado en `%TEMP%/th-balance-nuevo.txt`; mantiene los resultados anotados. En el juego se construyeron las tres obras hasta nivel 3; el primer molino cambió el reloj de 0 a 1 semilla. Terminar desde la estatua reinició las obras y el resumen retuvo el foco; Escape volvió a Estatua. Bienvenida con ausencia de más de dos horas abonó exactamente 36 000 monedas a ritmo 10 sin aumentar lo ganado, y retuvo el foco. La vuelta breve de pestaña (eventos de visibilidad y reloj controlados) abonó 600 monedas por 120 s una sola vez. Sin errores de aplicación en los escenarios finales.
+- **Mejoras jugables · Móvil y accesibilidad:** encuadre vertical centrado en cesta y bancal, con escala mínima de arte completo para evitar que 390 px reduzcan el bancal a la mitad por el margen. Barra móvil de dos filas, menús deslizables, zoom sobre la barra y ventanas a toda el área disponible. Ayudas con pulsación larga de 450 ms sin activar el botón; foco cíclico y restaurado en ventanas, bienvenida y resumen. Movimiento reducido: sin ambiente estacional ni confeti, sin balanceo y una de cada cuatro partículas de acción. Compilación y 96 tests correctos. En Chromium a 390×844 se comprobaron encuadre, barra y zoom; pulsación de 500 ms mostró la ayuda sin seleccionar trigo. Granero abierto con Tab/Enter mantuvo el foco en 32 Tab y Shift+Tab; Escape volvió a Granero. Emulación directa de Chromium confirmó cero partículas de ambiente/confeti y cuatro de 16 partículas de acción.
+- **Mejoras jugables · Reloj y vuelta:** reloj de temporada y semillas actuales siempre visibles. Ritmo de monedas con media exponencial de cinco minutos, guardado con fecha sin cambiar la versión 6; partidas antiguas rellenan con ceros. Bienvenida al volver tras cinco minutos y aviso breve entre uno y cinco. Compilación y 96 tests correctos. Reapertura simulada tras una hora con ritmo 10: +18 001 monedas (desfase de arranque incluido), ganado y semillas sin cambios; otra recarga no vuelve a pagar.
+- **Mejoras jugables · Obras:** molino, invernadero y fuente, tres niveles de 20 000 / 60 000 / 180 000 monedas tras completar el árbol. Cada nivel añade una semilla al terminar; las obras se reinician. Mercado, crecimiento y riego mejoran; fuente 3 evita volver al pozo. Solares y construcciones visibles y pulsables, con menú propio y próximo objetivo. Compilación y 91 tests correctos; molino construido desde el mapa. Balance: árbol activo 56,4 min, 98,01 monedas/s estables, 0 pérdidas por podredumbre/min y tres zonas 5,98 frente a 5,62 monedas/s. Contingencia aprobada: cuervo a 5 s; con 4 rec + 3 sem + 2 reg, las pérdidas bajan de 7 a 3 al añadir un guardián. El primer informe con tope de 90 min truncaba las tres temporadas; se resolvió ampliando solo la medición, sin rebajar los costes.
+- **Mejoras jugables · Destreza:** grupos con zona y semilla fijas acumulan hasta +30 % de rapidez de trabajo en seis minutos, sin cambiar el paso. Cambiar realmente zona o semilla reinicia la destreza; repetirlas la conserva. Se guarda en la partida y se muestra en el Tablón. Compilación y 84 tests correctos; tarjeta al +30 % comprobada en ejecución.
+- **Mejoras jugables · Mercado:** ventas recientes ponderadas por valor con olvido exponencial de 120 s. Un monocultivo puede venderse a ×0,6; un único cultivo desbloqueado no recibe penalización. Semillas saturadas con ayuda y color apagado. El bot pasa a tres grupos con zonas y semillas cuando tiene tres cultivos y tres sembradores. Compilación y 82 tests correctos; multiplicador y ayuda comprobados en el juego.
+- **Mejoras jugables · Amenazas:** cuervos comen a los 4 s; los gnomos sin oficio de guardián solo reaccionan a 60 px. En bancales grandes pueden llegar bandadas de tres. Los pulgones ralentizan el crecimiento a la mitad, se propagan entre vecinas hasta cuatro y se espantan a mano o con guardianes; no añaden cromos al álbum. Verificado con compilación, 77 tests y crecimiento/clic en el juego.
 - **v0.19 (2026-10-28):** menos ruido en pantalla. Los bocadillos de rutina (a por qué va cada gnomo) salen en una de cada 6 decisiones y nunca con más de 4 bocadillos a la vez; los de personalidad, siempre. El aviso de arriba ya no repite cada línea del diario: lo importante (mejoras, sucesos, encargos, cosechas doradas, coronas, cromos…) siempre, en cola, y alguna gracia de los gnomos como mucho cada 25 s; «se ha echado a perder» y «cesta llena» como mucho una vez por minuto. Todo sigue en el Diario. Las ayudas al pasar el ratón (o con el teclado) son ahora un bocadillo de papel con el estilo del juego en lugar del cuadro gris del navegador.
 - **v0.18 (2026-10-28):** zum de la cámara. Rueda del ratón (acerca hacia donde apunta), pellizco con dos dedos, teclas + − 0 y tres botones abajo a la izquierda (acercar, alejar y volver a ver todo el huerto). Con zum, el huerto se arrastra para moverse (arrastrar no cuenta como clic) y la cámara nunca enseña más allá del borde del mundo. Siempre de 2 en 2 para que el pixel art siga nítido; hasta 4 pasos más cerca o más lejos que el encuadre normal. Seguir a un gnomo suma un paso más sobre el zum elegido.
 - **v0.17 (2026-10-28):** todo el arte redibujado a doble resolución: gnomos de 32 × 32 con todas sus poses y herramientas, plantas de 32 × 28, terreno, edificios con todas sus mejoras, decorado, bichos, bocadillos, efectos e iconos y marcos de la interfaz. La cámara usa escalas pares para que el pixel art siga nítido. Sin cambios de simulación, equilibrio ni partidas guardadas.

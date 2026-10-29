@@ -42,7 +42,7 @@ export function loadGame(rng: Rng): LoadResult {
 /** Devuelve si se ha podido guardar. */
 export function saveGame(s: GameState): boolean {
   try {
-    localStorage.setItem(KEY, JSON.stringify(serialize(s)));
+    localStorage.setItem(KEY, JSON.stringify(serialize(s, Date.now())));
     return true;
   } catch {
     return false; // modo privado, sin sitio…: se juega igual y se avisa

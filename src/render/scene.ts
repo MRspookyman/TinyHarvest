@@ -1,13 +1,13 @@
 // Dibuja el estado de la simulación con PixiJS. No cambia el estado: solo lo lee.
 import { Application, Container, Graphics, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from 'pixi.js';
-import { BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, STATUE, WELL, WILT_WARNING, WORLD, type SeasonId } from '../sim/config';
-import { basketMax, canEndSeason, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, seasonOf, waterTime } from '../sim/sim';
-import type { Critter, GameState, Gnome, Pose } from '../sim/types';
+import { ACCESSIBILITY, BARN, BASKET, BOARD, CROPS, DOOR, FIELD, GROUP_PALETTE, HOUSE, IDLE_AREA, OLD_TREE, RIPE, ROTTEN, STATUE, WELL, WILT_WARNING, WORK_IDS, WORKS, WORLD, type SeasonId } from '../sim/config';
+import { basketMax, canEndSeason, fieldSize, groupOf, hasPorters, houseCapacity, isOpen, keepTime, plotAt, plotOrigin, seasonOf, treeComplete, waterTime } from '../sim/sim';
+import type { Critter, GameState, Gnome, Pose, WorkId } from '../sim/types';
 import { ART, artTexture } from './pixelart';
-import { CASA, MENUS, OFICIOS, RANKING, type MenuId } from '../textos';
+import { CASA, MENUS, OBRAS, OFICIOS, RANKING, type MenuId } from '../textos';
 import { drawBackground, drawField, drawGrassTile } from './background';
 import { DecorView, TOWER, WELL_DRAW_H } from './decor';
-import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, drawStatue, oldTreeStage, outlined, silhouette, STATUE_DRAW_W, statueTier } from './landmarks';
+import { BOARD_ROOF_GROUPS, drawBarn, drawBoard, drawHouse, drawOldTree, drawStatue, drawWork, oldTreeStage, outlined, silhouette, STATUE_DRAW_W, statueTier } from './landmarks';
 import { frameIndex, type Atlas } from './sprites';
 
 const FONT = ['Pixelify Sans', 'monospace'];
@@ -159,6 +159,8 @@ export class SceneView {
   private board: Landmark;
   private tree: Landmark;
   private statue: Landmark;
+  /** obras del pueblo (molino, invernadero y fuente): solo se ven con el árbol completo */
+  private works = {} as Record<WorkId, Landmark>;
   /** halo dorado detrás de la estatua (desde la 4.ª temporada y cuando se puede acabar la temporada) */
   private statueGlow = new Graphics();
   private statueGlowTier = -1;
@@ -201,6 +203,10 @@ export class SceneView {
   private layoutKey = '';
   private fieldKey = '';
   private time = 0;
+  /** preferencia del sistema; se consulta en cada uso para seguir los cambios en vivo */
+  private readonly reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  /** con movimiento reducido, solo se crea 1 de cada ACCESSIBILITY.particleEvery partículas */
+  private particleCount = 0;
   /** pantalla tapada por la interfaz HTML (barra de abajo, ficha del gnomo a la derecha), en px de pantalla */
   private insets = { right: 0, bottom: 0 };
 
@@ -255,6 +261,12 @@ export class SceneView {
     const house0 = drawHouse(0);
     this.house = addLandmark('contratar', house0, HOUSE.x, HOUSE.y + HOUSE.h - house0.height, { lugar: CASA.nombre, sub: MENUS.contratar.sub });
     this.houseTextures.set(this.houseKey, { normal: this.house.normal, hover: this.house.hover, w: house0.width, h: house0.height });
+    // las obras se apoyan en la base de su caja; syncLandmarks las enseña al completar el árbol
+    for (const id of WORK_IDS) {
+      const box = WORKS[id];
+      this.works[id] = addLandmark('obras', drawWork(id, 0), box.x, box.y, { lugar: OBRAS[id].nombre, sub: MENUS.obras.sub });
+      this.works[id].sprite.visible = false;
+    }
 
     this.basket = new Sprite(atlas.basket[0]);
     this.basket.position.set(BASKET.x - BASKET_SPRITE_W / 2, BASKET.y - 4 - BASKET_SPRITE_H);
@@ -497,6 +509,8 @@ export class SceneView {
     }
     this.seasonT -= dt;
     if (this.seasonT > 0) return;
+    // con movimiento reducido no cae nada de ambiente
+    if (this.reduceMotion.matches) return;
     this.seasonT = look.every * (0.6 + Math.random() * 0.8);
     const x = Math.random() * WORLD.w;
     if (look.kind === 'fireflies') {
@@ -538,7 +552,7 @@ export class SceneView {
     this.houseCount.position.set(p.x, p.y);
   }
 
-  /** Granero (mercado y gremio), tablón (grupos), árbol viejo (mejoras compradas) y estatua (temporada) según el progreso; los talentos dejan su marca. */
+  /** Granero (mercado y gremio), tablón (grupos), árbol viejo (mejoras compradas), estatua (temporada) y obras según el progreso; los talentos dejan su marca. */
   private syncLandmarks(s: GameState) {
     const t = s.tree, tal = s.prestige.talents;
     const gilded = tal.mercadoDorado > 0, contract = tal.contrato > 0;
@@ -550,6 +564,12 @@ export class SceneView {
     this.redrawLandmark(this.tree, `${stage}`, () => drawOldTree(stage), OLD_TREE.y + OLD_TREE.h);
     const tier = statueTier(s.prestige.season);
     this.redrawLandmark(this.statue, `${tier}`, () => drawStatue(tier), STATUE.y + STATUE.h);
+    const open = treeComplete(s);
+    for (const id of WORK_IDS) {
+      const lm = this.works[id], level = s.works[id];
+      lm.sprite.visible = open;
+      if (open) this.redrawLandmark(lm, `${level}`, () => drawWork(id, level), WORKS[id].y + WORKS[id].h);
+    }
   }
 
   /**
@@ -588,7 +608,8 @@ export class SceneView {
 
   /** Fiesta de temporada nueva: confeti y hojas doradas cayendo sobre el huerto y destello en la estatua. */
   private celebrate() {
-    for (let i = 0; i < 70; i++) {
+    // con movimiento reducido, sin confeti: solo el destello de la estatua
+    if (!this.reduceMotion.matches) for (let i = 0; i < 70; i++) {
       const tex = this.atlas.confetti[i % this.atlas.confetti.length];
       const x = Math.random() * WORLD.w, y = -4 - Math.random() * 70;
       this.addParticle(tex, x, y, 4 + Math.random() * 8, 35 + Math.random() * 25, 0, PARTY_TIME + Math.random() * 0.8, Math.random() * 6);
@@ -623,9 +644,9 @@ export class SceneView {
     lm.sprite.position.set(lm.x - (hovered ? 1 : 0), lm.y - (hovered ? 1 : 0));
   }
 
-  /** Elemento pulsable bajo un punto del mundo (por su caja, con un pequeño margen). */
+  /** Elemento pulsable visible bajo un punto del mundo (por su caja, con un pequeño margen). */
   private landmarkAt(x: number, y: number): Landmark | null {
-    return this.landmarks.find(l => x >= l.x - 1 && x <= l.x + l.w && y >= l.y - 1 && y <= l.y + l.h) ?? null;
+    return this.landmarks.find(l => l.sprite.visible && x >= l.x - 1 && x <= l.x + l.w && y >= l.y - 1 && y <= l.y + l.h) ?? null;
   }
 
   /** Gnomo bajo un punto del mundo; si se solapan, el que está más delante. */
@@ -646,23 +667,38 @@ export class SceneView {
     const { width: sw, height: sh } = this.app.screen;
     // el encuadre cabe en lo que no tapa la interfaz
     const w = Math.max(1, sw - this.insets.right), h = Math.max(1, sh - this.insets.bottom);
-    const key = `${sw}x${sh}|${this.insets.right}x${this.insets.bottom}|${this.fieldKey}|${s.tree.regadores > 0}|${s.tree.guardianes > 0}`;
+    const open = treeComplete(s);
+    const portrait = h > w * ACCESSIBILITY.portraitRatio;
+    const key = `${sw}x${sh}|${this.insets.right}x${this.insets.bottom}|${this.fieldKey}|${s.tree.regadores > 0}|${s.tree.guardianes > 0}|${open}|${portrait}`;
     if (key === this.layoutKey) return;
     const first = this.layoutKey === '';
     this.layoutKey = key;
 
     const f = fieldSize(s);
-    // el pozo y la atalaya solo cuentan cuando se ven
-    const well = s.tree.regadores > 0, tower = s.tree.guardianes > 0;
-    const x0 = OLD_TREE.x - 4;
-    const y0 = Math.min(BARN.y - 12, well ? WELL.y + WELL.h - WELL_DRAW_H - 2 : Infinity, tower ? TOWER.y - 2 : Infinity);
-    // la estatua siempre se ve (con el cofre de la herencia a su pie, que llega casi al borde del mundo)
-    const x1 = Math.max(FIELD.x + f.cols * FIELD.cell + 12, tower ? TOWER.x + TOWER.w + 4 : 0, STATUE.x + STATUE.w + 4);
-    // margen justo bajo el bancal (cabe la valla): con el arte doble, unas unidades deciden si cabe la escala siguiente
-    const y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 8, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4);
+    let x0: number, x1: number, y0: number, y1: number;
+    if (portrait) {
+      // en vertical solo se encuadran la cesta y el bancal; el resto se alcanza arrastrando
+      x0 = BASKET.x - 14;
+      x1 = FIELD.x + f.cols * FIELD.cell + 10;
+      y0 = FIELD.y - 14;
+      y1 = FIELD.y + f.rows * FIELD.cell + 10;
+    } else {
+      // el pozo y la atalaya solo cuentan cuando se ven
+      const well = s.tree.regadores > 0, tower = s.tree.guardianes > 0;
+      x0 = OLD_TREE.x - 4;
+      y0 = Math.min(BARN.y - 12, well ? WELL.y + WELL.h - WELL_DRAW_H - 2 : Infinity, tower ? TOWER.y - 2 : Infinity);
+      // la estatua siempre se ve (con el cofre de la herencia a su pie, que llega casi al borde del mundo)
+      x1 = Math.max(FIELD.x + f.cols * FIELD.cell + 12, tower ? TOWER.x + TOWER.w + 4 : 0, STATUE.x + STATUE.w + 4);
+      // margen justo bajo el bancal (cabe la valla): con el arte doble, unas unidades deciden si cabe la escala siguiente;
+      // con el árbol completo, también las obras bajo el árbol viejo
+      const works = open ? Math.max(...WORK_IDS.map(id => WORKS[id].y + WORKS[id].h)) + 4 : 0;
+      y1 = Math.max(FIELD.y + f.rows * FIELD.cell + 8, IDLE_AREA.y1 + 8, OLD_TREE.y + OLD_TREE.h + 4, works);
+    }
     const bw = x1 - x0, bh = y1 - y0;
     const fit = Math.min(w / bw, h / bh);
-    this.baseScale = fit >= ART ? Math.floor(fit / ART) * ART : Math.max(1, Math.floor(fit));
+    // En vertical, no se reduce el arte a media resolución por unos píxeles de margen: se puede arrastrar.
+    this.baseScale = portrait ? Math.max(ART, Math.floor(fit / ART) * ART)
+      : fit >= ART ? Math.floor(fit / ART) * ART : Math.max(1, Math.floor(fit));
     this.base = { x: x0 + bw / 2, y: y0 + bh / 2 };
     // al cambiar el tamaño de la ventana no hace falta un paseo de cámara (salvo con zum o arrastre del jugador)
     if (first || (this.followId === null && this.pan === null)) this.cam = { ...this.base };
@@ -745,7 +781,7 @@ export class SceneView {
       const ripe = p.stage === RIPE;
       const wilting = ripe && p.t >= keepTime(s, p.crop) * WILT_WARNING;
       // de vez en cuando una ráfaga mece la planta 1 px; cada parcela a su ritmo
-      const sway = p.stage > 0 && p.stage !== ROTTEN && Math.sin(this.time * 1.6 + p.id * 2.3) > 0.8;
+      const sway = !this.reduceMotion.matches && p.stage > 0 && p.stage !== ROTTEN && Math.sin(this.time * 1.6 + p.id * 2.3) > 0.8;
       const a = this.atlas;
       sp.texture = wilting
         ? (sway ? a.passingSway : a.passing)[p.crop]
@@ -951,6 +987,10 @@ export class SceneView {
         v.body.texture = a.snail[Math.floor(c.t * 1.5) % 2];
         v.shadow.scale.x = 1.1;
         break;
+      case 'pulgon':
+        v.body.texture = a.aphid[Math.floor(c.t * 3) % 2];
+        v.shadow.visible = false;
+        break;
       case 'topo': {
         // asoma, se queda mirando (a veces se agacha) y se esconde; el montículo se queda
         const rise = c.state === 'in' ? Math.min(5, Math.floor(v.stateAge * 12))
@@ -1024,6 +1064,7 @@ export class SceneView {
   }
 
   private addParticle(texture: Texture, x: number, y: number, vx: number, vy: number, g: number, life: number, flutter?: number, tint?: number) {
+    if (this.reduceMotion.matches && this.particleCount++ % ACCESSIBILITY.particleEvery !== 0) return;
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5);
     if (tint !== undefined) sprite.tint = tint;

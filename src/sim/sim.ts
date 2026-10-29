@@ -1,18 +1,19 @@
 // Simulación pura: sin DOM ni render. Todo lo que pasa en el huerto ocurre aquí.
 import {
-  BASE_SPEED, BASKET, BUBBLE_TIME, CARRETILLA_PER_LEVEL, CLEAR_TIME, CONSERVAS_PER_LEVEL, COST_GROWTH, CRITTER_SPEED, CROP_IDS, CROPS,
-  CROW_EAT, CROW_NOTICE, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, GUARD, HAPPENING_EVERY, HAPPENING_TIME,
+  APHID, AWAY, BASE_SPEED, BASKET, BUBBLE_TIME, CARRETILLA_PER_LEVEL, CLEAR_TIME, CONSERVAS_PER_LEVEL, COST_GROWTH, CRITTER_SPEED, CROP_IDS, CROPS,
+  CROW_EAT, CROW_NOTICE, CROW_REACH, CROWN_MARGIN, DOOR, EVENT_GAP, FIELD, FLOCK, GROUP_NAME_MAX, GROUP_PALETTE, GUARD, HAPPENING_EVERY,
+  HAPPENING_TIME,
   HARVEST_TIME, HOUSE, IDLE_AREA, JOB_IDS, JOB_NODE, JOBS, LEGENDARY, LIFE, LOG_MAX, MAX_GNOMES, MAX_GROUPS, MEET_COOLDOWN, MEET_DIST,
-  MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
+  MARKET, MERCADO_PER_LEVEL, MOLE_TIME, ORG, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_EFFECT,
   TALENTS, TRAIT_WALK, TRAIT_WORK, TREE, VALUE_DISTANCE_BIAS, WATER, WELL, WORLD, ZONE_BONUS, GOLDEN, NODE_IDS, MASTERY, ALBUM,
-  RALLY, ORDERS, FRIENDS, SEASON_IDS, SEASONS, BUBBLES, type SeasonId,
+  RALLY, ORDERS, FRIENDS, SEASON_IDS, SEASONS, SKILL, BUBBLES, WORK_EFFECT, WORK_IDS, WORK_MAX, WORKS, type SeasonId,
 } from './config';
 import { ALBUM_PAGES, pageRewardId, stickerId, type AlbumPage } from './album';
 import { createState, makeGnome, randomTrait } from './state';
-import { ALBUM_TEXTOS, APELLIDOS, ARBOL, CULTIVOS, ENCARGOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OFICIOS, TALENTOS } from '../textos';
+import { ALBUM_TEXTOS, APELLIDOS, ARBOL, CULTIVOS, ENCARGOS, GRUPOS, LEGENDARIO, LOG, NOMBRES, OBRAS, OFICIOS, TALENTOS } from '../textos';
 import type {
   BubbleKind, Critter, CritterKind, CropId, GameState, Gnome, GnomeGroup, Happening, JobId, MomentKind, NodeId, NoticeKind, Plot,
-  Pose, Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, Zone,
+  Pose, Priority, Rng, SeasonRecord, TalentId, Task, TaskKind, Veteran, WorkId, Zone,
 } from './types';
 
 // ---------- Árbol de mejoras y sus efectos ----------
@@ -31,10 +32,11 @@ export const nodeMaxed = (s: GameState, id: NodeId) => s.tree[id] >= TREE[id].ma
 
 /**
  * Próximo objetivo (G3), siempre a la vista en la barra de arriba: la mejora más barata del árbol que ya se puede
- * comprar o, con el árbol completo, la siguiente semilla dorada de la temporada.
+ * comprar; con el árbol completo, la obra sin terminar más barata; y con todo terminado, la siguiente semilla dorada.
  */
 export type Goal =
   | { kind: 'node'; id: NodeId; have: number; need: number }
+  | { kind: 'work'; id: WorkId; have: number; need: number }
   | { kind: 'seed'; seeds: number; have: number; need: number };
 export function nextGoal(s: GameState): Goal {
   let best: NodeId | null = null;
@@ -43,6 +45,12 @@ export function nextGoal(s: GameState): Goal {
     if (best === null || nodeCost(s, id) < nodeCost(s, best)) best = id;
   }
   if (best) return { kind: 'node', id: best, have: s.coins, need: nodeCost(s, best) };
+  let work: WorkId | null = null;
+  for (const id of WORK_IDS) {
+    if (s.works[id] >= WORK_MAX) continue;
+    if (work === null || workCost(s, id) < workCost(s, work)) work = id;
+  }
+  if (work) return { kind: 'work', id: work, have: s.coins, need: workCost(s, work) };
   const seeds = seasonSeeds(s) + 1;
   return { kind: 'seed', seeds, have: s.totalEarned, need: seedsCoinsNeeded(seeds) };
 }
@@ -67,6 +75,26 @@ export function buyNode(s: GameState, id: NodeId): boolean {
   } else {
     log(s, LOG.mejora(ARBOL[id].nombre), 'importante');
   }
+  if (treeComplete(s)) log(s, LOG.obrasAbiertas, 'importante');
+  return true;
+}
+
+// ---------- Obras de fin de temporada ----------
+
+/** todos los nodos del árbol al máximo: se abren las obras */
+export const treeComplete = (s: GameState) => NODE_IDS.every(id => nodeMaxed(s, id));
+/** coste del siguiente nivel de la obra (solo con nivel < WORK_MAX) */
+export const workCost = (s: GameState, id: WorkId) => WORKS[id].costs[s.works[id]];
+/** semillas doradas de más al acabar la temporada: una por nivel de obra */
+export const workSeeds = (s: GameState) => WORK_IDS.reduce((n, id) => n + s.works[id], 0);
+
+export function buyWork(s: GameState, id: WorkId): boolean {
+  if (!treeComplete(s) || s.works[id] >= WORK_MAX) return false;
+  const cost = workCost(s, id);
+  if (s.coins < cost) return false;
+  s.coins -= cost;
+  s.works[id]++;
+  log(s, LOG.obra(OBRAS[id].nombre, s.works[id]), 'importante');
   return true;
 }
 
@@ -95,9 +123,14 @@ export function turfBonus(s: GameState, g: Gnome): number {
 export const gnomeWalkSpeed = (s: GameState, g: Gnome) =>
   walkSpeed(s) * (TRAIT_WALK[g.trait] ?? 1) * (g.legendary ? LEGENDARY.mult : 1)
   * (g.job === 'guardian' ? 1 + GUARD.silbatoSpeed * s.tree.silbato : 1) * (1 + turfBonus(s, g)) * rallyBoost(s);
+/** la especialización acelera las tareas de campo, no los paseos */
+export function skillBonus(s: GameState, g: Gnome): number {
+  if (g.job !== 'recolector' && g.job !== 'sembrador' && g.job !== 'regador') return 0;
+  return Math.min(SKILL.max, SKILL.perMin * groupOf(s, g).skill / 60);
+}
 /** multiplicador del tiempo de trabajo de un gnomo concreto (menos = más rápido) */
 export const gnomeWorkMult = (s: GameState, g: Gnome) =>
-  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g) + friendBonus(s, g)) / rallyBoost(s);
+  (workMult(s) * (TRAIT_WORK[g.trait] ?? 1)) / (g.legendary ? LEGENDARY.mult : 1) / (1 + turfBonus(s, g) + friendBonus(s, g) + skillBonus(s, g)) / rallyBoost(s);
 /** la arenga del capataz (G7) acelera a todos mientras dura */
 export const rallyBoost = (s: GameState) => (s.rally.t > 0 ? 1 + RALLY.mult : 1);
 
@@ -112,23 +145,41 @@ export function rally(s: GameState, rng: Rng): boolean {
 }
 export const capacity = (s: GameState) => 1 + s.tree.saco;
 export const basketMax = (s: GameState) => BASKET.base + BASKET.perLevel * s.tree.cesta;
-/** segundos por fase con el abono (y el abono dorado), a velocidad normal (ver growRate) */
+/** segundos por fase con el abono (y el abono dorado) y el invernadero, a velocidad normal (ver growRate) */
 export const stageTime = (s: GameState, crop: CropId) =>
-  (CROPS[crop].grow * 0.85 ** s.tree.abono) / (1 + TALENT_EFFECT.abonoDorado * s.prestige.talents.abonoDorado) / RIPE;
+  (CROPS[crop].grow * 0.85 ** s.tree.abono) / (1 + TALENT_EFFECT.abonoDorado * s.prestige.talents.abonoDorado)
+  / (1 + WORK_EFFECT.invernadero * s.works.invernadero) / RIPE;
 /** a qué velocidad crece ahora la parcela: más rápido regada, muy despacio si tiene sed y está seca */
 export const growRate = (p: Plot) => (p.wet > 0 ? WATER.boost : CROPS[p.crop].thirsty ? WATER.dry : 1);
 /** segundos que dura un riego, con la regadera */
-export const waterTime = (s: GameState) => WATER.duration * (1 + WATER.regaderaTime * s.tree.regadera);
+export const waterTime = (s: GameState) =>
+  WATER.duration * (1 + WATER.regaderaTime * s.tree.regadera) * (1 + WORK_EFFECT.fuente * s.works.fuente);
 /** segundos que tarda un regador normal en regar una parcela, con la regadera */
 export const waterWork = (s: GameState) => WATER.work * (1 - WATER.regaderaWork * s.tree.regadera);
 /** hasta dónde ve el guardián (px del mundo), con el silbato */
 export const guardRange = (s: GameState) => GUARD.sight + GUARD.silbatoSight * s.tree.silbato;
 export const hasPorters = (s: GameState) => s.gnomes.some(g => g.job === 'porteador');
-/** monedas que da un cultivo al venderse, con el mercado, el mercado dorado, su maestría y el multiplicador de organización */
+/** monedas que da un cultivo al venderse, con el mercado, el mercado dorado, su maestría, la saturación y el multiplicador de organización */
 export const cropValue = (s: GameState, crop: CropId) =>
   CROPS[crop].value * (1 + MERCADO_PER_LEVEL * s.tree.mercado)
   * (1 + TALENT_EFFECT.mercadoDorado * s.prestige.talents.mercadoDorado)
-  * (1 + MASTERY.bonus * masteryLevel(s, crop)) * (crop === favoriteCrop(s) ? 1 + SEASONS.bonus : 1) * s.org.mult;
+  * (1 + MASTERY.bonus * masteryLevel(s, crop)) * (crop === favoriteCrop(s) ? 1 + SEASONS.bonus : 1) * s.org.mult
+  * marketMult(s, crop);
+/** segundos en los que el mercado olvida lo vendido */
+export const marketWindow = (s: GameState) => MARKET.window / (1 + WORK_EFFECT.molino * s.works.molino);
+/** multiplicador de saturación: baja si un cultivo se lleva más de su cuota de lo vendido últimamente */
+export function marketMult(s: GameState, crop: CropId): number {
+  let total = 0;
+  for (const c of CROP_IDS) total += s.market[c];
+  if (total < MARKET.minSample) return 1;
+  const free = 1 / Math.min(MARKET.fullMix, CROP_IDS.filter(c => cropUnlocked(s, c)).length);
+  const share = s.market[crop] / total;
+  return Math.max(MARKET.floor, 1 - MARKET.slope * Math.max(0, share - free));
+}
+/** apunta una venta en el mercado; llamar después de calcular su valor */
+export function noteSale(s: GameState, crop: CropId, n: number) {
+  s.market[crop] += n * CROPS[crop].value;
+}
 
 /** estación de la temporada en curso (G10): primavera, verano, otoño, invierno y vuelta a empezar */
 export const seasonOf = (s: GameState): SeasonId => SEASON_IDS[(s.prestige.season - 1) % SEASON_IDS.length];
@@ -368,7 +419,7 @@ export function createGroup(s: GameState): GnomeGroup | null {
   const usedColors = new Set(s.groups.map(g => g.color));
   const color = GROUP_PALETTE.findIndex((_, i) => !usedColors.has(i));
   const group: GnomeGroup = {
-    id: s.nextGroupId++, name, color: color === -1 ? s.groups.length % GROUP_PALETTE.length : color, priority: 'cercano', seed: null, zone: null,
+    id: s.nextGroupId++, name, color: color === -1 ? s.groups.length % GROUP_PALETTE.length : color, priority: 'cercano', seed: null, zone: null, skill: 0,
   };
   s.groups.push(group);
   log(s, LOG.grupoNuevo(name));
@@ -401,6 +452,8 @@ export function setPriority(s: GameState, id: number, p: Priority) {
 export function setGroupSeed(s: GameState, id: number, seed: CropId | null) {
   const group = s.groups.find(g => g.id === id);
   if (!group || (seed !== null && !cropUnlocked(s, seed))) return;
+  if (group.seed === seed) return;
+  group.skill = 0;
   group.seed = seed;
 }
 
@@ -425,6 +478,8 @@ export function setGroupZone(s: GameState, id: number, zone: Zone | null) {
     next = { c0: Math.min(c0, c1), c1: Math.max(c0, c1), r0: Math.min(r0, r1), r1: Math.max(r0, r1) };
     if (next.c0 < 0 || next.r0 < 0 || next.c1 >= FIELD.maxCols || next.r1 >= FIELD.maxRows) return;
   }
+  if (group.zone === null ? next === null : next !== null && group.zone.c0 === next.c0 && group.zone.c1 === next.c1 && group.zone.r0 === next.r0 && group.zone.r1 === next.r1) return;
+  group.skill = 0;
   group.zone = next;
   log(s, next ? LOG.zona(group.name, GRUPOS.zonaDesc(next.c0, next.c1, next.r0, next.r1)) : LOG.zonaTodo(group.name));
   for (const g of s.gnomes) {
@@ -461,10 +516,21 @@ export function moveGnome(s: GameState, gnomeId: number, groupId: number): boole
 
 // ---------- Clic en el bancal ----------
 
-/** Recoge si está madura; planta si está vacía o echada a perder (se arranca y se siembra). */
-export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | 'plant' | null {
+/**
+ * Espanta los pulgones si los hay (y nada más); si no, recoge si está madura o planta si está vacía o echada a perder
+ * (se arranca y se siembra).
+ */
+export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | 'plant' | 'shoo' | null {
   const p = s.plots[id];
   if (!p || !isOpen(s, p)) return null;
+  if (aphidOn(s, id)) {
+    for (const c of s.critters) {
+      if (c.kind !== 'pulgon' || c.plot !== id || c.state === 'out') continue;
+      c.state = 'out';
+      c.t = 0;
+    }
+    return 'shoo';
+  }
   if (p.stage === RIPE) {
     const golden = p.golden;
     const v = cropValue(s, p.crop) * (golden ? GOLDEN.mult : 1);
@@ -473,6 +539,7 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
     const o = plotOrigin(p);
     const manual = s.manualHarvests++ % 5 === 0;
     countHarvest(s, p.crop);
+    noteSale(s, p.crop, 1);
     if (golden) {
       p.golden = false;
       s.events.push({ type: 'golden', crop: p.crop, x: o.x + 9, y: o.y + 6, amount: Math.round(v) });
@@ -502,8 +569,12 @@ export function clickPlot(s: GameState, id: number, crop: CropId): 'harvest' | '
 
 export function tick(s: GameState, dt: number, rng: Rng) {
   const org = orgOf(s);
+  const before = s.totalEarned;
   s.seasonTime += dt;
   orgDecay(org, dt);
+  const mk = Math.exp(-dt / marketWindow(s));
+  for (const c of CROP_IDS) s.market[c] *= mk;
+  for (const g of s.groups) if (g.zone && g.seed) g.skill = Math.min(SKILL.max / SKILL.perMin * 60, g.skill + dt);
   for (const p of s.plots) {
     if (!isOpen(s, p)) continue;
     org.open += dt;
@@ -525,7 +596,7 @@ export function tick(s: GameState, dt: number, rng: Rng) {
       org.thirsty += dt;
       if (p.wet > 0) org.watered += dt;
     }
-    p.t += dt * growRate(p);
+    p.t += dt * growRate(p) * (aphidOn(s, p.id) ? APHID.slow : 1);
     p.wet = Math.max(0, p.wet - dt);
     const st = stageTime(s, p.crop);
     while (p.t >= st && p.stage < RIPE) {
@@ -549,13 +620,31 @@ export function tick(s: GameState, dt: number, rng: Rng) {
   }
   for (const g of s.gnomes) updateGnome(s, g, dt, rng);
   meetings(s, rng);
-  updateCritters(s, dt);
+  updateCritters(s, dt, rng);
   updateEvents(s, dt, rng);
   updateCrowns(s, rng);
   updateOrders(s, dt, rng);
   s.rally.t = Math.max(0, s.rally.t - dt);
   s.rally.cd = Math.max(0, s.rally.cd - dt);
   updateOrg(s, org);
+  // ritmo de monedas/s para las ganancias al volver; un tick sin tiempo no lo toca (evita dividir entre 0)
+  if (dt > 0) {
+    const k = Math.exp(-dt / AWAY.window);
+    s.rate = s.rate * k + ((s.totalEarned - before) / dt) * (1 - k);
+  }
+}
+
+/**
+ * Ganancias al volver tras `seconds` fuera: una parte del ritmo, con tope de tiempo. Solo da monedas, no suma a
+ * totalEarned (lo ganado fuera no da semillas doradas). Devuelve las monedas cobradas (0 si no hay nada).
+ */
+export function applyAway(s: GameState, seconds: number): number {
+  if (!(seconds >= AWAY.minSeconds) || s.rate <= 0) return 0;
+  const n = Math.floor(s.rate * AWAY.share * Math.min(seconds, AWAY.maxSeconds));
+  if (n <= 0) return 0;
+  s.coins += n;
+  log(s, LOG.vuelta(n));
+  return n;
 }
 
 function rot(s: GameState, p: Plot, rng: Rng) {
@@ -821,6 +910,9 @@ function patrol(s: GameState, g: Gnome, rng: Rng) {
 /** el topo está en esa parcela: no se puede sembrar hasta que se vaya */
 export const moleOn = (s: GameState, plot: number) =>
   s.critters.some(c => c.kind === 'topo' && c.plot === plot && c.state !== 'out');
+/** hay pulgones en esa parcela: crece a medias hasta que se van */
+export const aphidOn = (s: GameState, plot: number) =>
+  s.critters.some(c => c.kind === 'pulgon' && c.plot === plot && c.state !== 'out');
 
 function goDeliver(s: GameState, g: Gnome, rng: Rng) {
   if (g.job === 'recolector' && hasPorters(s)) goTo(g, BASKET.x + rng() * 6 - 3, BASKET.y, { kind: 'drop' });
@@ -860,7 +952,9 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
     }
   } else if (g.job === 'regador') {
     const left = canLeft.get(g) ?? WATER.can;
-    if (left <= 0) return goRefill(s, g, rng);
+    // con la fuente a nivel máximo la regadera no se vacía y el regador no vuelve al pozo
+    const endless = s.works.fuente >= WORK_MAX;
+    if (!endless && left <= 0) return goRefill(s, g, rng);
     const p = pickPlot(s, g, p => needsWater(s, p));
     if (p) {
       p.wres = g.id;
@@ -870,7 +964,7 @@ function decide(s: GameState, g: Gnome, rng: Rng) {
       return;
     }
     // sin nada que regar, aprovecha para llenar la regadera
-    if (left < WATER.can) return goRefill(s, g, rng);
+    if (!endless && left < WATER.can) return goRefill(s, g, rng);
   } else if (g.job === 'guardian') {
     return patrol(s, g, rng);
   } else {
@@ -1109,6 +1203,8 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
     work(g, (PLANT_TIME + (p.stage === ROTTEN ? CLEAR_TIME : 0)) * gnomeWorkMult(s, g), 'harvest', task);
   } else if (task.kind === 'deliver') {
     const amount = g.carry.reduce((a, c) => a + cropValue(s, c), 0);
+    // el valor se calcula antes de apuntar la venta: la saturación cuenta desde la siguiente entrega
+    for (const c of g.carry) noteSale(s, c, 1);
     s.coins += amount;
     s.totalEarned += amount;
     s.events.push({ type: 'coins', x: DOOR.x, y: DOOR.y - 20, amount: Math.round(amount) });
@@ -1162,11 +1258,11 @@ function arrive(s: GameState, g: Gnome, rng: Rng) {
     const c = s.critters.find(c => c.id === task.critter);
     if (!c || c.state !== 'stay') return think(g);
     work(g, 1, 'scare', task);
-    if (c.kind === 'topo') {
-      // el topo se mete en su agujero antes de tiempo
+    if (c.kind === 'topo' || c.kind === 'pulgon') {
+      // el topo se mete en su agujero antes de tiempo; los pulgones se dispersan
       c.state = 'out';
       c.t = 0;
-      if (rng() < 0.6) log(s, LOG.topoGuardian(g.name), 'humor');
+      if (c.kind === 'topo' && rng() < 0.6) log(s, LOG.topoGuardian(g.name), 'humor');
     } else {
       flyAway(c);
       if (rng() < 0.6) log(s, g.job === 'guardian' ? LOG.cuervoGuardian(g.name) : LOG.cuervoFuera(g.name), 'humor');
@@ -1241,7 +1337,7 @@ function finish(s: GameState, g: Gnome, rng: Rng) {
     if (p.wres === g.id) p.wres = null;
     if (p.stage >= 0 && p.stage < RIPE) {
       p.wet = waterTime(s);
-      canLeft.set(g, (canLeft.get(g) ?? WATER.can) - 1);
+      if (s.works.fuente < WORK_MAX) canLeft.set(g, (canLeft.get(g) ?? WATER.can) - 1);
       g.stats.tasks++;
       s.events.push({ type: 'water', plot: p.id });
       if (rng() < 0.04) log(s, `${g.name} ${pick(rng, LOG.regar)}`, 'humor');
@@ -1287,7 +1383,47 @@ function plotCentre(p: Plot) {
   return { x: o.x + 9, y: o.y + 12 };
 }
 
-function updateCritters(s: GameState, dt: number) {
+/** último tramo de APHID.spread s en que cada pulgón ha intentado saltar a una vecina (interno, como canLeft) */
+const aphidStep = new WeakMap<Critter, number>();
+/** cuervos que han bajado en bandada: el aviso ya se dio al empezar (interno: los bichos no se guardan) */
+const flockCrows = new WeakSet<Critter>();
+
+/** parcela abierta con una planta creciendo (aún no madura) y sin bicho: donde se pueden poner pulgones */
+const aphidTarget = (s: GameState, p: Plot) =>
+  isOpen(s, p) && p.stage >= 0 && p.stage < RIPE && !s.critters.some(c => c.plot === p.id);
+
+const liveAphids = (s: GameState) => s.critters.filter(c => c.kind === 'pulgon' && c.state !== 'out').length;
+
+function updateAphid(s: GameState, c: Critter, rng: Rng) {
+  if (c.state === 'in') {
+    if (c.t >= 0.5) c.state = 'stay';
+    return;
+  }
+  if (c.state !== 'stay') return;
+  const p = c.plot !== undefined ? s.plots[c.plot] : undefined;
+  // la planta ya ha madurado (o la han arrancado) o se han cansado: se van
+  if (!p || p.stage < 0 || p.stage >= RIPE || c.t >= 0.5 + APHID.life) {
+    c.state = 'out';
+    c.t = 0;
+    return;
+  }
+  const step = Math.floor(c.t / APHID.spread);
+  if (step > (aphidStep.get(c) ?? 0)) {
+    aphidStep.set(c, step);
+    if (liveAphids(s) < APHID.max) {
+      const next = s.plots.filter(q => Math.abs(q.col - p.col) + Math.abs(q.row - p.row) === 1 && aphidTarget(s, q));
+      if (next.length) {
+        const q = pick(rng, next);
+        const at = plotCentre(q);
+        spawn(s, 'pulgon', at.x, at.y, at.x, at.y, 'in', q.id);
+      }
+    }
+  }
+  // como el topo: solo los espanta el guardián (o el jugador con un clic)
+  if (!shooed(s, c)) callGuard(s, c, plotStand(p));
+}
+
+function updateCritters(s: GameState, dt: number, rng: Rng) {
   for (const c of s.critters) {
     c.t += dt;
     const dx = c.tx - c.x, dy = c.ty - c.y;
@@ -1302,6 +1438,7 @@ function updateCritters(s: GameState, dt: number) {
       if (Math.abs(dx) > 0.3) c.flip = dx < 0;
     }
     if (c.kind === 'cuervo') updateCrow(s, c, arrived);
+    else if (c.kind === 'pulgon') updateAphid(s, c, rng);
     else if (c.kind === 'topo') {
       // asoma, se queda un rato y se vuelve a meter (medio segundo para cada animación)
       if (c.state === 'in' && c.t >= 0.5) c.state = 'stay';
@@ -1338,11 +1475,11 @@ function updateCritters(s: GameState, dt: number) {
   s.critters = s.critters.filter(c => !gone(c));
 }
 
-/** se borra al acabar de irse (el topo, al meterse en su agujero; el caracol, al cruzar) */
+/** se borra al acabar de irse (el topo, al meterse en su agujero; los pulgones, al dispersarse; el caracol, al cruzar) */
 function gone(c: Critter): boolean {
   const there = c.x === c.tx && c.y === c.ty;
   if (c.state !== 'out') return c.kind === 'caracol' && there;
-  return c.kind === 'topo' ? c.t >= 0.5 : there;
+  return c.kind === 'topo' || c.kind === 'pulgon' ? c.t >= 0.5 : there;
 }
 
 /** gnomos que pueden dejarlo todo para espantar un cuervo: los ociosos y los que van andando a trabajar */
@@ -1386,7 +1523,8 @@ function updateCrow(s: GameState, c: Critter, arrived: boolean) {
     c.state = 'stay';
     c.t = 0;
     moment(s, 'cuervo', c.x, c.y);
-    log(s, LOG.cuervo, 'importante');
+    // en bandada, el aviso se dio una vez al empezar
+    if (!flockCrows.has(c)) log(s, LOG.cuervo, 'importante');
     return;
   }
   if (c.state !== 'stay') return;
@@ -1404,12 +1542,12 @@ function updateCrow(s: GameState, c: Critter, arrived: boolean) {
   if (shooed(s, c)) return;
   const st = plotStand(p);
   if (callGuard(s, c, st) || c.t < CROW_NOTICE) return;
-  // sin guardián libre, el gnomo libre más cercano va a espantarlo
+  // sin guardián libre, el gnomo libre más cercano va a espantarlo, si está lo bastante cerca para enterarse
   let best: Gnome | null = null;
   let bestD = Infinity;
   for (const g of s.gnomes) {
     const d = Math.hypot(g.x - st.x, g.y - st.y);
-    if (d < bestD && canShoo(g)) {
+    if (d <= CROW_REACH && d < bestD && canShoo(g)) {
       bestD = d;
       best = g;
     }
@@ -1422,9 +1560,9 @@ function updateCrow(s: GameState, c: Critter, arrived: boolean) {
 
 // ---------- Sucesos ----------
 
-export type EventKind = 'cuervo' | 'caracol' | 'topo' | Happening['kind'];
+export type EventKind = 'cuervo' | 'caracol' | 'topo' | 'pulgon' | Happening['kind'];
 /** el cuervo sale el doble: es el único que pide reacción a los gnomos */
-const SMALL: EventKind[] = ['cuervo', 'cuervo', 'topo', 'caracol'];
+const SMALL: EventKind[] = ['cuervo', 'cuervo', 'topo', 'caracol', 'pulgon'];
 const RARE: Happening['kind'][] = ['ranas', 'sindicato', 'espantapajaros'];
 
 function updateEvents(s: GameState, dt: number, rng: Rng) {
@@ -1447,7 +1585,8 @@ function updateEvents(s: GameState, dt: number, rng: Rng) {
 /** Empieza un suceso. Devuelve false si ahora no puede pasar (nada maduro para el cuervo, otro suceso raro en curso…). */
 export function startEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
   if (!beginEvent(s, kind, rng)) return false;
-  collect(s, 'sucesos', kind);
+  // los pulgones no tienen cromo en el álbum
+  if (kind !== 'pulgon') collect(s, 'sucesos', kind);
   return true;
 }
 
@@ -1459,7 +1598,34 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
     if (!ripe.length) return false;
     const p = pick(rng, ripe);
     const at = plotCentre(p);
-    spawn(s, 'cuervo', at.x + (rng() < 0.5 ? -90 : 90), -20, at.x, at.y, 'in', p.id);
+    const first = spawn(s, 'cuervo', at.x + (rng() < 0.5 ? -90 : 90), -20, at.x, at.y, 'in', p.id);
+    const { cols, rows } = fieldSize(s);
+    if (cols * rows >= FLOCK.minPlots && rng() < FLOCK.chance) {
+      // bandada: más cuervos, cada uno a otra parcela madura
+      const rest = ripe.filter(q => q !== p);
+      const flock = [first];
+      for (let i = 1; i < FLOCK.size && rest.length; i++) {
+        const q = pick(rng, rest);
+        rest.splice(rest.indexOf(q), 1);
+        const to = plotCentre(q);
+        flock.push(spawn(s, 'cuervo', to.x + (rng() < 0.5 ? -90 : 90), -20, to.x, to.y, 'in', q.id));
+      }
+      if (flock.length > 1) {
+        for (const c of flock) flockCrows.add(c);
+        log(s, LOG.bandada, 'importante');
+      }
+    }
+    return true;
+  }
+  if (kind === 'pulgon') {
+    if (liveAphids(s) >= APHID.max) return false;
+    const growing = open.filter(p => aphidTarget(s, p));
+    if (!growing.length) return false;
+    const p = pick(rng, growing);
+    const at = plotCentre(p);
+    spawn(s, 'pulgon', at.x, at.y, at.x, at.y, 'in', p.id);
+    moment(s, 'pulgon', at.x, at.y);
+    log(s, LOG.pulgon, 'importante');
     return true;
   }
   if (kind === 'topo') {
@@ -1526,7 +1692,7 @@ function beginEvent(s: GameState, kind: EventKind, rng: Rng): boolean {
 export const seasonSeeds = (s: GameState) => Math.floor((s.totalEarned / PRESTIGE.seedUnit) ** PRESTIGE.seedPow);
 /** monedas que hay que ganar en una temporada para llevarse n semillas (lo contrario de seasonSeeds) */
 export const seedsCoinsNeeded = (n: number) => Math.ceil(PRESTIGE.seedUnit * n ** (1 / PRESTIGE.seedPow));
-export const canEndSeason = (s: GameState) => seasonSeeds(s) >= PRESTIGE.minSeeds;
+export const canEndSeason = (s: GameState) => seasonSeeds(s) + workSeeds(s) >= PRESTIGE.minSeeds;
 
 export function talentCost(s: GameState, id: TalentId): number {
   const t = TALENTS[id];
@@ -1558,7 +1724,7 @@ export function buyTalent(s: GameState, id: TalentId): boolean {
  */
 export function endSeason(s: GameState, rng: Rng): GameState {
   const old = s.prestige;
-  const seeds = seasonSeeds(s);
+  const seeds = seasonSeeds(s) + workSeeds(s);
   const kings = JOB_IDS.map(j => s.gnomes.find(g => g.id === s.crowns[j] && g.job === j)).filter((g): g is Gnome => !!g);
   const record: SeasonRecord = {
     season: old.season,

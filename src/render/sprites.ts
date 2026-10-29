@@ -161,6 +161,11 @@ const SNAIL: PixelMap[] = [
   ['.....OOOOOO.......O...O.', '...OOPYYYYPOO.....Os.Os.', '..OPYPPpppPppO.....s.s..', '.OPYPPpOOOppppO....s.s..', 'OPYPPpOPPPpOpppO..OssssO', 'OPYPpOPPpppPOppO.OssWssO', 'OPYPpOPpOPppOppO.OsssssO', 'OPYPpOPpOOppOppOOssssssO', 'OPPPpOPPPppPOppOsssssssO', '.OPPPpOOOOOpppOssssssssO', '..OPPPPPPPpppOsssssssssO', '...OOOOOOOOOOssssssssssO', '.OssssssssssssssssssssO.', 'OsssssssssssssssssssssO.'],
   ['.....OOOOOO.............', '...OOPYYYYPOO...........', '..OPYPPpppPppO....O...O.', '.OPYPPpOOOppppO...Os.Os.', 'OPYPPpOPPPpOpppO...s.s..', 'OPYPpOPPpppPOppO..OsssO.', 'OPYPpOPpOPppOppO.OssWssO', 'OPYPpOPpOOppOppOOssssssO', 'OPPPpOPPPppPOppOsssssssO', '.OPPPpOOOOOpppOssssssssO', '..OPPPPPPPpppOsssssssssO', '...OOOOOOOOOOssssssssssO', '.OssssssssssssssssssssO.', 'OsssssssssssssssssssssO.'],
 ];
+/** pulgones: tres puntitos verdes que cambian de sitio */
+const APHID: PixelMap[] = [
+  ['.O...O..', 'OlO.OlO.', '.O.O.O..', '..OlO...', '...O....'],
+  ['...O....', '..OlO.O.', '.O.O.OlO', 'OlO...O.', '.O......'],
+];
 const MOLE_MOUND: PixelMap = [
   '......mmmmmmmm......', '....mmPPmmmmmmmm....', '..mmPPmmmhmPPmmhmm..', '.mmmPmmmmhmmmmmmmmm.',
   'mmmmmhmmmmmhmPPmmmmm', 'mmhmmmmmmmmhmmmmmmhm', '.hhhhmmmmmmmmhhhhhh.', '..hhhhhhhhhhhhhhhh..',
@@ -227,6 +232,7 @@ export interface Atlas {
   crowPeck: Texture[];
   crowFly: Texture[];
   snail: Texture[];
+  aphid: Texture[];
   /** topo asomando: 0 = solo el montículo … 5 = la cabeza entera fuera */
   mole: Texture[];
   /** [color][fotograma] */
@@ -339,6 +345,7 @@ export function buildAtlas(): Atlas {
     crowPeck: CROW_PECK.map(m => tex(m, CRITTER_PAL)),
     crowFly: CROW_FLY.map(m => tex(m, CRITTER_PAL)),
     snail: SNAIL.map(m => tex(m, CRITTER_PAL)),
+    aphid: APHID.map(m => tex(m, CRITTER_PAL)),
     mole: [0, 1, 2, 3, 4, 5].map(rise => artTexture(moleCanvas(rise))),
     butterfly: BUTTERFLY_COLORS.map(X => BUTTERFLY.map(m => tex(m, { X, O: '#1a1c2c' }))),
     frog: FROG.map(m => tex(m, CRITTER_PAL)),

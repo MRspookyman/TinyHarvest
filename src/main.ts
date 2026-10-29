@@ -5,10 +5,11 @@ import { createSound } from './render/sound';
 import { buildAtlas } from './render/sprites';
 import { clearGame, loadGame, saveGame } from './save';
 import {
-  buyHouse, buyNode, buyTalent, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, dismissOrder, endSeason, hire, hireCost,
+  applyAway, buyHouse, buyNode, buyTalent, buyWork, canEndSeason, clickPlot, createGroup, cropUnlocked, deleteGroup, dismissOrder, endSeason, hire, hireCost,
   houseCapacity, houseCost, houseMaxed, moveGnome, nodeCost, plotOrigin, rally, renameGroup, setGroupColor, setGroupSeed, setGroupZone,
   setPriority, tick,
 } from './sim/sim';
+import { AWAY } from './sim/config';
 import { createState } from './sim/state';
 import type { CropId, GameState } from './sim/types';
 import type { GameActions } from './ui/dom';
@@ -22,16 +23,18 @@ import { createHireMenu } from './ui/menus/hire';
 import { createRankingMenu } from './ui/menus/ranking';
 import { createSeasonMenu, createSeasonSummary } from './ui/menus/season';
 import { createTreeMenu } from './ui/menus/tree';
+import { createWorksMenu } from './ui/menus/works';
 import { createNotices } from './ui/notices';
 import { createTutorial } from './ui/tutorial';
 import { installTooltips } from './ui/tooltip';
 import { createZoomControls } from './ui/zoom';
 import { createWindows } from './ui/windows';
-import { AVISOS } from './textos';
+import { createWelcome } from './ui/welcome';
+import { AVISOS, BIENVENIDA } from './textos';
 
 const rng = Math.random;
-// Con el juego cerrado o la pestaña oculta no se avanza: el paso máximo por fotograma es corto
-// y no se recupera el tiempo perdido.
+// Con el juego cerrado o la pestaña oculta no se simula: el paso máximo por fotograma es corto
+// y no se recupera el tiempo perdido. Al volver solo se cobra una parte de lo que se ganaba (applyAway).
 const MAX_DT = 0.1;
 const SAVE_EVERY = 10;
 
@@ -83,6 +86,17 @@ async function start() {
       ]);
     }
   }
+  // ganancias al volver: solo con una partida cargada de verdad (sin parámetros de prueba) y con hora de guardado;
+  // se guarda enseguida para que recargar no las vuelva a cobrar
+  let startAway = { seconds: 0, coins: 0 };
+  if (!location.search && loaded.state && state.savedAt > 0) {
+    const seconds = (Date.now() - state.savedAt) / 1000;
+    const coins = applyAway(state, seconds);
+    if (coins > 0) {
+      startAway = { seconds, coins };
+      persist();
+    }
+  }
   let seed: CropId = 'zanahoria';
   // solo en desarrollo: acceso al estado desde la consola para revisar (window.__th.state)
   if (import.meta.env.DEV) Object.assign(window, { __th: { get state() { return state; } } });
@@ -110,6 +124,7 @@ async function start() {
     hire: job => bought(hire(state, job, rng), 'hire'),
     buyNode: id => bought(buyNode(state, id)),
     buyHouse: () => bought(buyHouse(state)),
+    buyWork: id => bought(buyWork(state, id)),
     createGroup: () => createGroup(state),
     renameGroup: (id, name) => renameGroup(state, id, name),
     setGroupColor: (id, color) => setGroupColor(state, id, color),
@@ -165,16 +180,26 @@ async function start() {
     ranking: createRankingMenu(actions),
     temporada: seasonMenu,
     album: createAlbumMenu(),
+    obras: createWorksMenu(actions),
   });
   const hud = createHud(document.getElementById('topbar')!, stageEl, actions, m => windows.open(m), sound);
   const coinStat = document.querySelector<HTMLElement>('[data-coin-stat]')!;
   const summary = createSeasonSummary(stageEl, actions);
+  const welcome = createWelcome(stageEl);
+  /** bienvenida si se ha estado fuera un buen rato; si no, basta un aviso */
+  const welcomeBack = (seconds: number, coins: number) => {
+    if (coins <= 0) return;
+    if (seconds >= AWAY.dialogSeconds) welcome.show(seconds, coins);
+    else hud.notice('importante', BIENVENIDA.corto(coins));
+  };
+  welcomeBack(startAway.seconds, startAway.coins);
   // después de las ventanas y del resumen: su Esc va primero
   const card = createGnomeCard(stageEl, actions, id => scene.follow(id));
 
   scene.onPlotClick = id => {
     const r = clickPlot(state, id, seed);
     if (r === 'plant') sound.play('plant');
+    if (r === 'shoo') sound.play('click');
     if (r === 'harvest') {
       sound.play('harvest');
       const o = plotOrigin(state.plots[id]);
@@ -204,9 +229,11 @@ async function start() {
       tutorial.update(state, { menu: windows.current, card: card.current });
       zoom.update();
       // la cámara encuadra el huerto en lo que no tapan la barra de abajo ni la ficha (D13); se aplica al siguiente fotograma
+      const bottom = stageEl.clientHeight - toolbar.offsetTop;
+      stageEl.style.setProperty('--toolbar-h', `${bottom}px`);
       scene.setInsets({
         right: card.el.hidden ? 0 : stageEl.clientWidth - card.el.offsetLeft,
-        bottom: stageEl.clientHeight - toolbar.offsetTop,
+        bottom,
       });
       sinceSave += dt;
       if (sinceSave >= SAVE_EVERY) {
@@ -239,8 +266,21 @@ async function start() {
     }
   }
 
+  // al ocultar la pestaña se guarda y se apunta la hora; al volver se cobra una sola vez lo de fuera
+  let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') persist();
+    if (document.visibilityState === 'hidden') {
+      if (!hiddenAt) hiddenAt = Date.now();
+      persist();
+      return;
+    }
+    if (!hiddenAt || broken) return;
+    const seconds = (Date.now() - hiddenAt) / 1000;
+    hiddenAt = 0;
+    const coins = applyAway(state, seconds);
+    if (coins <= 0) return;
+    persist();
+    welcomeBack(seconds, coins);
   });
   window.addEventListener('pagehide', persist);
 }

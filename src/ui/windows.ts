@@ -3,6 +3,7 @@ import { buttonImage, frameImage } from '../render/icons';
 import type { GameState } from '../sim/types';
 import { MENUS, UI, type MenuId } from '../textos';
 import { html } from './dom';
+import { focusOwner, isTopLayer, restoreFocus, trapTab } from './focus';
 
 export interface Menu {
   el: HTMLElement;
@@ -28,6 +29,8 @@ export function createWindows(host: HTMLElement, menus: Record<MenuId, Menu>): W
   const layer = html(`<div class="win-layer" hidden></div>`);
   host.append(layer);
   let current: MenuId | null = null;
+  /** quién tenía el foco antes de abrir; se conserva al pasar de un menú a otro */
+  let opener: HTMLElement | null = null;
 
   const shells = {} as Record<MenuId, HTMLElement>;
   for (const id of Object.keys(menus) as MenuId[]) {
@@ -54,9 +57,12 @@ export function createWindows(host: HTMLElement, menus: Record<MenuId, Menu>): W
   layer.addEventListener('pointerdown', e => {
     if (e.target === layer) close();
   });
-  // Esc cierra la ventana; se marca como usada para que no cierre también la ficha del gnomo
+  // Esc cierra la ventana; se marca como usada para que no cierre también la ficha del gnomo.
+  // Si el resumen o la bienvenida están encima, la tecla es suya.
   window.addEventListener('keydown', e => {
-    if (e.key !== 'Escape' || !current) return;
+    if (!current || e.defaultPrevented || !isTopLayer(layer)) return;
+    if (e.key === 'Tab') trapTab(e, shells[current]);
+    if (e.key !== 'Escape') return;
     e.preventDefault();
     close();
   });
@@ -64,6 +70,7 @@ export function createWindows(host: HTMLElement, menus: Record<MenuId, Menu>): W
   function open(id: MenuId) {
     if (current === id) return;
     if (current) shells[current].hidden = true;
+    else opener = focusOwner();
     current = id;
     layer.hidden = false;
     shells[id].hidden = false;
@@ -76,6 +83,9 @@ export function createWindows(host: HTMLElement, menus: Record<MenuId, Menu>): W
     shells[current].hidden = true;
     current = null;
     layer.hidden = true;
+    const back = opener;
+    opener = null;
+    restoreFocus(back);
   }
 
   return {

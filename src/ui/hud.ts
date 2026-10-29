@@ -1,10 +1,10 @@
 // Monedas y organización arriba, accesos y semillas abajo, y avisos seleccionados sobre el huerto.
 import { CROP_IDS, RALLY, SEASONS } from '../sim/config';
-import { cropUnlocked, cropValue, favoriteCrop, masteryLevel, masteryNext, nextGoal, seasonOf } from '../sim/sim';
+import { cropUnlocked, cropValue, favoriteCrop, marketMult, masteryLevel, masteryNext, nextGoal, seasonOf, seasonSeeds, workSeeds } from '../sim/sim';
 import type { CropId, GameState, OrgPart } from '../sim/types';
 import { cropIcons, goldenSeedIcon, menuIcons, rallyIcon } from '../render/icons';
 import type { Sound } from '../render/sound';
-import { ARBOL, CULTIVOS, ENCARGOS, ESTACIONES, MAESTRIA, MENUS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
+import { ARBOL, CULTIVOS, ENCARGOS, ESTACIONES, MAESTRIA, MENUS, OBRAS, ORG, TEMPORADA, UI, type MenuId } from '../textos';
 import { esc, pixelImg, setDisabled, setText, toggleClass, type GameActions } from './dom';
 
 export interface Hud {
@@ -45,6 +45,7 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
       </div>
       <span class="stat"><b data-gnomes>0</b> ${UI.gnomos}</span>
       <span class="stat estacion" data-estacion><span data-estacion-name></span> · <img class="px" alt="" data-estacion-icon><span data-estacion-fav></span></span>
+      <span class="stat clock" data-clock data-tip="${esc(UI.relojAyuda)}"></span>
       <span class="stat" data-prestige hidden data-tip="${esc(TEMPORADA.saldo)}">${pixelImg(goldenSeedIcon, 'px seed-icon')}<b data-gold>0</b> · <span data-season></span></span>
       <button type="button" class="sound-btn" data-sound aria-pressed="false"><i aria-hidden="true"></i></button>
     </div>`;
@@ -162,18 +163,22 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
 
       // próximo objetivo (G3): nombre, barra y cifras; brilla cuando ya se puede
       const goal = nextGoal(s);
-      const name = goal.kind === 'node' ? ARBOL[goal.id].nombre : UI.proximoSemilla(goal.seeds);
+      const name = goal.kind === 'node' ? ARBOL[goal.id].nombre : goal.kind === 'work' ? OBRAS[goal.id].nombre : UI.proximoSemilla(goal.seeds);
       const fill = Math.min(1, goal.have / goal.need);
-      goalMenu = goal.kind === 'node' ? 'arbol' : 'temporada';
+      // lo que se compra con monedas (nodo u obra) brilla cuando ya alcanza
+      const buyable = goal.kind !== 'seed';
+      goalMenu = goal.kind === 'node' ? 'arbol' : goal.kind === 'work' ? 'obras' : 'temporada';
       setText(goalBtn.querySelector('[data-goal-name]'), name);
-      setText(goalBtn.querySelector('[data-goal-nums]'), fill >= 1 && goal.kind === 'node' ? UI.listo : `${Math.floor(goal.have)} / ${goal.need}`);
+      setText(goalBtn.querySelector('[data-goal-nums]'), fill >= 1 && buyable ? UI.listo : `${Math.floor(goal.have)} / ${goal.need}`);
       const width = `${Math.round(fill * 100)}%`;
       const goalFill = goalBtn.querySelector<HTMLElement>('[data-goal-fill]')!;
       if (goalFill.style.width !== width) goalFill.style.width = width;
-      toggleClass(goalBtn, 'ready', fill >= 1 && goal.kind === 'node');
-      const help = goal.kind === 'node' ? UI.proximoAyuda : UI.proximoSemillaAyuda;
+      toggleClass(goalBtn, 'ready', fill >= 1 && buyable);
+      const help = goal.kind === 'node' ? UI.proximoAyuda : goal.kind === 'work' ? UI.proximoObraAyuda : UI.proximoSemillaAyuda;
       if (goalBtn.dataset.tip !== help) goalBtn.dataset.tip = help;
       setText(topbar.querySelector('[data-gnomes]'), String(s.gnomes.length));
+      // reloj de la temporada y semillas que se llevaría si acabara ahora
+      setText(topbar.querySelector('[data-clock]'), `${TEMPORADA.duracion(s.seasonTime)} · ${UI.semillasAhora(seasonSeeds(s) + workSeeds(s))}`);
       // semillas doradas y temporada: solo cuando ya significan algo
       const { goldenSeeds, season } = s.prestige;
       const prestige = topbar.querySelector<HTMLElement>('[data-prestige]')!;
@@ -225,7 +230,10 @@ export function createHud(topbar: HTMLElement, stage: HTMLElement, actions: Game
         const next = masteryNext(s, c);
         if (btn.dataset.level !== String(level)) btn.dataset.level = String(level);
         const mastery = level || s.mastery[c] ? ` ${MAESTRIA.nivel(level)}: ${next === null ? MAESTRIA.maximo : MAESTRIA.progreso(s.mastery[c], next)}.` : '';
-        const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}.${mastery}`;
+        const mult = marketMult(s, c);
+        const market = mult < 0.95 ? ` ${UI.mercado(mult)}` : '';
+        toggleClass(btn, 'saturated', mult < 0.9);
+        const title = locked ? `${CULTIVOS[c].nombre}: ${UI.bloqueadaEnArbol}` : `${CULTIVOS[c].nombre} (${UI.vale(Math.round(cropValue(s, c)))}). ${UI.semillaAyuda}.${mastery}${market}`;
         if (btn.dataset.tip !== title) btn.dataset.tip = title;
         if (btn.getAttribute('aria-label') !== title) btn.setAttribute('aria-label', title);
       }

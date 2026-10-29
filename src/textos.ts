@@ -1,8 +1,8 @@
 // Todos los textos del juego. Para retocar el tono, se cambia aquí.
 import {
-  BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, GUARD, MERCADO_PER_LEVEL, PORTER_CAPACITY, TALENT_EFFECT, WATER,
+  AWAY, BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROPS, GUARD, MERCADO_PER_LEVEL, PORTER_CAPACITY, TALENT_EFFECT, WATER, WORK_EFFECT,
 } from './sim/config';
-import type { Branch, CropId, JobId, NodeId, OrgPart, Priority, TalentId, TraitId } from './sim/types';
+import type { Branch, CropId, JobId, NodeId, OrgPart, Priority, TalentId, TraitId, WorkId } from './sim/types';
 
 const pct = (f: number) => `${Math.round(f * 100)} %`;
 
@@ -14,6 +14,7 @@ export const UI = {
   vale: (n: number) => `vale ${n}`,
   semilla: 'Semilla',
   semillaAyuda: 'Lo que plantas al hacer clic en la tierra',
+  mercado: (mult: number) => `Mercado ×${mult.toLocaleString('es-ES', { maximumFractionDigits: 2 })}: se vende demasiado; siembra otra cosa un rato`,
   bloqueadaEnArbol: 'Se desbloquea en el árbol de mejoras',
   tienes: (n: number) => `Tienes ${n}`,
   contratar: (n: number) => `Contratar · ${n}`,
@@ -38,6 +39,7 @@ export const UI = {
   proximoAyuda: 'Lo siguiente que puedes conseguir. Pulsa para abrir el árbol de mejoras.',
   proximoSemilla: (n: number) => (n === 1 ? 'La primera semilla dorada' : `Semilla dorada n.º ${n}`),
   proximoSemillaAyuda: 'El árbol está completo: cuanto más ganes esta temporada, más semillas doradas te llevarás. Pulsa para ver la estatua.',
+  proximoObraAyuda: 'El árbol está completo: cada nivel de obra es una semilla dorada más al acabar la temporada. Pulsa para ver las obras.',
   listo: '¡Ya puedes!',
   sonido: 'Sonido',
   sonidoOn: 'Quitar el sonido',
@@ -54,6 +56,9 @@ export const UI = {
   alejar: 'Alejar (rueda del ratón, − o pellizcar)',
   encuadre: 'Volver a ver todo el huerto (0)',
   arrastrar: 'Arrastra el huerto para moverte',
+  // reloj de la temporada en la barra
+  semillasAhora: (n: number) => `→ ${n === 1 ? '1 semilla' : `${n} semillas`}`,
+  relojAyuda: 'Tiempo de esta temporada y semillas doradas que te llevarías si acabas ahora',
 };
 
 /** Avisos de guardado y de errores: se quedan hasta que se resuelven. */
@@ -78,6 +83,7 @@ export const MENUS = {
   ranking: { titulo: 'Gnomos del mes', sub: 'Quién destaca en el huerto', lugar: 'Ranking', boton: 'Ranking' },
   temporada: { titulo: 'Estatua del Gnomo Dorado', sub: 'Temporada y talentos', lugar: 'Estatua del Gnomo Dorado', boton: 'Estatua' },
   album: { titulo: 'Álbum del huerto', sub: 'Cromos de todas las temporadas', lugar: 'Álbum', boton: 'Álbum' },
+  obras: { titulo: 'Obras del pueblo', sub: 'Grandes obras de fin de temporada: cada nivel, una semilla dorada más', lugar: 'Obras del pueblo', boton: 'Obras' },
 } as const;
 export type MenuId = keyof typeof MENUS;
 
@@ -149,6 +155,19 @@ export const CASA = {
   maximo: 'La casa no da para más: ya roza las nubes',
 };
 
+/** Obras de fin de temporada: se abren con el árbol completo, junto a la casa. */
+export const OBRAS: Record<WorkId, { nombre: string; desc: string }> = {
+  molino: { nombre: 'Molino', desc: `El mercado se recupera un ${pct(WORK_EFFECT.molino)} más rápido por nivel.` },
+  invernadero: { nombre: 'Invernadero', desc: `Todo crece un ${pct(WORK_EFFECT.invernadero)} más rápido por nivel.` },
+  fuente: { nombre: 'Fuente', desc: `El riego dura un ${pct(WORK_EFFECT.fuente)} más por nivel; a nivel 3 los regadores no vuelven al pozo.` },
+};
+
+export const OBRA = {
+  bloqueada: 'Termina el árbol viejo para empezar las obras',
+  construir: (coste: number) => `Construir · ${coste}`,
+  semillas: (n: number) => (n === 1 ? '+1 semilla dorada al acabar la temporada' : `+${n} semillas doradas al acabar la temporada`),
+};
+
 export const GRUPOS = {
   primero: 'Los de siempre',
   sugerencias: ['Los Madrugadores', 'La Brigada del Surco', 'Los Sin Prisa', 'Comando Zanahoria', 'Los del Fondo', 'La Peña del Rastrillo', 'Los Barbas', 'Los Siesteros', 'Escuadrón Tomate', 'Los Que Llegan Tarde'],
@@ -170,6 +189,8 @@ export const GRUPOS = {
   zona: 'Zona',
   zonaTodo: 'Todo el bancal',
   zonaAyuda: 'Pulsa dos parcelas para marcar las esquinas de la zona. Recolectores, sembradores y regadores del grupo solo trabajan dentro; porteadores y guardianes van a todas partes.',
+  destreza: (pct: number) => `Destreza +${pct} %`,
+  destrezaAyuda: 'Con zona y semilla fijas, el grupo coge destreza (hasta +30 %)',
   zonaEsquina: 'Ahora pulsa la otra esquina',
   zonaDesc: (c0: number, c1: number, r0: number, r1: number) =>
     `${c0 === c1 ? `Columna ${c0 + 1}` : `Columnas ${c0 + 1}–${c1 + 1}`} · ${r0 === r1 ? `fila ${r0 + 1}` : `filas ${r0 + 1}–${r1 + 1}`}`,
@@ -250,9 +271,13 @@ export const LOG = {
   cuervo: 'Un cuervo aterriza en el bancal y mira las cosechas con mucho interés.',
   cuervoCome: (uno: string) => `El cuervo se ha zampado ${uno} y se va sin pagar.`,
   cuervoFuera: (n: string) => `${n} espanta al cuervo agitando los brazos. El cuervo se ofende.`,
+  bandada: '¡Una bandada de cuervos! Que alguien avise a los guardianes',
+  obra: (nombre: string, nivel: number) => `${nombre}: nivel ${nivel} terminado. Los gnomos posan para la foto con el casco torcido.`,
+  obrasAbiertas: '¡Árbol completo! El pueblo propone tres obras junto a la casa',
   caracol: 'Un caracol cruza el bancal. Lleva prisa, a su manera.',
   topo: 'Un topo asoma en el bancal, mira alrededor y decide quedarse un rato.',
   topoFuera: 'El topo se va por donde vino. Deja un agujero y ningún comentario.',
+  pulgon: 'Pulgones en el bancal: esa planta crece a medias',
   ranas: 'Llueven ranas. Los gnomos lo encuentran normal para ser martes.',
   sindicato: 'El sindicato gnomo pide más café. Todos paran con los brazos cruzados.',
   sindicatoFin: 'Acaba la huelga: los gnomos vuelven al tajo con la taza en la mano.',
@@ -271,6 +296,7 @@ export const LOG = {
     ? `${n} vuelve del año pasado con la corona en la mochila. «¿Me habéis echado de menos?» Nadie contesta.`
     : `${n} vuelve por ${temporadas}.ª temporada. Ya tiene taza con su nombre y opiniones sobre todo.`),
   experiencia: (n: number) => `${n} gnomos con experiencia esperan en la puerta. No han cobrado nada: dicen que es por amor al surco.`,
+  vuelta: (n: number) => `Mientras no estabas, los gnomos han seguido a medio gas y han sacado ${n} monedas. Juran que no han echado ni una siesta.`,
 };
 
 /** Árbol dorado de talentos: se compra con semillas doradas y dura para siempre. */
@@ -527,6 +553,27 @@ export const TEMPORADA = {
   resumenSigue: (n: number) => `Empieza la temporada ${n}. El huerto huele a nuevo.`,
   vamos: '¡A plantar!',
   verFama: 'Ver salón de la fama',
+};
+
+/** Bienvenida al volver tras un rato fuera: los gnomos han seguido trabajando a medio gas. */
+export const BIENVENIDA = {
+  titulo: '¡Has vuelto!',
+  fuera: (tiempo: string) => `Has estado fuera ${tiempo}.`,
+  tope: (() => {
+    const h = AWAY.maxSeconds / 3600;
+    return `(los gnomos solo llevan la cuenta de ${h === 1 ? '1 hora' : `${h} horas`})`;
+  })(),
+  monedas: (n: number) => `Tus gnomos han seguido a medio gas: +${n} monedas`,
+  corto: (n: number) => `Los gnomos han seguido a lo suyo mientras no mirabas: +${n} monedas`,
+  frases: [
+    'Han regado las zanahorias con mucho mimo y una canción que nadie quiere volver a oír.',
+    'Alguien ha montado un torneo de carretillas. Ha ganado la carretilla.',
+    'Han votado a quién le tocaba fregar las tazas. Ha salido un empate entre todos.',
+    'Un tomate ha madurado sin que nadie lo viera. Hay sospechas.',
+    'Han ensayado una bienvenida con pancarta, pero la pancarta se la comió un cuervo.',
+    'Dicen que han trabajado muchísimo. Las huellas de siesta en la paja dicen otra cosa.',
+  ],
+  seguir: '¡A trabajar!',
 };
 
 /** Tutorial (F5): unas pistas cortas, de una en una, que avanzan cuando el jugador hace lo que dicen. */

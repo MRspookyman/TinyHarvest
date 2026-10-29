@@ -1,4 +1,4 @@
-import type { Branch, CritterKind, CropId, JobId, NodeId, Priority, TalentId, TraitId } from './types';
+import type { Branch, CritterKind, CropId, JobId, NodeId, Priority, TalentId, TraitId, WorkId } from './types';
 
 // Coordenadas en píxeles lógicos del mundo (rejilla de 16 px por sprite).
 export const WORLD = { w: 300, h: 200 } as const;
@@ -129,6 +129,12 @@ export const TREE: Record<NodeId, NodeDef> = {
 export const CARRETILLA_PER_LEVEL = 3;
 export const CONSERVAS_PER_LEVEL = 0.25;
 export const MERCADO_PER_LEVEL = 0.15;
+/**
+ * Saturación del mercado: se recuerda lo vendido de cada cultivo (en monedas base, con olvido exponencial de
+ * `window` s). Si un cultivo pasa de su cuota libre (1 / min(fullMix, cultivos desbloqueados)), vale menos:
+ * 1 − slope × exceso, nunca por debajo de `floor`. Con menos de `minSample` monedas recordadas no hay castigo.
+ */
+export const MARKET = { window: 120, floor: 0.6, slope: 0.6, fullMix: 3, minSample: 50 } as const;
 
 /**
  * Riego (iteración 7). Una parcela regada crece WATER.boost veces más rápido durante `duration` s (más con la
@@ -182,6 +188,34 @@ export const ORG = {
 } as const;
 export const NODE_IDS = Object.keys(TREE) as NodeId[];
 export const TREE_ROOT = { x: 50, y: 90 } as const;
+
+// ---------- Obras de fin de temporada ----------
+
+/**
+ * Obras del pueblo: se abren con el árbol completo; cada nivel (hasta 3) da una semilla dorada más al acabar la
+ * temporada. Las cajas ocupan el hueco bajo el árbol viejo y la casa (y ≥ 150, borde inferior en 194).
+ */
+export const WORK_IDS: WorkId[] = ['molino', 'invernadero', 'fuente'];
+export const WORKS: Record<WorkId, { costs: readonly [number, number, number]; x: number; y: number; w: number; h: number }> = {
+  molino:      { costs: [20000, 60000, 180000], x: 8,  y: 150, w: 30, h: 44 },
+  invernadero: { costs: [20000, 60000, 180000], x: 42, y: 162, w: 34, h: 32 },
+  fuente:      { costs: [20000, 60000, 180000], x: 82, y: 168, w: 24, h: 26 },
+};
+/** nivel máximo de cada obra */
+export const WORK_MAX = 3;
+/** molino: el mercado olvida un 30 % más rápido; invernadero: +10 % de crecimiento; fuente: riego +30 % */
+export const WORK_EFFECT = { molino: 0.3, invernadero: 0.1, fuente: 0.3 } as const;
+
+// ---------- Ganancias al volver ----------
+
+/**
+ * Al volver se cobra una parte de lo que se ganaba (media de monedas/s con olvido de `window` s), con tope de tiempo.
+ * share: fracción del ritmo; maxSeconds: tope de tiempo fuera; minSeconds: por debajo no se cobra nada;
+ * dialogSeconds: desde aquí se muestra la bienvenida en vez de un aviso.
+ */
+export const AWAY = { share: 0.5, maxSeconds: 7200, minSeconds: 60, dialogSeconds: 300, window: 300 } as const;
+/** gesto táctil, encuadre vertical y densidad de partículas con movimiento reducido */
+export const ACCESSIBILITY = { longPressMs: 450, movePx: 8, particleEvery: 4, portraitRatio: 1.1 } as const;
 
 // ---------- Prestigio (iteración 8) ----------
 
@@ -252,16 +286,27 @@ export const BUBBLES = { routine: 1 / 6, max: 4 } as const;
 /** dos gnomos andando a menos de esto se ven; luego cada uno tarda MEET_COOLDOWN en volver a reaccionar */
 export const MEET_DIST = 6;
 export const MEET_COOLDOWN = 20;
-/** segundos entre sucesos pequeños (cuervo, caracol, topo) */
+/** destreza por minuto con zona y semilla fijas; solo acelera el trabajo */
+export const SKILL = { perMin: 0.05, max: 0.3 } as const;
+/** segundos entre sucesos pequeños (cuervo, caracol, topo, pulgón) */
 export const EVENT_GAP = { min: 30, max: 90, first: 30 } as const;
 /** uno de cada tantos sucesos es un suceso raro (ranas, sindicato, espantapájaros) */
 export const HAPPENING_EVERY = 8;
 /** el cuervo se come la planta a los CROW_EAT s; un gnomo libre se da cuenta a los CROW_NOTICE s */
-export const CROW_EAT = 8;
+export const CROW_EAT = 5;
 export const CROW_NOTICE = 1;
+/** distancia máxima (px del mundo) a la que un gnomo libre que no es guardián va a espantar un cuervo */
+export const CROW_REACH = 60;
+/** bandada: con el bancal de al menos minPlots parcelas, a veces bajan hasta size cuervos a la vez */
+export const FLOCK = { minPlots: 30, chance: 0.25, size: 3 } as const;
+/**
+ * pulgón: la planta crece a slow; cada spread s salta a una vecina; se va a los life s (o al madurar la planta);
+ * nunca hay más de max a la vez
+ */
+export const APHID = { slow: 0.5, spread: 20, life: 60, max: 4 } as const;
 /** el topo bloquea su parcela este tiempo */
 export const MOLE_TIME = 15;
-export const CRITTER_SPEED: Record<CritterKind, number> = { cuervo: 45, caracol: 4, topo: 0, mariposa: 14, rana: 26 };
+export const CRITTER_SPEED: Record<CritterKind, number> = { cuervo: 45, caracol: 4, topo: 0, mariposa: 14, rana: 26, pulgon: 0 };
 /** sucesos raros: duración (s) */
 export const HAPPENING_TIME = { ranas: 8, sindicato: 8, sindicatoCafe: 4, espantapajaros: 15 } as const;
 /**

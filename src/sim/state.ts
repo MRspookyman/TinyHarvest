@@ -1,11 +1,11 @@
 import {
   CROP_IDS, EVENT_GAP, FIELD, GROUP_NAME_MAX, GROUP_PALETTE, HOUSE, JOB_IDS, MAX_GROUPS, NODE_IDS, ORDERS, ORG, PRESTIGE, PRIORITIES,
-  RALLY, RIPE, ROTTEN, TALENT_IDS, TALENTS, TRAIT_IDS, TREE,
+  RALLY, RIPE, ROTTEN, SKILL, TALENT_IDS, TALENTS, TRAIT_IDS, TREE, WORK_IDS, WORK_MAX,
 } from './config';
 import { GRUPOS, LOG } from '../textos';
 import type {
   CropId, GameState, Gnome, GnomeGroup, GnomeStats, JobId, NodeId, Plot, Prestige, Priority, Rng, SeasonRecord, TalentId,
-  TraitId, Veteran, Zone,
+  TraitId, Veteran, WorkId, Zone,
 } from './types';
 import { ALBUM_IDS } from './album';
 
@@ -56,7 +56,7 @@ export function createState(rng: Rng): GameState {
     basket: [],
     gnomes: [],
     hired: Object.fromEntries(JOB_IDS.map(j => [j, 0])) as Record<JobId, number>,
-    groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano', seed: null, zone: null }],
+    groups: [{ id: 1, name: GRUPOS.primero, color: 0, priority: 'cercano', seed: null, zone: null, skill: 0 }],
     nextGroupId: 2,
     nextId: 1,
     manualHarvests: 0,
@@ -72,7 +72,11 @@ export function createState(rng: Rng): GameState {
     nextEventIn: EVENT_GAP.first,
     happening: null,
     mastery: Object.fromEntries(CROP_IDS.map(c => [c, 0])) as Record<CropId, number>,
+    market: Object.fromEntries(CROP_IDS.map(c => [c, 0])) as Record<CropId, number>,
+    works: Object.fromEntries(WORK_IDS.map(id => [id, 0])) as Record<WorkId, number>,
     rally: { t: 0, cd: 0 },
+    rate: 0,
+    savedAt: 0,
     order: null,
     nextOrderIn: ORDERS.first,
     log: [LOG.inicio],
@@ -81,9 +85,10 @@ export function createState(rng: Rng): GameState {
 }
 
 // ---------- Guardado ----------
-// Solo se guarda el estado duradero. Lo que el gnomo estaba haciendo se descarta
-// y al cargar vuelve a pensar; no se simula el tiempo que pasó fuera. Los bichos y los sucesos tampoco se guardan,
-// ni el multiplicador de organización: se recalcula solo.
+// Solo se guarda el estado duradero. Lo que el gnomo estaba haciendo se descarta y al cargar vuelve a pensar.
+// El huerto no se simula mientras no estás (ni crece ni se trabaja): al volver solo se cobra una parte del ritmo
+// de monedas guardado (ver applyAway). Los bichos y los sucesos tampoco se guardan,
+// ni el multiplicador de organización ni la saturación del mercado: se recalculan solos.
 // Los campos opcionales (semilla del grupo, estadísticas, podredumbre) se rellenan al cargar si faltan;
 // los cambios de forma van en MIGRATIONS. Los oficios y cultivos que falten (partidas viejas) empiezan en cero.
 
@@ -107,6 +112,11 @@ export interface SaveData {
   seasonTime: number;
   mastery?: Record<CropId, number>;
   rally?: { t: number; cd: number };
+  works?: Record<WorkId, number>;
+  /** media de monedas/s al guardar */
+  rate?: number;
+  /** momento del guardado, en ms de época */
+  savedAt?: number;
   prestige: Prestige;
   crowns: Record<JobId, number | null>;
   plots: { crop: CropId; stage: number; t: number; wet: number; golden?: boolean }[];
@@ -117,7 +127,8 @@ export interface SaveData {
   log: string[];
 }
 
-export function serialize(s: GameState): SaveData {
+/** savedAt: momento del guardado en ms de época (Date.now() al guardar; fijo en los tests) */
+export function serialize(s: GameState, savedAt: number): SaveData {
   return {
     v: SAVE_VERSION,
     coins: s.coins,
@@ -134,6 +145,9 @@ export function serialize(s: GameState): SaveData {
     seasonTime: s.seasonTime,
     mastery: { ...s.mastery },
     rally: { ...s.rally },
+    works: { ...s.works },
+    rate: s.rate,
+    savedAt,
     prestige: structuredClone(s.prestige),
     plots: s.plots.map(p => ({ crop: p.crop, stage: p.stage, t: p.t, wet: p.wet, golden: p.golden })),
     crowns: { ...s.crowns },
@@ -205,7 +219,10 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
   for (const j of JOB_IDS) s.hired[j] = int(d.hired?.[j], 0, 0, 999);
   s.seasonTime = Math.max(0, num(d.seasonTime, 0));
   for (const c of CROP_IDS) s.mastery[c] = int(d.mastery?.[c], 0, 0, 1e9);
+  for (const id of WORK_IDS) s.works[id] = int(d.works?.[id], 0, 0, WORK_MAX);
   s.rally = { t: Math.min(RALLY.duration, Math.max(0, num(d.rally?.t, 0))), cd: Math.min(RALLY.cooldown, Math.max(0, num(d.rally?.cd, 0))) };
+  s.rate = Math.max(0, num(d.rate, 0));
+  s.savedAt = Math.max(0, num(d.savedAt, 0));
   s.prestige = loadPrestige(d.prestige);
 
   if (Array.isArray(d.groups)) {
@@ -219,6 +236,7 @@ export function deserialize(raw: unknown, rng: Rng): GameState | null {
         priority: PRIORITIES.includes(g.priority) ? g.priority : ('cercano' as Priority),
         seed: isCrop(g.seed) ? g.seed : null,
         zone: loadZone(g.zone),
+        skill: Math.min(SKILL.max / SKILL.perMin * 60, Math.max(0, num(g.skill, 0))),
       }));
     if (groups.length) s.groups = groups;
   }

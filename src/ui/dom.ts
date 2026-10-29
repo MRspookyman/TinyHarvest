@@ -1,11 +1,13 @@
 // Utilidades pequeñas para la interfaz HTML.
-import type { CropId, JobId, NodeId, Priority, TalentId, Zone } from '../sim/types';
+import type { CropId, JobId, NodeId, Priority, TalentId, WorkId, Zone } from '../sim/types';
 
 /** Lo que la interfaz puede pedirle al juego. main.ts lo conecta con la simulación. */
 export interface GameActions {
   hire(job: JobId): void;
   buyNode(id: NodeId): void;
   buyHouse(): void;
+  /** obra de fin de temporada: un nivel más */
+  buyWork(id: WorkId): void;
   createGroup(): void;
   renameGroup(id: number, name: string): void;
   setGroupColor(id: number, color: number): void;

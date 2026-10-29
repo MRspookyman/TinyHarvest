@@ -2,16 +2,16 @@
 import { test } from 'vitest';
 import {
   BASKET, CARRETILLA_PER_LEVEL, CONSERVAS_PER_LEVEL, CROP_IDS, CROPS, DOOR, FIELD, HARVEST_TIME, HOUSE, IDLE_AREA, MAX_GNOMES,
-  JOB_NODE, NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_IDS, TREE, WATER, WELL,
+  JOB_NODE, NODE_IDS, PICKUP_TIME, PLANT_TIME, PORTER_CAPACITY, PRESTIGE, RIPE, ROTTEN, TALENT_IDS, TREE, WATER, WELL, WORK_IDS,
 } from '../src/sim/config';
 import {
-  buyHouse, buyNode, buyTalent, canEndSeason, capacity, clickPlot, createGroup, cropsEaten, cropUnlocked, cropValue, endSeason, hasPorters, hire,
-  hireCost, houseCapacity, houseCost, houseMaxed, isOpen, jobUnlocked, moveGnome, nodeCost, nodeMaxed, nodeReachable, plotStand,
+  buyHouse, buyNode, buyTalent, canEndSeason, capacity, clickPlot, createGroup, cropsEaten, cropUnlocked, cropValue, endSeason, fieldSize, hasPorters,
+  hire, hireCost, houseCapacity, houseCost, houseMaxed, inZone, isOpen, jobUnlocked, moveGnome, nodeCost, nodeMaxed, nodeReachable, plotStand,
   porterCapacity, seasonSeeds, setGroupSeed, setGroupZone, setPriority, stageTime, startEvent, talentCost, talentMaxed, talentReachable, tick,
-  walkSpeed, waterTime, waterWork, workMult,
+  walkSpeed, waterTime, waterWork, workMult, buyWork, treeComplete, workCost, workSeeds,
 } from '../src/sim/sim';
 import { createState } from '../src/sim/state';
-import type { CropId, GameState, JobId, MomentKind, NodeId, Priority, Rng, TalentId } from '../src/sim/types';
+import type { CropId, GameState, JobId, MomentKind, NodeId, Plot, Priority, Rng, TalentId } from '../src/sim/types';
 
 const SEED = 12345;
 const DT = 0.1;
@@ -64,10 +64,10 @@ const REST_TIME = 0.3;
  *   - lo que siembran los sembradores: plantar más un salto entre dos parcelas cualesquiera del bancal
  *     (1,5 × la distancia media al centro),
  * y los clics del jugador suman medio cultivo por clic a recoger y a sembrar (cada cultivo pide dos clics).
- * Se elige el cultivo desbloqueado con más (ritmo × valor de venta). Así la zanahoria gana con bancal pequeño y
- * gente de sobra, y la calabaza cuando faltan manos para tantos viajes.
+ * Se ordenan los cultivos desbloqueados de más a menos (ritmo × valor de venta), con el valor de mercado del momento.
+ * Así la zanahoria gana con bancal pequeño y gente de sobra, y la calabaza cuando faltan manos para tantos viajes.
  */
-function chooseCrop(s: GameState, clicksPerSec: number): CropId {
+function rankCrops(s: GameState, clicksPerSec: number): CropId[] {
   const speed = walkSpeed(s);
   const wm = workMult(s);
   const stands = s.plots.filter(p => isOpen(s, p)).map(plotStand);
@@ -90,8 +90,7 @@ function chooseCrop(s: GameState, clicksPerSec: number): CropId {
   const waterHop = (1.5 * meanDist(centre.x, centre.y)) / speed + waterWork(s) * wm;
   const refill = ((2 * meanDist(well.x, well.y)) / speed + WATER.refill * wm) / WATER.can;
   const waterings = staff(s, 'regador') / (waterHop + refill);
-  let best: CropId = 'zanahoria';
-  let bestRate = -1;
+  const rated: { crop: CropId; rate: number }[] = [];
   for (const c of CROP_IDS) {
     if (!cropUnlocked(s, c)) continue;
     // parte del crecimiento que pasa regado: cada riego cubre su duración (o lo que le queda por crecer pasado
@@ -100,13 +99,82 @@ function chooseCrop(s: GameState, clicksPerSec: number): CropId {
     const wetShare = Math.min(1, (waterings * Math.max(0, Math.min(waterTime(s), grow - WATER.low))) / stands.length);
     const speedUp = wetShare * WATER.boost + (1 - wetShare) * (CROPS[c].thirsty ? WATER.dry : 1);
     const field = stands.length / (grow / speedUp + latency);
-    const rate = Math.min(field, harvest, plant) * cropValue(s, c);
-    if (rate > bestRate) {
-      bestRate = rate;
-      best = c;
-    }
+    rated.push({ crop: c, rate: Math.min(field, harvest, plant) * cropValue(s, c) });
   }
-  return best;
+  // orden estable: a igual ritmo, el primero de CROP_IDS
+  return rated.sort((a, b) => b.rate - a.rate).map(r => r.crop);
+}
+
+/** El cultivo que más rinde (el primero de `rankCrops`). */
+const chooseCrop = (s: GameState, clicksPerSec: number): CropId => rankCrops(s, clicksPerSec)[0];
+
+// ---------- Bot de siembra ----------
+
+/** cultivos (y grupos) del bot diversificado */
+const MIX = 3;
+/** oficios que se reparten por turnos entre los grupos del bot diversificado */
+const MIX_JOBS = ['recolector', 'sembrador', 'regador'] as const satisfies readonly JobId[];
+
+/**
+ * Qué siembra el bot. Con un solo grupo, el mejor cultivo en todo el bancal. Desde que hay MIX cultivos y MIX
+ * sembradores, MIX grupos (creados una sola vez): cada uno con un tercio de las columnas abiertas y uno de los MIX
+ * mejores cultivos, y los gnomos de MIX_JOBS repartidos por turnos.
+ */
+interface Sower {
+  /** el mejor cultivo: lo siembra el grupo único y lo planta el jugador fuera de las zonas */
+  crop: CropId;
+  /** ids de los MIX grupos; null mientras siembra un solo grupo */
+  groups: number[] | null;
+  /** columnas abiertas con que se trazaron las zonas */
+  cols: number;
+}
+
+const groupById = (s: GameState, id: number) => s.groups.find(g => g.id === id)!;
+
+/**
+ * Cada CHOOSE_STEPS repiensa cultivos (y zonas si se ha abierto bancal); las semillas de los grupos solo cambian si
+ * cambia el conjunto de los MIX mejores, y el grupo que conserva su cultivo no lo cambia (no pierde destreza).
+ * En cada paso coloca en su grupo a los gnomos recién contratados (entran en el primero).
+ */
+function plan(s: GameState, bot: Sower, clicksPerSec: number, n: number) {
+  if (n % CHOOSE_STEPS === 0) {
+    const ranked = rankCrops(s, clicksPerSec);
+    if (!bot.groups && ranked.length >= MIX && staff(s, 'sembrador') >= MIX) {
+      bot.groups = [s.groups[0].id, ...Array.from({ length: MIX - 1 }, () => createGroup(s)!.id)];
+    }
+    if (!bot.groups) {
+      if (ranked[0] !== bot.crop || n === 0) setGroupSeed(s, s.groups[0].id, ranked[0]);
+    } else {
+      const groups = bot.groups;
+      const { cols } = fieldSize(s);
+      if (cols !== bot.cols) {
+        bot.cols = cols;
+        groups.forEach((id, i) => setGroupZone(s, id, {
+          c0: Math.floor((i * cols) / MIX), r0: 0, c1: Math.floor(((i + 1) * cols) / MIX) - 1, r1: FIELD.maxRows - 1,
+        }));
+      }
+      const top = ranked.slice(0, MIX);
+      const seeds = groups.map(id => groupById(s, id).seed);
+      const missing = top.filter(c => !seeds.includes(c));
+      groups.forEach((id, i) => {
+        const seed = seeds[i];
+        if (seed !== null && top.includes(seed)) return;
+        setGroupSeed(s, id, missing.shift()!);
+      });
+    }
+    bot.crop = ranked[0];
+  }
+  if (bot.groups) {
+    const groups = bot.groups;
+    for (const job of MIX_JOBS) s.gnomes.filter(g => g.job === job).forEach((g, i) => moveGnome(s, g.id, groups[i % MIX]));
+  }
+}
+
+/** Lo que plantaría el jugador en la parcela: la semilla del grupo del bot cuya zona la contiene, o el mejor cultivo. */
+function clickCrop(s: GameState, bot: Sower, p: Plot): CropId {
+  if (!bot.groups) return bot.crop;
+  const zoned = bot.groups.map(id => groupById(s, id)).find(g => inZone(g.zone, p));
+  return zoned?.seed ?? bot.crop;
 }
 
 // ---------- a) Ritmo ----------
@@ -137,6 +205,9 @@ function purchaseOptions(s: GameState, rng: Rng): Purchase[] {
   for (const id of NODE_IDS) {
     if (nodeReachable(s, id) && !nodeMaxed(s, id)) opts.push({ cost: nodeCost(s, id), buy: () => buyNode(s, id) });
   }
+  if (treeComplete(s)) for (const id of WORK_IDS) {
+    if (s.works[id] < 3) opts.push({ cost: workCost(s, id), buy: () => buyWork(s, id) });
+  }
   return opts;
 }
 
@@ -150,13 +221,13 @@ function shop(s: GameState, rng: Rng): number {
   }
 }
 
-/** Un clic del jugador: primero recoger, luego sembrar. Devuelve false si no había nada que hacer. */
-function playerClick(s: GameState, crop: CropId): boolean {
+/** Un clic del jugador: primero recoger, luego sembrar (lo que toque en esa parcela). Devuelve false si no había nada que hacer. */
+function playerClick(s: GameState, bot: Sower): boolean {
   for (const p of s.plots) {
-    if (p.stage === RIPE && p.res === null && isOpen(s, p)) return clickPlot(s, p.id, crop) !== null;
+    if (p.stage === RIPE && p.res === null && isOpen(s, p)) return clickPlot(s, p.id, clickCrop(s, bot, p)) !== null;
   }
   for (const p of s.plots) {
-    if ((p.stage === -1 || p.stage === ROTTEN) && p.res === null && isOpen(s, p)) return clickPlot(s, p.id, crop) !== null;
+    if ((p.stage === -1 || p.stage === ROTTEN) && p.res === null && isOpen(s, p)) return clickPlot(s, p.id, clickCrop(s, bot, p)) !== null;
   }
   return false;
 }
@@ -190,7 +261,7 @@ interface Sample {
   gnomes: string;
   beds: number;
   bancal: number;
-  crop: CropId;
+  crop: string;
   rotted: number;
 }
 
@@ -232,7 +303,7 @@ function runProfile(profile: Profile): RunResult {
   const earnedAt = new Map<number, number>();
   const rateMarks = new Set(RATE_AT_MIN.flatMap(m => [(m - WINDOW_MIN) * STEPS_PER_MIN, m * STEPS_PER_MIN]));
   let budget = 0;
-  let crop: CropId = 'zanahoria';
+  const bot: Sower = { crop: 'zanahoria', groups: null, cols: 0 };
   let tailEarned = 0;
   let tailRotted = 0;
   let rottedEarly = 0;
@@ -250,7 +321,7 @@ function runProfile(profile: Profile): RunResult {
     gnomes: `${s.hired.recolector}/${s.hired.sembrador}/${s.hired.porteador}/${s.hired.regador}/${s.hired.guardian}`,
     beds: houseCapacity(s),
     bancal: s.tree.bancal,
-    crop,
+    crop: bot.groups ? bot.groups.map(id => groupById(s, id).seed ?? '—').join(' + ') : bot.crop,
     rotted: s.rotted,
   });
 
@@ -260,15 +331,11 @@ function runProfile(profile: Profile): RunResult {
       tailRotted = s.rotted;
     }
     if (rateMarks.has(n)) earnedAt.set(n, s.totalEarned);
-    if (n % CHOOSE_STEPS === 0) {
-      const next = chooseCrop(s, profile.clicksPerSec);
-      if (next !== crop || n === 0) setGroupSeed(s, s.groups[0].id, next);
-      crop = next;
-    }
+    plan(s, bot, profile.clicksPerSec, n);
     // presupuesto de clics; no se acumula más de uno (el jugador no guarda clics para luego)
     budget = Math.min(budget + clicksPerStep, Math.max(1, clicksPerStep));
     while (budget >= 1) {
-      if (!playerClick(s, crop)) break;
+      if (!playerClick(s, bot)) break;
       budget -= 1;
     }
     const done = milestones['árbol completo'] !== null;
@@ -307,7 +374,9 @@ test('a) Ritmo', () => {
   out.push(`## a) Ritmo (${RUN_MIN} min de juego, dt = ${DT} s, semilla ${SEED})`, '');
   out.push(
     'El bot compra siempre lo más barato que pueda pagar (con la casa llena, ampliar la casa en vez de contratar) y',
-    `cada ${CHOOSE_STEPS * DT} s siembra el cultivo con más (min(ritmo del bancal, de recolectores, de sembradores) × valor).`, '',
+    `cada ${CHOOSE_STEPS * DT} s siembra el cultivo con más (min(ritmo del bancal, de recolectores, de sembradores) × valor).`,
+    `Con ${MIX} cultivos y ${MIX} sembradores pasa a ${MIX} grupos, cada uno con un tercio de las columnas abiertas y uno de`,
+    `los ${MIX} mejores cultivos; las semillas solo cambian si cambia ese trío.`, '',
   );
   out.push('### Hitos (minuto en que se alcanzan)', '');
   out.push(table(
@@ -677,13 +746,14 @@ test('h) Organización', () => {
 // ---------- i) Temporadas ----------
 
 const SEASONS = 3;
-/** el bot acaba la temporada al completar el árbol, o aquí si no llega */
-const SEASON_CAP_MIN = 90;
+/** el bot acaba al completar el árbol y las obras, o aquí si no llega */
+const SEASON_CAP_MIN = 240;
 /** semillas que daría acabar la primera temporada en estos minutos */
 const SEED_MARKS_MIN = [30, 45, 65, 90];
 
 interface SeasonRun {
   treeStep: number | null;
+  workStep: number | null;
   endStep: number;
   /** primer paso en que se puede acabar la temporada */
   canEndStep: number | null;
@@ -691,31 +761,30 @@ interface SeasonRun {
   byMinute: { earned: number; seeds: number }[];
 }
 
-/** Juega una temporada como el bot de a) (clics, cultivo y compras); con `stopAtTree` para al completar el árbol. */
-function playSeason(s: GameState, rng: Rng, profile: Profile, capMin: number, stopAtTree: boolean): SeasonRun {
+/** Juega como el bot de a); stopAtWorks para al completar árbol y obras. */
+function playSeason(s: GameState, rng: Rng, profile: Profile, capMin: number, stopAtWorks: boolean): SeasonRun {
   const clicksPerStep = profile.clicksPerSec * DT;
-  const run: SeasonRun = { treeStep: null, endStep: 0, canEndStep: null, byMinute: [{ earned: 0, seeds: 0 }] };
+  const run: SeasonRun = { treeStep: null, workStep: null, endStep: 0, canEndStep: null, byMinute: [{ earned: 0, seeds: 0 }] };
   let budget = 0;
-  let crop: CropId = 'zanahoria';
+  const bot: Sower = { crop: 'zanahoria', groups: null, cols: 0 };
   for (let n = 0; n < capMin * STEPS_PER_MIN; n++) {
-    if (n % CHOOSE_STEPS === 0) {
-      const next = chooseCrop(s, profile.clicksPerSec);
-      if (next !== crop || n === 0) setGroupSeed(s, s.groups[0].id, next);
-      crop = next;
-    }
+    plan(s, bot, profile.clicksPerSec, n);
     budget = Math.min(budget + clicksPerStep, Math.max(1, clicksPerStep));
     while (budget >= 1) {
-      if (!playerClick(s, crop)) break;
+      if (!playerClick(s, bot)) break;
       budget -= 1;
     }
     shop(s, rng);
     step(s, rng);
     run.endStep = n + 1;
     if (run.canEndStep === null && canEndSeason(s)) run.canEndStep = n + 1;
-    if ((n + 1) % STEPS_PER_MIN === 0) run.byMinute.push({ earned: s.totalEarned, seeds: seasonSeeds(s) });
+    if ((n + 1) % STEPS_PER_MIN === 0) run.byMinute.push({ earned: s.totalEarned, seeds: seasonSeeds(s) + workSeeds(s) });
     if (run.treeStep === null && NODE_IDS.every(id => nodeMaxed(s, id))) {
       run.treeStep = n + 1;
-      if (stopAtTree) break;
+    }
+    if (run.workStep === null && treeComplete(s) && WORK_IDS.every(id => s.works[id] === 3)) {
+      run.workStep = n + 1;
+      if (stopAtWorks) break;
     }
   }
   return run;
@@ -748,26 +817,25 @@ test('i) Temporadas', () => {
   for (let k = 1; k <= SEASONS; k++) {
     const start = talentList(s.prestige.talents);
     const r = playSeason(s, rng, profile, SEASON_CAP_MIN, true);
-    const seeds = seasonSeeds(s);
+    const seeds = seasonSeeds(s) + workSeeds(s);
     const earned = s.totalEarned;
     s = endSeason(s, rng);
     const bought = spendSeeds(s);
     const counts: Partial<Record<TalentId, number>> = {};
     for (const id of bought) counts[id] = (counts[id] ?? 0) + 1;
     rows.push([
-      k, start, minOr(r.treeStep), f1(r.endStep / STEPS_PER_MIN), minOr(r.canEndStep), Math.round(earned), `**${seeds}**`,
+      k, start, minOr(r.treeStep), minOr(r.workStep), f1(r.endStep / STEPS_PER_MIN), minOr(r.canEndStep), Math.round(earned), `**${seeds}**`,
       talentList(counts), s.prestige.goldenSeeds,
     ]);
   }
   const out = [
     `## i) Temporadas (${profile.name}, ${SEASONS} temporadas seguidas)`, '',
-    `El bot juega como en a) hasta completar el árbol (como mucho ${SEASON_CAP_MIN} min), acaba la temporada y gasta las`,
+    `El bot juega como en a) hasta completar árbol y obras (como mucho ${SEASON_CAP_MIN} min), acaba la temporada y gasta las`,
     'semillas en el talento más barato que pueda pagar, una y otra vez.',
-    `Semillas = floor((ganado / ${PRESTIGE.seedUnit}) ^ ${PRESTIGE.seedPow}); para acabar hacen falta ${PRESTIGE.minSeeds}.`,
-    'Objetivo: temporada 1 con el árbol en 60–75 min y 10–15 semillas; la 2 en ≤ 45–50 min; la 3, más rápida aún;',
-    'se puede acabar la primera hacia el min 30–40.', '',
+    `Semillas = floor((ganado / ${PRESTIGE.seedUnit}) ^ ${PRESTIGE.seedPow}) + niveles de obras; para acabar hacen falta ${PRESTIGE.minSeeds}.`,
+    'Objetivo: árbol activo en 45–65 min, temporada 1 con al menos 15 semillas y temporadas siguientes más cortas.', '',
     table(
-      ['temporada', 'talentos al empezar', 'árbol completo (min)', 'fin (min)', 'se puede acabar desde (min)', 'ganado', 'semillas', 'compra al acabar', 'semillas sobrantes'],
+      ['temporada', 'talentos al empezar', 'árbol completo (min)', 'obras (min)', 'fin (min)', 'se puede acabar desde (min)', 'ganado', 'semillas', 'compra al acabar', 'semillas sobrantes'],
       rows,
     ),
     '', `### Semillas si se acaba la temporada 1 en el minuto… (se puede desde el min ${minOr(long.canEndStep)}; árbol completo en el ${minOr(long.treeStep)})`, '',
@@ -806,6 +874,15 @@ test('j) Zonas', () => {
       { name: 'dos zonas, ¼ de la plantilla a la calabaza', setup: s => twoZones(s, n => Math.round(n / 4)) },
       // la calabaza (lenta y cómoda) casi no da trabajo: con un gnomo de cada oficio basta
       { name: 'dos zonas, 1 de cada oficio a la calabaza', setup: s => twoZones(s, () => 1) },
+      { name: 'tres zonas con semilla (destreza)', setup: s => {
+        const groups = [s.groups[0], createGroup(s)!, createGroup(s)!];
+        groups.forEach((g, i) => {
+          setGroupZone(s, g.id, { c0: i * 3, c1: i * 3 + 2, r0: 0, r1: FIELD.maxRows - 1 });
+          setGroupSeed(s, g.id, (['calabaza', 'zanahoria', 'zanahoria'] as const)[i]);
+          setPriority(s, g.id, 'valioso');
+        });
+        for (const job of MIX_JOBS) s.gnomes.filter(g => g.job === job).forEach((g, i) => moveGnome(s, g.id, groups[i % groups.length].id));
+      } },
     ];
     for (const { name, setup } of setups) {
       const rng = mulberry32(SEED);

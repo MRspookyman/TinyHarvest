@@ -19,6 +19,8 @@ export type NodeId =
   | 'bancal'
   | 'trigo' | 'abono' | 'tomate' | 'calabaza' | 'conservas' | 'mercado' | 'regadores' | 'regadera' | 'fresa' | 'melon';
 export type Branch = 'gnomos' | 'bancal' | 'cultivos';
+/** Obras de fin de temporada: se abren con el árbol completo y cada nivel da una semilla dorada más. */
+export type WorkId = 'molino' | 'invernadero' | 'fuente';
 /**
  * Poses del gnomo. Nuevas en la iteración 6: sit (sentado en el suelo o en una calabaza), wave (saluda o
  * aplaude), fall (se cae de culo tras un tropiezo), scare (brazos arriba: espanta un cuervo o hace de espantapájaros).
@@ -82,6 +84,8 @@ export interface GnomeGroup {
   seed: CropId | null;
   /** parcelas en las que trabajan recolectores, sembradores y regadores del grupo; null = todo el bancal */
   zone: Zone | null;
+  /** segundos de especialización con zona y semilla fijas */
+  skill: number;
 }
 
 /**
@@ -166,7 +170,9 @@ export type MomentKind =
   // iteración 7: el guardián espanta a un bicho a tiempo
   | 'vigilancia'
   // iteración 10: dos gnomos se hacen amigos
-  | 'amistad';
+  | 'amistad'
+  // amenazas suaves: pulgones en una planta que crece
+  | 'pulgon';
 
 /** Salida de la simulación para el render; se vacía en cada fotograma. */
 export type SimEvent =
@@ -233,8 +239,9 @@ export interface Organization {
  * - topo: asoma en una parcela vacía (`plot`), deja un montículo un rato y se va.
  * - mariposa: revolotea por la hierba; los ociosos la persiguen.
  * - rana: cae del cielo en la lluvia de ranas y se va saltando.
+ * - pulgón: se pega a una planta que crece (`plot`), la hace crecer a medias y salta a las vecinas.
  */
-export type CritterKind = 'cuervo' | 'caracol' | 'topo' | 'mariposa' | 'rana';
+export type CritterKind = 'cuervo' | 'caracol' | 'topo' | 'mariposa' | 'rana' | 'pulgon';
 export interface Critter {
   id: number;
   kind: CritterKind;
@@ -294,8 +301,16 @@ export interface GameState {
   happening: Happening | null;
   /** cosechas de cada cultivo en esta temporada: dan la maestría (G5) */
   mastery: Record<CropId, number>;
+  /** venta reciente de cada cultivo en monedas base (con olvido exponencial): satura el mercado; no se guarda */
+  market: Record<CropId, number>;
+  /** nivel (0..3) de cada obra de fin de temporada; cada nivel da una semilla dorada más al acabar la temporada */
+  works: Record<WorkId, number>;
   /** arenga del capataz (G7): segundos que le quedan al efecto y a la recarga */
   rally: { t: number; cd: number };
+  /** media de monedas/s ganadas jugando (con olvido de AWAY.window s): da las ganancias al volver */
+  rate: number;
+  /** momento del último guardado, en ms de época (0 = desconocido) */
+  savedAt: number;
   /** encargo del pueblo en curso (G8), o null; no se guarda: al cargar llega otro */
   order: Order | null;
   /** segundos hasta el próximo encargo */

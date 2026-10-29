@@ -1,12 +1,13 @@
 // Estatua del Gnomo Dorado: terminar la temporada, el árbol dorado de talentos y el salón de la fama.
 import { CROP_IDS, PRESTIGE, TALENT_EFFECT, TALENT_IDS, TALENT_ROOT, TALENTS } from '../../sim/config';
 import {
-  canEndSeason, costGrowth, legendaryChance, seasonSeeds, seedsCoinsNeeded, talentCost, talentMaxed, talentReachable,
+  canEndSeason, costGrowth, legendaryChance, seasonSeeds, seedsCoinsNeeded, talentCost, talentMaxed, talentReachable, workSeeds,
 } from '../../sim/sim';
 import type { GameState, TalentId } from '../../sim/types';
 import { goldenSeedIcon, jobIcons, legendIcon, talentIcons, traitIcons } from '../../render/icons';
 import { CULTIVOS, LEGENDARIO, OFICIOS, RASGOS, TALENTOS, TEMPORADA, UI } from '../../textos';
 import { esc, html, pixelImg, setDisabled, setText, toggleClass, type GameActions } from '../dom';
+import { focusOwner, isTopLayer, restoreFocus, trapTab } from '../focus';
 import type { Menu } from '../windows';
 import { elbow } from './tree';
 
@@ -149,14 +150,17 @@ export function createSeasonMenu(actions: GameActions): SeasonMenu {
   });
 
   function updateEnd(s: GameState) {
-    const seeds = seasonSeeds(s);
+    // las ganadas con monedas más una por cada nivel de obra
+    const earned = seasonSeeds(s);
+    const works = workSeeds(s);
+    const seeds = earned + works;
     const can = canEndSeason(s);
     setText(el.querySelector('[data-f-season]'), String(s.prestige.season));
     setText(el.querySelector('[data-f-time]'), TEMPORADA.duracion(s.seasonTime));
     setText(el.querySelector('[data-f-earned]'), String(Math.floor(s.totalEarned)));
     setText(el.querySelector('[data-f-seeds]'), String(seeds));
-    setText(el.querySelector('[data-f-next]'), TEMPORADA.siguiente(Math.ceil(seedsCoinsNeeded(seeds + 1) - s.totalEarned)));
-    setText(el.querySelector('[data-f-why]'), can ? '' : TEMPORADA.noAun(PRESTIGE.minSeeds, Math.ceil(seedsCoinsNeeded(PRESTIGE.minSeeds) - s.totalEarned)));
+    setText(el.querySelector('[data-f-next]'), TEMPORADA.siguiente(Math.ceil(seedsCoinsNeeded(earned + 1) - s.totalEarned)));
+    setText(el.querySelector('[data-f-why]'), can ? '' : TEMPORADA.noAun(PRESTIGE.minSeeds, Math.ceil(seedsCoinsNeeded(PRESTIGE.minSeeds - works) - s.totalEarned)));
     if (!can && armTimer) disarm();
     setDisabled(endBtn, !can);
   }
@@ -257,8 +261,13 @@ export function createSeasonMenu(actions: GameActions): SeasonMenu {
 export function createSeasonSummary(host: HTMLElement, actions: GameActions) {
   const layer = html(`<div class="win-layer summary-layer" hidden></div>`);
   host.append(layer);
+  let opener: HTMLElement | null = null;
   const close = () => {
+    if (layer.hidden) return;
     layer.hidden = true;
+    const back = opener;
+    opener = null;
+    restoreFocus(back);
   };
   layer.addEventListener('click', e => {
     const target = e.target as HTMLElement;
@@ -268,9 +277,11 @@ export function createSeasonSummary(host: HTMLElement, actions: GameActions) {
       actions.showHallOfFame();
     }
   });
-  // Esc lo cierra antes que nada (se registra antes que la ficha)
+  // Esc lo cierra antes que nada (se registra antes que la ficha); Tab no sale de él
   window.addEventListener('keydown', e => {
-    if (e.key !== 'Escape' || layer.hidden) return;
+    if (e.defaultPrevented || !isTopLayer(layer)) return;
+    if (e.key === 'Tab') trapTab(e, layer);
+    if (e.key !== 'Escape') return;
     e.preventDefault();
     close();
   });
@@ -294,6 +305,7 @@ export function createSeasonSummary(host: HTMLElement, actions: GameActions) {
             <footer><button type="button" class="link" data-fame>${TEMPORADA.verFama}</button><button type="button" class="btn gold" data-ok>${TEMPORADA.vamos}</button></footer>
           </div>
         </section>`;
+      if (layer.hidden) opener = focusOwner();
       layer.hidden = false;
       layer.querySelector<HTMLElement>('[data-ok]')!.focus({ preventScroll: true });
     },
